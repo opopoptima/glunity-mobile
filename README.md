@@ -8,6 +8,7 @@
 
 ## Table of Contents
 
+0. [Developer Bootstrap Docs](#0-developer-bootstrap-docs)
 1. [Project Overview](#1-project-overview)
 2. [Technical Architecture](#2-technical-architecture)
 3. [Data Models](#3-data-models-mongodb-schemas)
@@ -19,6 +20,15 @@
 9. [Git Workflow & Dev Rules](#9-git-workflow--development-rules)
 10. [Risk Management](#10-risk-management)
 11. [Definition of Done](#11-definition-of-done)
+
+---
+
+## 0. Developer Bootstrap Docs
+
+Use these documents first before coding:
+- `docs/01-architecture-overview.md` — target backend + mobile structure and boundaries
+- `docs/engineering-ddoc.md` — mandatory development doctrine (clean, secure, scalable, performant)
+- `docs/02-initialization-guide.md` — how to start new modules and migrate progressively
 
 ---
 

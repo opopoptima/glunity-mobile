@@ -1,0 +1,12 @@
+{
+  "name": "glunity-api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/app/server.js",
+  "scripts": {
+    "dev": "node src/app/server.js",
+    "start": "node src/app/server.js",
+    "lint": "echo \"api lint placeholder\"",
+    "test": "echo \"api test placeholder\""
+  }
+}
