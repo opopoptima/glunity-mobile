@@ -2,7 +2,7 @@
 # Glunity Mobile — Technical Architecture & Project Plan
 
 > React Native + Node.js · iOS & Android · Agile / Scrum  
-> Client: Sirine Boufares · Agency: Optima Junior Entreprise · April 2026
+· Agency: Optima Junior Entreprise · April 2026
 
 ---
 
