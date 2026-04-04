@@ -24,10 +24,28 @@ Standardize release preparation, deployment, verification, and rollback.
 ## Backend Deployment Steps
 1. tag release candidate
 2. backup database
-3. deploy backend service
+3. build and deploy backend containers
 4. run migration steps if any
 5. warm up health checks
 6. validate key endpoints
+
+## Container Deployment Standard
+- Production compose file: `docker-compose.yml`
+- Local/dev compose file: `docker-compose.dev.yml`
+- Reverse proxy config: `deploy/nginx/default.conf`
+- API image context: `api/Dockerfile`
+
+### Baseline Command
+```bash
+docker compose up -d --build
+```
+
+### Scale API Instances
+```bash
+docker compose up -d --build --scale api=3
+```
+
+Use orchestrator-based scaling for sustained high traffic.
 
 ## Mobile Release Steps
 1. bump app version and build number
@@ -67,4 +85,6 @@ Standardize release preparation, deployment, verification, and rollback.
 - smoke test checklist
 - release notes
 - known issues list
+- container image tags
+- compose version used
 
