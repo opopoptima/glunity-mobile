@@ -1,0 +1,11 @@
+{
+  "name": "glunity-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "App.tsx",
+  "scripts": {
+    "start": "echo \"mobile start placeholder\"",
+    "lint": "echo \"mobile lint placeholder\"",
+    "test": "echo \"mobile test placeholder\""
+  }
+}
