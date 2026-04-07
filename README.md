@@ -38,7 +38,7 @@ Glunity Mobile is a community-driven mobile application for people with celiac d
 
 > **Design is locked.** The marketing team delivered the complete Figma mockups. The dev team's job is 100% implementation — architecture, backend API, business logic, real-time features, security, and pixel-perfect React Native UI. No design decisions during development.
 >
-> **Figma:** https://embed.figma.com/design/hGkZ6EBoLgG1o5FCPAzgnZ/Glunity
+
 
 ### 1.1 Functional modules
 
