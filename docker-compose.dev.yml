@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    env_file:
+      - ./api/.env.example
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+    command: npm run dev
+    depends_on:
+      - mongo
+    networks:
+      - glunity_dev_net
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_dev_data:/data/db
+    networks:
+      - glunity_dev_net
+
+networks:
+  glunity_dev_net:
+    driver: bridge
+
+volumes:
+  mongo_dev_data:

@@ -11,41 +11,66 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { AppStackParamList } from '@/navigation/types';
+import type { AppStackParamList } from '@/modules/auth/navigation/types';
+import { BottomNavBar } from '@/shared/components/BottomNavBar';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Settings'>;
 
 const C = {
-  green:  '#8BC34A',
-  dark:   '#2E2E2E',
-  bg:     '#F6F5F3',
-  white:  '#FFFFFF',
-  muted:  '#6B6B6B',
-  red:    '#C8102E',
-  redLight: 'rgba(200,16,46,0.08)',
-  border: 'rgba(46,46,46,0.12)',
+  green: '#8BC34A',
+  dark: '#2E2E2E',
+  bg: '#F6F5F3',
+  white: '#FFFFFF',
+  muted: '#9E9E9E',
+  mutedLight: '#BBBBBB',
+  red: '#C8102E',
+  redLight: 'rgba(200,16,46,0.10)',
+  border: 'rgba(0,0,0,0.08)',
+  rowDivider: '#F0F0F0',
+};
+
+const F = {
+  regular: 'Poppins_400Regular',
+  semibold: 'Poppins_600SemiBold',
+  bold: 'Poppins_700Bold',
 };
 
 // ── SettingItem ────────────────────────────────────────────────────────────────
 interface SettingItemProps {
   iconName: string;
-  iconColor?: string;
   title: string;
   subtitle?: string;
-  showArrow?: boolean;
+  showChevron?: boolean;
   showSwitch?: boolean;
+  valueText?: string;
   isLast?: boolean;
-  danger?: boolean;
+  switchValue?: boolean;
+  onSwitchChange?: (value: boolean) => void;
   onPress?: () => void;
 }
 
 function SettingItem({
-  iconName, iconColor, title, subtitle,
-  showArrow = true, showSwitch = false,
-  isLast = false, danger = false, onPress,
+  iconName,
+  title,
+  subtitle,
+  showChevron = true,
+  showSwitch = false,
+  valueText,
+  isLast = false,
+  switchValue,
+  onSwitchChange,
+  onPress,
 }: SettingItemProps) {
   const [enabled, setEnabled] = useState(true);
-  const color = danger ? C.red : (iconColor ?? C.green);
+  const currentSwitchValue = switchValue ?? enabled;
+
+  const handleSwitchChange = (value: boolean) => {
+    if (onSwitchChange) {
+      onSwitchChange(value);
+      return;
+    }
+    setEnabled(value);
+  };
 
   return (
     <TouchableOpacity
@@ -53,31 +78,38 @@ function SettingItem({
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[s.rowIcon, { backgroundColor: danger ? C.redLight : 'rgba(139,195,74,0.12)' }]}>
-        <MaterialCommunityIcons name={iconName as any} size={20} color={color} />
+      <View style={s.rowIcon}>
+        <MaterialCommunityIcons name={iconName as any} size={18} color={C.red} />
       </View>
 
       <View style={s.rowContent}>
-        <Text style={[s.rowTitle, danger && { color: C.red }]}>{title}</Text>
+        <Text style={s.rowTitle}>{title}</Text>
         {subtitle ? <Text style={s.rowSub}>{subtitle}</Text> : null}
       </View>
 
       {showSwitch ? (
         <Switch
-          value={enabled}
-          onValueChange={setEnabled}
-          trackColor={{ false: '#ccc', true: C.green }}
+          value={currentSwitchValue}
+          onValueChange={handleSwitchChange}
+          trackColor={{ false: '#E0E0E0', true: C.green }}
           thumbColor={C.white}
         />
-      ) : showArrow ? (
-        <MaterialCommunityIcons name="chevron-right" size={20} color="rgba(46,46,46,0.3)" />
-      ) : null}
+      ) : (
+        <View style={s.rowRight}>
+          {valueText ? <Text style={s.rowValue}>{valueText}</Text> : null}
+          {showChevron ? <MaterialCommunityIcons name="chevron-right" size={18} color={C.mutedLight} /> : null}
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
 
 // ── SettingsScreen ─────────────────────────────────────────────────────────────
 export default function SettingsScreen({ navigation }: Props) {
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+
   return (
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
@@ -88,9 +120,7 @@ export default function SettingsScreen({ navigation }: Props) {
           <MaterialCommunityIcons name="arrow-left" size={22} color={C.dark} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Settings</Text>
-        <TouchableOpacity style={s.headerBack} id="settings-notif-btn">
-          <MaterialCommunityIcons name="bell-outline" size={22} color={C.dark} />
-        </TouchableOpacity>
+        <View style={s.headerSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
@@ -120,15 +150,17 @@ export default function SettingsScreen({ navigation }: Props) {
             iconName="bell-ring-outline"
             title="Push Notifications"
             subtitle="Alerts, reminders and updates"
-            showArrow={false}
             showSwitch
+            switchValue={pushEnabled}
+            onSwitchChange={setPushEnabled}
           />
           <SettingItem
             iconName="email-outline"
             title="Email Updates"
             subtitle="Weekly digest and newsletters"
-            showArrow={false}
             showSwitch
+            switchValue={emailEnabled}
+            onSwitchChange={setEmailEnabled}
             isLast
           />
         </View>
@@ -140,13 +172,14 @@ export default function SettingsScreen({ navigation }: Props) {
             iconName="weather-night"
             title="Dark Mode"
             subtitle="Switch to dark theme"
-            showArrow={false}
             showSwitch
+            switchValue={darkModeEnabled}
+            onSwitchChange={setDarkModeEnabled}
           />
           <SettingItem
             iconName="format-size"
             title="Text Size"
-            subtitle="Adjust reading comfort"
+            valueText="Medium"
             isLast
           />
         </View>
@@ -167,48 +200,26 @@ export default function SettingsScreen({ navigation }: Props) {
           />
         </View>
 
-        {/* DANGER ZONE */}
-        <Text style={s.sectionLabel}>DANGER ZONE</Text>
-        <View style={s.card}>
-          <SettingItem
-            iconName="logout"
-            title="Log Out"
-            showArrow={false}
-            danger
-            isLast
-            onPress={() => navigation.navigate('Profile')}
-          />
-        </View>
+        <TouchableOpacity style={s.logoutBtn} onPress={() => navigation.navigate('Profile')}>
+          <View style={s.logoutIconWrap}>
+            <MaterialCommunityIcons name="logout" size={20} color={C.white} />
+          </View>
+          <Text style={s.logoutText}>Log out</Text>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={C.white} />
+        </TouchableOpacity>
 
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Bottom Nav */}
-      <View style={s.bottomNav}>
-        <TouchableOpacity style={s.navBtn} onPress={() => navigation.navigate('Home')} id="settings-nav-home">
-          <MaterialCommunityIcons name="home-outline" size={24} color={C.dark} />
-          <Text style={s.navLabel}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={s.navBtn} id="settings-nav-events">
-          <MaterialCommunityIcons name="calendar-outline" size={24} color={C.dark} />
-          <Text style={s.navLabel}>Events</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={s.fab} id="settings-nav-fab">
-          <MaterialCommunityIcons name="plus" size={28} color={C.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={s.navBtn} id="settings-nav-reels">
-          <MaterialCommunityIcons name="play-circle-outline" size={24} color={C.dark} />
-          <Text style={s.navLabel}>Reels</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={s.navBtn} onPress={() => navigation.navigate('Profile')} id="settings-nav-profile">
-          <MaterialCommunityIcons name="account" size={24} color={C.green} />
-          <Text style={[s.navLabel, { color: C.green }]}>Profile</Text>
-        </TouchableOpacity>
-      </View>
+      <BottomNavBar
+        activeTab="events"
+        idPrefix="settings-nav"
+        onPressHome={() => navigation.navigate('Home')}
+        onPressEvents={() => {}}
+        onPressCenter={() => {}}
+        onPressReels={() => {}}
+        onPressProfile={() => navigation.navigate('Profile')}
+      />
     </SafeAreaView>
   );
 }
@@ -217,55 +228,113 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
 
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingHorizontal: 20,
-    paddingTop: 12, paddingBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   headerBack: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: C.white, alignItems: 'center', justifyContent: 'center',
-    elevation: 2,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: C.dark },
+  headerSpacer: {
+    width: 24,
+    height: 24,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: C.dark,
+    fontFamily: F.semibold,
+  },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 12 },
+  scroll: { paddingHorizontal: 16, paddingTop: 8 },
 
   sectionLabel: {
-    fontSize: 10, fontWeight: '700', color: 'rgba(46,46,46,0.4)',
-    marginBottom: 8, marginTop: 16, letterSpacing: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: C.dark,
+    marginTop: 20,
+    marginBottom: 8,
+    fontFamily: F.bold,
   },
   card: {
-    backgroundColor: C.white, borderRadius: 16, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07, shadowRadius: 6, elevation: 3,
+    backgroundColor: C.white,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   row: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 14, gap: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    gap: 12,
   },
-  rowBorder: { borderBottomWidth: 0.5, borderBottomColor: C.border },
+  rowBorder: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.border,
+  },
   rowIcon: {
-    width: 40, height: 40, borderRadius: 12,
-    alignItems: 'center', justifyContent: 'center',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: C.redLight,
   },
   rowContent: { flex: 1 },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: C.dark },
-  rowSub:   { fontSize: 11, color: C.muted, marginTop: 2 },
-
-  bottomNav: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: 80,
-    backgroundColor: C.white, flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'space-around', paddingBottom: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 10,
+  rowTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: C.dark,
+    fontFamily: F.semibold,
   },
-  navBtn:   { alignItems: 'center', gap: 2, minWidth: 48 },
-  navLabel: { fontSize: 8, fontWeight: '500', color: C.dark, marginTop: 2 },
-  fab: {
-    width: 60, height: 60, borderRadius: 30, backgroundColor: C.green,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
-    borderWidth: 4, borderColor: C.bg,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15, shadowRadius: 10, elevation: 8,
+  rowSub: {
+    fontSize: 11,
+    color: C.muted,
+    marginTop: 2,
+    fontFamily: F.regular,
+  },
+  rowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rowValue: {
+    fontSize: 13,
+    color: C.muted,
+    fontFamily: F.regular,
+  },
+
+  logoutBtn: {
+    marginTop: 20,
+    marginHorizontal: 16,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: C.green,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  logoutIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  logoutText: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 15,
+    color: C.white,
+    fontWeight: '600',
+    fontFamily: F.semibold,
   },
 });
