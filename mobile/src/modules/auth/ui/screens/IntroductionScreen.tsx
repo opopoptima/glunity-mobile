@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../../navigation/types';
+import { Feather } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Intro'>;
 
@@ -31,7 +32,7 @@ function ScanIllustration() {
         <View style={il.textLine2} />
       </View>
       <View style={il.checkCircle}>
-        <Text style={il.checkText}>✓</Text>
+        <Feather name="check" size={20} color="#fff" />
       </View>
     </View>
   );
@@ -83,8 +84,7 @@ const il = StyleSheet.create({
     borderRadius: 8, borderWidth: 1, borderColor: '#2E2E2E',
     overflow: 'hidden', alignItems: 'center', justifyContent: 'space-evenly',
     paddingVertical: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 6, elevation: 3,
+    boxShadow: '0px 2px 6px rgba(0,0,0,0.08)', elevation: 3,
   },
   redBand: { width: '70%', height: 22, backgroundColor: '#C8102E', borderRadius: 3 },
   barcodeRow: { flexDirection: 'row', alignItems: 'flex-end', height: 30 },
@@ -102,8 +102,7 @@ const il = StyleSheet.create({
   mapCard: {
     width: 140, height: 130, backgroundColor: '#FFFFFF',
     borderRadius: 10, borderWidth: 1, borderColor: '#2E2E2E', overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 6, elevation: 3,
+    boxShadow: '0px 2px 6px rgba(0,0,0,0.08)', elevation: 3,
   },
   mapLine: { position: 'absolute', backgroundColor: 'rgba(46,46,46,0.15)' },
   routeLine: {
@@ -125,8 +124,7 @@ const il = StyleSheet.create({
   // Community
   bubble: {
     width: 120, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07, shadowRadius: 6, elevation: 2,
+    boxShadow: '0px 2px 6px rgba(0,0,0,0.07)', elevation: 2,
   },
   bubbleRight: {
     backgroundColor: '#FFFFFF', borderBottomRightRadius: 4,
@@ -289,15 +287,17 @@ export default function IntroductionScreen({ navigation }: Props) {
       {/* Bottom navigation bar */}
       <View style={styles.navBar}>
         <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.8}>
-          <Text style={styles.arrowText}>←</Text>
+          <Feather name="arrow-left" size={24} color="#2E2E2E" />
         </TouchableOpacity>
 
         <DotsIndicator count={SLIDES.length} active={activeIndex} />
 
         <TouchableOpacity style={styles.nextBtn} onPress={goNext} activeOpacity={0.8}>
-          <Text style={styles.arrowTextWhite}>
-            {activeIndex === SLIDES.length - 1 ? '✓' : '→'}
-          </Text>
+          {activeIndex === SLIDES.length - 1 ? (
+            <Feather name="check" size={32} color="#FFFFFF" />
+          ) : (
+            <Feather name="arrow-right" size={32} color="#FFFFFF" />
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -314,15 +314,13 @@ const styles = StyleSheet.create({
   backBtn: {
     width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.11, shadowRadius: 14, elevation: 6,
+    boxShadow: '0px 2px 14px rgba(0,0,0,0.11)', elevation: 6,
   },
   arrowText: { fontSize: 20, color: '#2E2E2E', fontWeight: '600' },
   nextBtn: {
     width: 76, height: 76, borderRadius: 38, backgroundColor: '#8BC34A',
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#8BC34A', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35, shadowRadius: 12, elevation: 8,
+    boxShadow: '0px 4px 12px rgba(139,195,74,0.35)', elevation: 8,
   },
   arrowTextWhite: { fontSize: 26, color: '#FFFFFF', fontWeight: '700' },
 });

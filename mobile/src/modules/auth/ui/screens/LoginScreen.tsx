@@ -17,6 +17,7 @@ import { AuthInput } from '../../../../shared/components/AuthInput';
 import { AuthButton } from '../../../../shared/components/AuthButton';
 import { Colors, Font, Spacing, Radius } from '../../../../shared/utils/theme';
 import { useAuth } from '../../state/auth.context';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
@@ -63,7 +64,7 @@ export default function LoginScreen({ navigation }: Props) {
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.mascot}>🦸</Text>
+            <MaterialCommunityIcons name="shield-check-outline" size={80} color={Colors.green} />
             <View style={styles.divider} />
           </View>
 
@@ -93,9 +94,7 @@ export default function LoginScreen({ navigation }: Props) {
             value={password}
             onChangeText={setPassword}
             error={errors.password}
-            rightIcon={
-              <Text style={styles.eyeIcon}>{showPass ? '🙈' : '👁️'}</Text>
-            }
+            rightIcon={<Feather name={showPass ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
             onRightIconPress={() => setShowPass((p) => !p)}
           />
 

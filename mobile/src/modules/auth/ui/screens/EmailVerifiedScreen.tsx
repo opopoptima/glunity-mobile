@@ -10,6 +10,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/types';
 import { AuthButton } from '@/shared/components/AuthButton';
 import { Colors, Font, Spacing } from '@/shared/utils/theme';
+import { Feather } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'EmailVerified'>;
 
@@ -23,7 +24,7 @@ export default function EmailVerifiedScreen({ route, navigation }: Props) {
         <View style={styles.container}>
           {/* Icon */}
           <View style={styles.iconCircle}>
-            <Text style={styles.iconEmoji}>✅</Text>
+            <Feather name="check-circle" size={60} color={Colors.green} />
           </View>
 
           <Text style={styles.title}>Email Verified!</Text>
@@ -50,7 +51,7 @@ export default function EmailVerifiedScreen({ route, navigation }: Props) {
       <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
       <View style={styles.container}>
         <View style={[styles.iconCircle, styles.iconCircleRed]}>
-          <Text style={styles.iconEmoji}>❌</Text>
+          <Feather name="x-circle" size={60} color="#E53935" />
         </View>
 
         <Text style={styles.title}>Verification Failed</Text>

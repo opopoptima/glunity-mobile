@@ -7,7 +7,7 @@ import React, {
   useMemo,
 } from 'react';
 import { authReducer, initialState, AuthState } from './auth.reducer';
-import authApi, { LoginDto, RegisterDto } from '../api/auth.api';
+import authApi, { LoginDto, RegisterDto, UpdateProfileDto } from '../api/auth.api';
 import { TokenStore } from '../../../core/storage/secure-store';
 
 function getAuthErrorMessage(err: any, fallback: string): string {
@@ -24,10 +24,11 @@ function getAuthErrorMessage(err: any, fallback: string): string {
 }
 
 interface AuthContextValue extends AuthState {
-  login: (dto: LoginDto) => Promise<void>;
-  register: (dto: RegisterDto) => Promise<void>;
-  logout: () => Promise<void>;
-  clearError: () => void;
+  login:         (dto: LoginDto) => Promise<void>;
+  register:      (dto: RegisterDto) => Promise<void>;
+  logout:        () => Promise<void>;
+  updateProfile: (dto: UpdateProfileDto) => Promise<void>;
+  clearError:    () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -87,13 +88,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const updateProfile = useCallback(async (dto: UpdateProfileDto) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    try {
+      // Optimistic update first — feels instant
+      dispatch({ type: 'UPDATE_USER', payload: dto });
+      // Then persist to backend (best-effort; API may not exist yet)
+      try {
+        const updatedUser = await authApi.updateProfile(dto);
+        dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+      } catch {
+        // If backend fails, the optimistic update still stays for this session
+      }
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, []);
+
   const clearError = useCallback(() => {
     dispatch({ type: 'SET_ERROR', payload: null });
   }, []);
 
   const value = useMemo(
-    () => ({ ...state, login, register, logout, clearError }),
-    [state, login, register, logout, clearError],
+    () => ({ ...state, login, register, logout, updateProfile, clearError }),
+    [state, login, register, logout, updateProfile, clearError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

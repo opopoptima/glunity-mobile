@@ -8,9 +8,10 @@ import {
   Image,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { AuthStackParamList } from '../../../navigation/types';
-import { AuthButton } from '../../../../shared/components/AuthButton';
-import { Colors, Font, Spacing } from '../../../../shared/utils/theme';
+import type { AuthStackParamList } from '@/navigation/types';
+import { AuthButton } from '@/shared/components/AuthButton';
+import { Colors, Font, Spacing } from '@/shared/utils/theme';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Welcome'>;
 
@@ -22,7 +23,7 @@ export default function WelcomeScreen({ navigation }: Props) {
       <View style={styles.container}>
         {/* Mascot */}
         <View style={styles.mascotWrap}>
-          <Text style={styles.mascot}>🌾</Text>
+          <MaterialCommunityIcons name={"wheat" as any} size={80} color={Colors.green} />
         </View>
 
         {/* Heading */}

@@ -18,12 +18,20 @@ export interface AuthUser {
   _id: string;
   fullName: string;
   email: string;
+  phone?: string;
+  bio?: string;
   profileType: string;
   avatarUrl: string | null;
   emailVerified: boolean;
   streakDays: number;
   language: string;
   darkMode: boolean;
+}
+
+export interface UpdateProfileDto {
+  fullName?: string;
+  phone?: string;
+  bio?: string;
 }
 
 export interface AuthResponse {
@@ -56,6 +64,11 @@ const authApi = {
 
   async getMe(): Promise<AuthUser> {
     const { data } = await http.get<{ success: boolean; data: { user: AuthUser } }>('/auth/me');
+    return data.data.user;
+  },
+
+  async updateProfile(dto: UpdateProfileDto): Promise<AuthUser> {
+    const { data } = await http.patch<{ success: boolean; data: { user: AuthUser } }>('/users/me', dto);
     return data.data.user;
   },
   async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {

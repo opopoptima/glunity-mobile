@@ -16,6 +16,7 @@ import { AuthInput } from '@/shared/components/AuthInput';
 import { AuthButton } from '@/shared/components/AuthButton';
 import { Colors, Font, Spacing, Radius } from '@/shared/utils/theme';
 import authApi from '../../api/auth.api';
+import { Feather } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
 
@@ -74,7 +75,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
         <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
         <View style={styles.centeredBox}>
           <View style={styles.iconCircle}>
-            <Text style={styles.iconEmoji}>🔓</Text>
+            <Feather name="unlock" size={40} color={Colors.green} />
           </View>
           <Text style={styles.resultTitle}>Password Updated!</Text>
           <Text style={styles.resultBody}>
@@ -99,7 +100,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
         <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
         <View style={styles.centeredBox}>
           <View style={[styles.iconCircle, styles.iconCircleRed]}>
-            <Text style={styles.iconEmoji}>⏰</Text>
+            <Feather name="clock" size={40} color="#E53935" />
           </View>
           <Text style={styles.resultTitle}>Link Expired</Text>
           <Text style={styles.resultBody}>
@@ -135,7 +136,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
         >
           {/* Icon */}
           <View style={styles.iconCircle}>
-            <Text style={styles.iconEmoji}>🔐</Text>
+            <Feather name="lock" size={40} color={Colors.green} />
           </View>
 
           <Text style={styles.title}>Set New Password</Text>
@@ -157,7 +158,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
             value={password}
             onChangeText={setPassword}
             error={errors.password}
-            rightIcon={<Text style={styles.eye}>{showPass ? '🙈' : '👁️'}</Text>}
+            rightIcon={<Feather name={showPass ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
             onRightIconPress={() => setShowPass((p) => !p)}
           />
           <AuthInput
@@ -167,7 +168,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
             value={confirm}
             onChangeText={setConfirm}
             error={errors.confirm}
-            rightIcon={<Text style={styles.eye}>{showConf ? '🙈' : '👁️'}</Text>}
+            rightIcon={<Feather name={showConf ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
             onRightIconPress={() => setShowConf((p) => !p)}
           />
 

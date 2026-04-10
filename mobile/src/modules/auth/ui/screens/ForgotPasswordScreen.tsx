@@ -17,6 +17,7 @@ import { AuthInput } from '@/shared/components/AuthInput';
 import { AuthButton } from '@/shared/components/AuthButton';
 import { Colors, Font, Spacing, Radius } from '@/shared/utils/theme';
 import authApi from '../../api/auth.api';
+import { Feather } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
@@ -63,7 +64,7 @@ function EmailStep({
       >
         {/* Illustration */}
         <View style={styles.illustrationBox}>
-          <Text style={styles.illustrationEmoji}>📧</Text>
+          <Feather name="mail" size={40} color={Colors.green} />
         </View>
 
         <Text style={styles.title}>Forgot Password</Text>
@@ -113,7 +114,7 @@ function SentStep({
   return (
     <View style={[styles.scroll, styles.centeredContent]}>
       <View style={styles.mailboxBox}>
-        <Text style={styles.mailboxEmoji}>📮</Text>
+        <Feather name="send" size={60} color={Colors.green} />
       </View>
 
       <Text style={styles.title}>Check Your Inbox</Text>

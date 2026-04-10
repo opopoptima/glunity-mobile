@@ -17,6 +17,7 @@ import { AuthInput } from '../../../../shared/components/AuthInput';
 import { AuthButton } from '../../../../shared/components/AuthButton';
 import { Colors, Font, Spacing, Radius } from '../../../../shared/utils/theme';
 import { useAuth } from '../../state/auth.context';
+import { Feather } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
@@ -138,7 +139,7 @@ export default function RegisterScreen({ navigation }: Props) {
             value={form.password}
             onChangeText={set('password')}
             error={errors.password}
-            rightIcon={<Text style={styles.eye}>{showPass ? '🙈' : '👁️'}</Text>}
+            rightIcon={<Feather name={showPass ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
             onRightIconPress={() => setShowPass((p) => !p)}
           />
           <AuthInput
@@ -148,7 +149,7 @@ export default function RegisterScreen({ navigation }: Props) {
             value={form.confirm}
             onChangeText={set('confirm')}
             error={errors.confirm}
-            rightIcon={<Text style={styles.eye}>{showConfirm ? '🙈' : '👁️'}</Text>}
+            rightIcon={<Feather name={showConfirm ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
             onRightIconPress={() => setShowConfirm((p) => !p)}
           />
 

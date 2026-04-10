@@ -11,20 +11,25 @@ import {
 } from 'react-native';
 import { useAuth } from '@/modules/auth/state/auth.context';
 import { Colors, Font, Spacing } from '@/shared/utils/theme';
+import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { AppStackParamList } from '@/navigation/types';
+
+type Props = NativeStackScreenProps<AppStackParamList, 'Home'>;
 
 const { width } = Dimensions.get('window');
 
 const QUICK_ACCESS = [
-  { icon: '🔍', label: 'Find Products' },
-  { icon: '👥', label: 'Community' },
-  { icon: '📋', label: 'Patient Resources' },
-  { icon: '📍', label: 'Map' },
+  { icon: <Feather name="search" size={24} color={Colors.green} />, label: 'Find Products' },
+  { icon: <Feather name="users" size={24} color={Colors.green} />, label: 'Community' },
+  { icon: <Feather name="file-text" size={24} color={Colors.green} />, label: 'Patient Resources' },
+  { icon: <Feather name="map-pin" size={24} color={Colors.green} />, label: 'Map' },
 ];
 
 const RECIPES = [
-  { name: 'Gluten-Free Pizza', emoji: '🍕' },
-  { name: 'Tunisian Brik',     emoji: '🥘' },
-  { name: 'Quinoa Bowl',       emoji: '🥗' },
+  { name: 'Gluten-Free Pizza', icon: <MaterialCommunityIcons name="pizza" size={40} color="#FF9800" /> },
+  { name: 'Tunisian Brik',     icon: <MaterialCommunityIcons name="bowl-mix" size={40} color="#795548" /> },
+  { name: 'Quinoa Bowl',       icon: <MaterialCommunityIcons name="food-apple" size={40} color="#4CAF50" /> },
 ];
 
 const EVENTS = [
@@ -32,25 +37,25 @@ const EVENTS = [
     name:     'Gluten-Free Cooking Workshop',
     location: 'Central Park, NYC',
     date:     'Sat, Jun 15 • 2:00 PM',
-    emoji:    '🍳',
+    icon:     <MaterialCommunityIcons name="pan" size={36} color="#607D8B" />,
   },
   {
     name:     'GF Community Picnic',
     location: 'Central Park, NYC',
     date:     'Sat, Jun 15 • 2:00 PM',
-    emoji:    '🧺',
+    icon:     <MaterialCommunityIcons name="basket" size={36} color="#8D6E63" />,
   },
 ];
 
 const NAV_ITEMS = [
-  { icon: '🏠', label: 'Home',    active: true  },
-  { icon: '📅', label: 'Events',  active: false },
-  { icon: null,  label: '',        fab: true    },
-  { icon: '🎬', label: 'Reels',   active: false },
-  { icon: '👤', label: 'Profile', active: false },
+  { getIcon: (color: string) => <Feather name="home" size={22} color={color} />, label: 'Home', active: true },
+  { getIcon: (color: string) => <Feather name="calendar" size={22} color={color} />, label: 'Events', active: false },
+  { getIcon: () => null, label: '', fab: true },
+  { getIcon: (color: string) => <MaterialCommunityIcons name="movie-play-outline" size={24} color={color} />, label: 'Reels', active: false },
+  { getIcon: (color: string) => <Feather name="user" size={22} color={color} />, label: 'Profile', active: false },
 ];
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }: Props) {
   const { user, logout } = useAuth();
   const firstName = user?.fullName?.split(' ')[0] ?? 'You';
 
@@ -67,16 +72,16 @@ export default function HomeScreen() {
         <View style={s.header}>
           <View style={s.userRow}>
             <View style={s.avatar}>
-              <Text style={{ fontSize: 18 }}>👩</Text>
+              <Feather name="user" size={20} color={Colors.green} />
             </View>
             <Text style={s.greeting}>{firstName}</Text>
           </View>
           <View style={s.headerActions}>
             <TouchableOpacity style={s.iconBtn} id="home-search-btn">
-              <Text>🔍</Text>
+              <Feather name="search" size={18} color={Colors.dark} />
             </TouchableOpacity>
             <TouchableOpacity style={s.iconBtn} id="home-notif-btn">
-              <Text>🔔</Text>
+              <Feather name="bell" size={18} color={Colors.dark} />
             </TouchableOpacity>
             <TouchableOpacity style={s.logoutBtn} onPress={logout} id="home-logout-btn">
               <Text style={s.logoutText}>Logout</Text>
@@ -90,7 +95,7 @@ export default function HomeScreen() {
             Instantly check for gluten & find safe alternatives
           </Text>
           <View style={s.qrBox}>
-            <Text style={s.qrIcon}>⬛</Text>
+            <MaterialCommunityIcons name="qrcode-scan" size={44} color={Colors.dark} />
           </View>
           <TouchableOpacity style={s.tapScanBtn} activeOpacity={0.85} id="home-scan-btn">
             <Text style={s.tapScanText}>Tap to Scan</Text>
@@ -103,7 +108,7 @@ export default function HomeScreen() {
           {QUICK_ACCESS.map((item) => (
             <TouchableOpacity key={item.label} style={s.quickCard} activeOpacity={0.8}>
               <View style={s.quickIconBox}>
-                <Text style={{ fontSize: 22 }}>{item.icon}</Text>
+                {item.icon}
               </View>
               <Text style={s.quickLabel}>{item.label}</Text>
             </TouchableOpacity>
@@ -126,7 +131,7 @@ export default function HomeScreen() {
           {RECIPES.map((r) => (
             <View key={r.name} style={s.recipeCard}>
               <View style={s.recipeImg}>
-                <Text style={{ fontSize: 42 }}>{r.emoji}</Text>
+                {r.icon}
               </View>
               <Text style={s.recipeTitle}>{r.name}</Text>
             </View>
@@ -148,13 +153,19 @@ export default function HomeScreen() {
           {EVENTS.map((ev) => (
             <View key={ev.name} style={s.eventCard}>
               <View style={s.eventImg}>
-                <Text style={{ fontSize: 36 }}>{ev.emoji}</Text>
+                {ev.icon}
                 <View style={s.eventBadge}><Text style={s.gfText}>GF</Text></View>
               </View>
               <View style={s.eventInfo}>
                 <Text style={s.eventName}>{ev.name}</Text>
-                <Text style={s.eventMeta}>📍 {ev.location}</Text>
-                <Text style={s.eventMeta}>📅 {ev.date}</Text>
+                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 2}}>
+                  <Feather name="map-pin" size={8} color={Colors.dark} style={{marginRight: 4}} />
+                  <Text style={s.eventMeta}>{ev.location}</Text>
+                </View>
+                <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                  <Feather name="calendar" size={8} color={Colors.dark} style={{marginRight: 4}} />
+                  <Text style={s.eventMeta}>{ev.date}</Text>
+                </View>
               </View>
             </View>
           ))}
@@ -165,18 +176,34 @@ export default function HomeScreen() {
 
       {/* ── Bottom Navigation Bar ─────────────────────────────────────────── */}
       <View style={s.bottomNav}>
-        {NAV_ITEMS.map((n, i) =>
-          n.fab ? (
-            <TouchableOpacity key="fab" style={s.fab} activeOpacity={0.85} id="home-fab-btn">
-              <Text style={{ color: Colors.white, fontSize: 26 }}>＋</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity key={i} style={s.navBtn} activeOpacity={0.7}>
-              <Text style={{ fontSize: 20 }}>{n.icon}</Text>
-              <Text style={[s.navLabel, n.active && { color: Colors.green }]}>{n.label}</Text>
-            </TouchableOpacity>
-          ),
-        )}
+        <TouchableOpacity style={s.navBtn} activeOpacity={0.7} id="home-nav-home">
+          <Feather name="home" size={22} color={Colors.green} />
+          <Text style={[s.navLabel, { color: Colors.green }]}>Home</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={s.navBtn} activeOpacity={0.7} id="home-nav-events">
+          <Feather name="calendar" size={22} color={Colors.dark} />
+          <Text style={s.navLabel}>Events</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={s.fab} activeOpacity={0.85} id="home-nav-fab">
+          <Feather name="plus" size={28} color={Colors.white} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={s.navBtn} activeOpacity={0.7} id="home-nav-reels">
+          <MaterialCommunityIcons name="movie-play-outline" size={24} color={Colors.dark} />
+          <Text style={s.navLabel}>Reels</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={s.navBtn}
+          activeOpacity={0.7}
+          onPress={() => navigation.navigate('Profile')}
+          id="home-nav-profile"
+        >
+          <Feather name="user" size={22} color={Colors.dark} />
+          <Text style={s.navLabel}>Profile</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
