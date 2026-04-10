@@ -1,9 +1,18 @@
 import React from 'react';
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AuthProvider } from './src/modules/auth/state/auth.context';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import {
+  useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+} from '@expo-google-fonts/poppins';
+
+let hasPatchedDefaultFonts = false;
 
 /**
  * Deep-link / URL mapping.
@@ -46,6 +55,29 @@ const linking: LinkingOptions<ReactNavigation.RootParamList> = {
 };
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+  });
+
+  if (!fontsLoaded) {
+    return (
+      <View style={styles.loadingRoot}>
+        <ActivityIndicator size="small" color="#8BC34A" />
+      </View>
+    );
+  }
+
+  if (!hasPatchedDefaultFonts) {
+    if (!Text.defaultProps) Text.defaultProps = {};
+    if (!TextInput.defaultProps) TextInput.defaultProps = {};
+    Text.defaultProps.style = [Text.defaultProps.style, { fontFamily: 'Poppins_400Regular' }];
+    TextInput.defaultProps.style = [TextInput.defaultProps.style, { fontFamily: 'Poppins_400Regular' }];
+    hasPatchedDefaultFonts = true;
+  }
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <NavigationContainer linking={linking}>
@@ -59,4 +91,5 @@ export default function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  loadingRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F6F5F3' },
 });

@@ -1,354 +1,572 @@
-import React from 'react';
+import React from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
+  Animated,
+  Easing,
+  FlatList,
+  Image,
   ScrollView,
-  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
   TouchableOpacity,
-  Dimensions,
-} from 'react-native';
-import { useAuth } from '@/modules/auth/state/auth.context';
-import { Colors, Font, Spacing } from '@/shared/utils/theme';
-import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { AppStackParamList } from '@/navigation/types';
+  View,
+} from "react-native";
+import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { colors } from "../theme/colors";
+import { homeScreenText } from "../../state/homeData";
+import type { HomeScreenProps } from "../../domain/home.types";
+import { BottomNavBar } from "@/shared/components/BottomNavBar";
 
-type Props = NativeStackScreenProps<AppStackParamList, 'Home'>;
+const ICON_RED = "#C8102E";
+const SCREEN_BG = "#F6F5F3";
 
-const { width } = Dimensions.get('window');
+export function HomeScreen({
+  user,
+  hasNotification = false,
+  onPressScan,
+  onPressSearch,
+  onPressNotification,
+  quickAccessItems,
+  recipes,
+  onPressRecipesSeeAll,
+  events,
+  onPressEventsSeeAll,
+  onPressProfilePhoto,
+  onPressNavHome,
+  onPressNavEvents,
+  onPressNavFab,
+  onPressNavReels,
+  onPressNavProfile,
+}: HomeScreenProps) {
+  const insets = useSafeAreaInsets();
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const searchAnim = React.useRef(new Animated.Value(0)).current;
+  const qrFloat = React.useRef(new Animated.Value(0)).current;
+  const inputRef = React.useRef<TextInput>(null);
 
-const QUICK_ACCESS = [
-  { icon: <Feather name="search" size={24} color={Colors.green} />, label: 'Find Products' },
-  { icon: <Feather name="users" size={24} color={Colors.green} />, label: 'Community' },
-  { icon: <Feather name="file-text" size={24} color={Colors.green} />, label: 'Patient Resources' },
-  { icon: <Feather name="map-pin" size={24} color={Colors.green} />, label: 'Map' },
-];
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(qrFloat, {
+          toValue: 1,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(qrFloat, {
+          toValue: 0,
+          duration: 1800,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [qrFloat]);
 
-const RECIPES = [
-  { name: 'Gluten-Free Pizza', icon: <MaterialCommunityIcons name="pizza" size={40} color="#FF9800" /> },
-  { name: 'Tunisian Brik',     icon: <MaterialCommunityIcons name="bowl-mix" size={40} color="#795548" /> },
-  { name: 'Quinoa Bowl',       icon: <MaterialCommunityIcons name="food-apple" size={40} color="#4CAF50" /> },
-];
+  const qrTranslateY = qrFloat.interpolate({
+    inputRange: [0, 1],
+    outputRange: [2, -8],
+  });
 
-const EVENTS = [
-  {
-    name:     'Gluten-Free Cooking Workshop',
-    location: 'Central Park, NYC',
-    date:     'Sat, Jun 15 • 2:00 PM',
-    icon:     <MaterialCommunityIcons name="pan" size={36} color="#607D8B" />,
-  },
-  {
-    name:     'GF Community Picnic',
-    location: 'Central Park, NYC',
-    date:     'Sat, Jun 15 • 2:00 PM',
-    icon:     <MaterialCommunityIcons name="basket" size={36} color="#8D6E63" />,
-  },
-];
+  const qrScale = qrFloat.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.99, 1.03],
+  });
 
-const NAV_ITEMS = [
-  { getIcon: (color: string) => <Feather name="home" size={22} color={color} />, label: 'Home', active: true },
-  { getIcon: (color: string) => <Feather name="calendar" size={22} color={color} />, label: 'Events', active: false },
-  { getIcon: () => null, label: '', fab: true },
-  { getIcon: (color: string) => <MaterialCommunityIcons name="movie-play-outline" size={24} color={color} />, label: 'Reels', active: false },
-  { getIcon: (color: string) => <Feather name="user" size={22} color={color} />, label: 'Profile', active: false },
-];
+  const toggleSearch = React.useCallback(() => {
+    const next = !searchOpen;
+    setSearchOpen(next);
+    Animated.timing(searchAnim, {
+      toValue: next ? 1 : 0,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(() => {
+      if (next) inputRef.current?.focus();
+      if (!next) setQuery("");
+    });
+    onPressSearch();
+  }, [onPressSearch, searchAnim, searchOpen]);
 
-export default function HomeScreen({ navigation }: Props) {
-  const { user, logout } = useAuth();
-  const firstName = user?.fullName?.split(' ')[0] ?? 'You';
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredQuickAccess = React.useMemo(() => {
+    if (!normalizedQuery) return quickAccessItems;
+    return quickAccessItems.filter((item) => item.label.toLowerCase().includes(normalizedQuery));
+  }, [normalizedQuery, quickAccessItems]);
+
+  const filteredRecipes = React.useMemo(() => {
+    if (!normalizedQuery) return recipes;
+    return recipes.filter((item) => item.title.toLowerCase().includes(normalizedQuery));
+  }, [normalizedQuery, recipes]);
+
+  const filteredEvents = React.useMemo(() => {
+    if (!normalizedQuery) return events;
+    return events.filter((item) => {
+      const blob = `${item.title} ${item.location} ${item.date}`.toLowerCase();
+      return blob.includes(normalizedQuery);
+    });
+  }, [events, normalizedQuery]);
+
+  const searchHeight = searchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 48],
+  });
+
+  const searchOpacity = searchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
 
   return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
-
+    <View style={styles.root}>
       <ScrollView
-        style={s.flex}
-        contentContainerStyle={s.content}
+        style={styles.screen}
+        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 8, 22) }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ────────────────────────────────────────────────────────── */}
-        <View style={s.header}>
-          <View style={s.userRow}>
-            <View style={s.avatar}>
-              <Feather name="user" size={20} color={Colors.green} />
+        <View style={styles.headerRow}>
+          <TouchableOpacity style={styles.userInfo} activeOpacity={0.8} onPress={onPressProfilePhoto}>
+            <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
+            <Text style={styles.greeting}>{user.name}</Text>
+            <View style={styles.avatarBadge}>
+              <Feather name="award" size={10} color="#FFFFFF" />
             </View>
-            <Text style={s.greeting}>{firstName}</Text>
-          </View>
-          <View style={s.headerActions}>
-            <TouchableOpacity style={s.iconBtn} id="home-search-btn">
-              <Feather name="search" size={18} color={Colors.dark} />
+          </TouchableOpacity>
+
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={toggleSearch} activeOpacity={0.8} style={styles.iconButton}>
+              <Feather name="search" size={18} color="#393C40" />
             </TouchableOpacity>
-            <TouchableOpacity style={s.iconBtn} id="home-notif-btn">
-              <Feather name="bell" size={18} color={Colors.dark} />
-            </TouchableOpacity>
-            <TouchableOpacity style={s.logoutBtn} onPress={logout} id="home-logout-btn">
-              <Text style={s.logoutText}>Logout</Text>
+            <TouchableOpacity onPress={onPressNotification} activeOpacity={0.8} style={styles.iconButton}>
+              <Ionicons name="notifications-outline" size={18} color="#393C40" />
+              {hasNotification ? <View style={styles.notificationDot} /> : null}
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── QR Scanner Banner ─────────────────────────────────────────────── */}
-        <View style={s.banner}>
-          <Text style={s.bannerSub}>
-            Instantly check for gluten & find safe alternatives
-          </Text>
-          <View style={s.qrBox}>
-            <MaterialCommunityIcons name="qrcode-scan" size={44} color={Colors.dark} />
+        <Animated.View style={[styles.searchWrap, { height: searchHeight, opacity: searchOpacity }]}>
+          <View style={styles.searchInner}>
+            <Feather name="search" size={16} color="#6B7280" />
+            <TextInput
+              ref={inputRef}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search products, recipes, events"
+              placeholderTextColor="#9CA3AF"
+              underlineColorAndroid="transparent"
+              style={styles.searchInput}
+            />
+            {!!query && (
+              <TouchableOpacity activeOpacity={0.8} onPress={() => setQuery("")}>
+                <Ionicons name="close-circle" size={16} color="#9CA3AF" />
+              </TouchableOpacity>
+            )}
           </View>
-          <TouchableOpacity style={s.tapScanBtn} activeOpacity={0.85} id="home-scan-btn">
-            <Text style={s.tapScanText}>Tap to Scan</Text>
+        </Animated.View>
+
+        <View style={styles.heroCard}>
+          <Animated.View
+            style={{
+              transform: [{ translateY: qrTranslateY }, { scale: qrScale }],
+            }}
+          >
+            <Ionicons name="qr-code" size={84} color="#FFFFFF" />
+          </Animated.View>
+          <Text style={styles.heroSubtitle}>{homeScreenText.qrSubtitle}</Text>
+          <TouchableOpacity activeOpacity={0.85} onPress={onPressScan} style={styles.scanCta}>
+            <Text style={styles.scanCtaText}>Tap to Scan</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── Quick Access ───────────────────────────────────────────────────── */}
-        <Text style={s.sectionTitle}>Quick Access</Text>
-        <View style={s.quickGrid}>
-          {QUICK_ACCESS.map((item) => (
-            <TouchableOpacity key={item.label} style={s.quickCard} activeOpacity={0.8}>
-              <View style={s.quickIconBox}>
-                {item.icon}
+        <Text style={styles.sectionTitlePrimary}>{homeScreenText.quickAccessTitle}</Text>
+
+        <View style={styles.quickGrid}>
+          {filteredQuickAccess.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.85}
+              onPress={item.onPress}
+              style={styles.quickCard}
+            >
+              <View style={styles.quickIconWrap}>
+                <Ionicons name={item.icon} size={22} color={ICON_RED} />
               </View>
-              <Text style={s.quickLabel}>{item.label}</Text>
+              <Text style={styles.quickCardLabel}>{item.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* ── Recipes ───────────────────────────────────────────────────────── */}
-        <View style={s.sectionRow}>
-          <Text style={s.sectionTitle}>Check Recipes</Text>
-          <View style={s.gfBadge}><Text style={s.gfText}>GF</Text></View>
-          <TouchableOpacity style={s.seeAll} id="home-recipes-see-all">
-            <Text style={s.seeAllText}>See All →</Text>
+        <View style={styles.sectionRow}>
+          <View style={styles.sectionRowLeft}>
+            <Text style={styles.sectionTitleSecondary}>{homeScreenText.checkRecipesTitle}</Text>
+            <View style={styles.gfPill}>
+              <MaterialCommunityIcons name="sparkles" size={10} color="#FFFFFF" />
+              <Text style={styles.gfPillText}>GF</Text>
+            </View>
+          </View>
+          <TouchableOpacity activeOpacity={0.8} onPress={onPressRecipesSeeAll}>
+            <Text style={styles.seeAll}>See All</Text>
           </TouchableOpacity>
         </View>
-        <ScrollView
+
+        <FlatList
           horizontal
+          data={filteredRecipes}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.recipesList}
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.hRow}
-        >
-          {RECIPES.map((r) => (
-            <View key={r.name} style={s.recipeCard}>
-              <View style={s.recipeImg}>
-                {r.icon}
-              </View>
-              <Text style={s.recipeTitle}>{r.name}</Text>
-            </View>
-          ))}
-        </ScrollView>
+          renderItem={({ item }) => (
+            <TouchableOpacity activeOpacity={0.85} onPress={item.onPress} style={styles.recipeCard}>
+              <Image source={{ uri: item.imageUrl }} style={styles.recipeImage} />
+              <Text style={styles.recipeName} numberOfLines={2}>
+                {item.title}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
 
-        {/* ── Events ────────────────────────────────────────────────────────── */}
-        <View style={s.sectionRow}>
-          <Text style={s.sectionTitle}>Check Events</Text>
-          <TouchableOpacity style={s.seeAll} id="home-events-see-all">
-            <Text style={s.seeAllText}>See All →</Text>
+        <View style={[styles.sectionRow, styles.eventsHeader]}>
+          <Text style={styles.sectionTitleSecondary}>{homeScreenText.checkEventsTitle}</Text>
+          <TouchableOpacity activeOpacity={0.8} onPress={onPressEventsSeeAll}>
+            <Text style={styles.seeAll}>See All</Text>
           </TouchableOpacity>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[s.hRow, { marginBottom: 0 }]}
-        >
-          {EVENTS.map((ev) => (
-            <View key={ev.name} style={s.eventCard}>
-              <View style={s.eventImg}>
-                {ev.icon}
-                <View style={s.eventBadge}><Text style={s.gfText}>GF</Text></View>
-              </View>
-              <View style={s.eventInfo}>
-                <Text style={s.eventName}>{ev.name}</Text>
-                <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 2}}>
-                  <Feather name="map-pin" size={8} color={Colors.dark} style={{marginRight: 4}} />
-                  <Text style={s.eventMeta}>{ev.location}</Text>
-                </View>
-                <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                  <Feather name="calendar" size={8} color={Colors.dark} style={{marginRight: 4}} />
-                  <Text style={s.eventMeta}>{ev.date}</Text>
-                </View>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
 
-        <View style={{ height: 100 }} />
+        <View style={styles.eventsRow}>
+          {filteredEvents.map((item) => (
+            <TouchableOpacity key={item.id} activeOpacity={0.85} onPress={item.onPress} style={styles.eventCard}>
+              <Image source={{ uri: item.imageUrl }} style={styles.eventImage} />
+              <View style={styles.eventBody}>
+                <Text style={styles.eventTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                <View style={styles.metaRow}>
+                  <Ionicons name="location-outline" size={10} color={ICON_RED} />
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    {item.location}
+                  </Text>
+                </View>
+                <View style={styles.metaRow}>
+                  <Ionicons name="calendar-outline" size={10} color={ICON_RED} />
+                  <Text style={styles.metaText} numberOfLines={1}>
+                    {item.date}
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={{ height: 116 + insets.bottom }} />
       </ScrollView>
 
-      {/* ── Bottom Navigation Bar ─────────────────────────────────────────── */}
-      <View style={s.bottomNav}>
-        <TouchableOpacity style={s.navBtn} activeOpacity={0.7} id="home-nav-home">
-          <Feather name="home" size={22} color={Colors.green} />
-          <Text style={[s.navLabel, { color: Colors.green }]}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={s.navBtn} activeOpacity={0.7} id="home-nav-events">
-          <Feather name="calendar" size={22} color={Colors.dark} />
-          <Text style={s.navLabel}>Events</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={s.fab} activeOpacity={0.85} id="home-nav-fab">
-          <Feather name="plus" size={28} color={Colors.white} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={s.navBtn} activeOpacity={0.7} id="home-nav-reels">
-          <MaterialCommunityIcons name="movie-play-outline" size={24} color={Colors.dark} />
-          <Text style={s.navLabel}>Reels</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={s.navBtn}
-          activeOpacity={0.7}
-          onPress={() => navigation.navigate('Profile')}
-          id="home-nav-profile"
-        >
-          <Feather name="user" size={22} color={Colors.dark} />
-          <Text style={s.navLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      <BottomNavBar
+        activeTab="events"
+        idPrefix="home-nav"
+        onPressHome={onPressNavHome}
+        onPressEvents={onPressNavEvents}
+        onPressCenter={onPressNavFab}
+        onPressReels={onPressNavReels}
+        onPressProfile={onPressNavProfile}
+      />
+    </View>
   );
 }
 
-const s = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: Colors.bg },
-  flex:    { flex: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 12 },
-
-  // Header
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 16,
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: SCREEN_BG,
   },
-  userRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  screen: {
+    flex: 1,
+    backgroundColor: SCREEN_BG,
+  },
+  content: {
+    paddingHorizontal: 12,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 18,
+    paddingHorizontal: 6,
+  },
+  userInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    position: "relative",
+  },
   avatar: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: Colors.greenLight, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: Colors.green,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#E5E7EB",
   },
-  greeting: { fontSize: 17, fontWeight: Font.medium, color: '#343831', marginLeft: 8 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: Colors.bg, alignItems: 'center', justifyContent: 'center',
-    elevation: 2,
+  avatarBadge: {
+    position: "absolute",
+    left: 27,
+    top: 24,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: "#F9FAFB",
+    backgroundColor: colors.primaryGreen,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  logoutBtn: {
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 8, borderWidth: 1, borderColor: Colors.error,
+  greeting: {
+    marginLeft: 8,
+    fontSize: 18,
+    lineHeight: 23,
+    fontWeight: "500",
+    color: "#343831",
   },
-  logoutText: { fontSize: 11, color: Colors.error, fontWeight: Font.semibold },
-
-  // Banner
-  banner: {
-    width: '100%', height: 200,
-    backgroundColor: 'rgba(139,195,74,0.8)',
-    borderRadius: 24, marginBottom: 20,
-    alignItems: 'center', justifyContent: 'center', padding: 16,
-    shadowColor: Colors.green,
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3,
-    shadowRadius: 10, elevation: 5,
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
-  bannerSub: {
-    fontSize: 10, color: '#DCFCE7', textAlign: 'center',
-    textTransform: 'capitalize', marginBottom: 12,
+  searchWrap: {
+    overflow: "hidden",
+    marginBottom: 10,
+    borderRadius: 14,
+    backgroundColor: SCREEN_BG,
   },
-  qrBox: {
-    width: 80, height: 80, backgroundColor: Colors.white,
-    borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+  searchInner: {
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    gap: 8,
   },
-  qrIcon: { fontSize: 50 },
-  tapScanBtn: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 10, paddingHorizontal: 18, paddingVertical: 8,
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: "#111827",
+    paddingVertical: 0,
+    backgroundColor: "transparent",
+    includeFontPadding: false,
   },
-  tapScanText: { fontSize: 11, fontWeight: Font.bold, color: Colors.white },
-
-  // Sections
-  sectionTitle: {
-    fontSize: 15, fontWeight: Font.bold, color: '#111827', marginBottom: 12,
+  iconButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F6F5F3",
+  },
+  notificationDot: {
+    position: "absolute",
+    right: 8,
+    top: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: ICON_RED,
+  },
+  heroCard: {
+    height: 238,
+    borderRadius: 24,
+    backgroundColor: "rgba(139, 195, 74, 0.8)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 6,
+  },
+  heroSubtitle: {
+    marginTop: 6,
+    fontSize: 10,
+    lineHeight: 24,
+    color: "#DCFCE7",
+    textTransform: "capitalize",
+    fontWeight: "400",
+  },
+  scanCta: {
+    marginTop: 12,
+    height: 40,
+    minWidth: 86,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+  },
+  scanCtaText: {
+    fontSize: 11,
+    lineHeight: 20,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  sectionTitlePrimary: {
+    marginTop: 22,
+    marginLeft: 0,
+    fontSize: 15,
+    lineHeight: 28,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  quickGrid: {
+    marginTop: 14,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  quickCard: {
+    width: "48.2%",
+    backgroundColor: "#F6F5F3",
+    borderRadius: 16,
+    alignItems: "center",
+    paddingVertical: 24,
+    marginBottom: 14,
+    shadowColor: "#000000",
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  quickIconWrap: {
+    width: 55,
+    height: 55,
+    borderRadius: 16,
+    backgroundColor: "rgba(139, 195, 74, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+  quickCardLabel: {
+    fontSize: 12,
+    lineHeight: 18,
+    letterSpacing: 0.2,
+    fontWeight: "600",
+    color: "#2E2E2E",
   },
   sectionRow: {
-    flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8,
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  gfBadge: {
-    backgroundColor: Colors.green, borderRadius: 999,
-    paddingHorizontal: 8, paddingVertical: 3,
+  sectionRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
-  gfText: { fontSize: 10, fontWeight: Font.bold, color: Colors.white },
-  seeAll: { marginLeft: 'auto' },
-  seeAllText: { fontSize: 11, fontWeight: Font.semibold, color: '#C8102E' },
-
-  // Quick Access
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginBottom: 24 },
-  quickCard: {
-    width: (width - 46) / 2, height: 140,
-    backgroundColor: Colors.white, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12, shadowRadius: 8, elevation: 4,
+  sectionTitleSecondary: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+    color: "#363636",
   },
-  quickIconBox: {
-    width: 55, height: 55, borderRadius: 16, backgroundColor: Colors.greenLight,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+  gfPill: {
+    height: 24,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    backgroundColor: "#8BC34A",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
-  quickLabel: { fontSize: 12, fontWeight: Font.semibold, color: Colors.dark, textAlign: 'center' },
-
-  // Horizontal row
-  hRow: { paddingRight: 16, marginBottom: 24, gap: 14 },
-
-  // Recipes
+  gfPillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  seeAll: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+    color: ICON_RED,
+  },
+  recipesList: {
+    marginTop: 12,
+    paddingBottom: 6,
+    gap: 12,
+  },
   recipeCard: {
-    width: 138, height: 190,
-    backgroundColor: Colors.white, borderRadius: 20, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15, shadowRadius: 10, elevation: 5,
+    width: 138,
+    height: 190,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000000",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    elevation: 5,
+    overflow: "hidden",
   },
-  recipeImg: {
-    width: '100%', height: 130, backgroundColor: '#F3F4F6',
-    alignItems: 'center', justifyContent: 'center',
+  recipeImage: {
+    width: "100%",
+    height: 140,
+    resizeMode: "cover",
   },
-  recipeTitle: {
-    fontSize: 13, fontWeight: Font.bold, color: '#000',
-    textAlign: 'center', marginTop: 10, paddingHorizontal: 6,
+  recipeName: {
+    marginTop: 8,
+    textAlign: "center",
+    paddingHorizontal: 8,
+    fontSize: 15,
+    lineHeight: 17,
+    fontWeight: "700",
+    color: "#000000",
   },
-
-  // Events
+  eventsHeader: {
+    marginTop: 18,
+  },
+  eventsRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
   eventCard: {
-    width: 160, backgroundColor: Colors.white, borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08, shadowRadius: 6, elevation: 3,
+    width: "48.3%",
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+    shadowColor: "#000000",
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
+    elevation: 3,
   },
-  eventImg: {
-    width: '100%', height: 110, backgroundColor: '#F3F4F6',
-    alignItems: 'center', justifyContent: 'center', position: 'relative',
+  eventImage: {
+    width: "100%",
+    height: 128,
+    backgroundColor: "#F3F4F6",
   },
-  eventBadge: {
-    position: 'absolute', top: 8, right: 8,
-    backgroundColor: Colors.green, borderRadius: 999,
-    paddingHorizontal: 7, paddingVertical: 2,
+  eventBody: {
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 10,
   },
-  eventInfo: { padding: 10 },
-  eventName: { fontSize: 9, fontWeight: Font.bold, color: '#111827', marginBottom: 6 },
-  eventMeta: { fontSize: 8, color: Colors.dark, marginBottom: 2 },
-
-  // Bottom Nav
-  bottomNav: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: 80,
-    backgroundColor: Colors.white,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
-    paddingBottom: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 10,
+  eventTitle: {
+    fontSize: 9,
+    lineHeight: 14,
+    fontWeight: "700",
+    color: "#111827",
   },
-  navBtn: { alignItems: 'center', gap: 2, minWidth: 48 },
-  navLabel: { fontSize: 8, fontWeight: Font.medium, color: Colors.dark, marginTop: 2 },
-  fab: {
-    width: 60, height: 60, borderRadius: 30, backgroundColor: Colors.green,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
-    borderWidth: 4, borderColor: Colors.bg,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15, shadowRadius: 10, elevation: 8,
+  metaRow: {
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metaText: {
+    flex: 1,
+    fontSize: 9,
+    lineHeight: 14,
+    fontWeight: "400",
+    color: "#2E2E2E",
   },
 });
+
+export default HomeScreen;

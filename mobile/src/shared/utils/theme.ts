@@ -1,4 +1,5 @@
 export const Colors = {
+  primaryRed:  '#C8102E',
   bg:          '#F6F5F3',
   green:       '#8BC34A',
   greenLight:  'rgba(139,195,74,0.12)',
@@ -13,6 +14,7 @@ export const Colors = {
 };
 
 export const Font = {
+  family:      'Poppins',
   light:      '300' as const,
   regular:    '400' as const,
   medium:     '500' as const,
