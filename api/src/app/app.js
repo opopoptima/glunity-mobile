@@ -1,5 +1,40 @@
-/**
- * Skeleton app assembly file.
- * Express app wiring is intentionally not implemented at this stage.
- */
+'use strict';
 
+const express         = require('express');
+const cors            = require('cors');
+const cookieParser    = require('cookie-parser');
+const corsOptions     = require('./config/cors');
+const errorMiddleware = require('./common/middleware/error.middleware');
+const requestId       = require('./common/middleware/request-id.middleware');
+const logger          = require('./bootstrap/logger.bootstrap');
+
+// ── Route modules ─────────────────────────────────────────────────────────────
+const authRoutes = require('./modules/auth/auth.routes');
+
+const app = express();
+
+// ── Global middleware ──────────────────────────────────────────────────────────
+app.use(requestId);
+app.use(cors(corsOptions));
+app.use(cookieParser());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+
+// ── Health check ──────────────────────────────────────────────────────────────
+app.get('/health', (_req, res) =>
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() }),
+);
+
+// ── API Routes ────────────────────────────────────────────────────────────────
+app.use('/api/auth', authRoutes);
+
+// ── 404 handler ───────────────────────────────────────────────────────────────
+app.use((req, res) => {
+  logger.warn(`Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ success: false, code: 'NOT_FOUND', message: 'Route not found' });
+});
+
+// ── Global error handler (MUST be last) ───────────────────────────────────────
+app.use(errorMiddleware);
+
+module.exports = app;
