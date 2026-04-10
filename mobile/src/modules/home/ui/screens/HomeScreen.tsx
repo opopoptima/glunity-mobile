@@ -4,6 +4,7 @@ import {
   Easing,
   FlatList,
   Image,
+  InteractionManager,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +21,16 @@ import { BottomNavBar } from "@/shared/components/BottomNavBar";
 
 const ICON_RED = "#C8102E";
 const SCREEN_BG = "#F6F5F3";
+
+const optimizeUnsplashImage = (url: string, width: number, height: number) => {
+  if (!url.includes("images.unsplash.com")) {
+    return url;
+  }
+
+  const hasQuery = url.includes("?");
+  const separator = hasQuery ? "&" : "?";
+  return `${url}${separator}auto=format&fit=crop&q=75&w=${width}&h=${height}`;
+};
 
 export function HomeScreen({
   user,
@@ -46,6 +57,18 @@ export function HomeScreen({
   const qrFloat = React.useRef(new Animated.Value(0)).current;
   const inputRef = React.useRef<TextInput>(null);
 
+  const avatarUrl = React.useMemo(() => optimizeUnsplashImage(user.avatarUrl, 96, 96), [user.avatarUrl]);
+
+  const optimizedRecipes = React.useMemo(
+    () => recipes.map((item) => ({ ...item, imageUrl: optimizeUnsplashImage(item.imageUrl, 400, 320) })),
+    [recipes],
+  );
+
+  const optimizedEvents = React.useMemo(
+    () => events.map((item) => ({ ...item, imageUrl: optimizeUnsplashImage(item.imageUrl, 420, 320) })),
+    [events],
+  );
+
   React.useEffect(() => {
     Animated.loop(
       Animated.sequence([
@@ -65,6 +88,20 @@ export function HomeScreen({
     ).start();
   }, [qrFloat]);
 
+  React.useEffect(() => {
+    const urls = [
+      avatarUrl,
+      ...optimizedRecipes.slice(0, 3).map((item) => item.imageUrl),
+      ...optimizedEvents.slice(0, 2).map((item) => item.imageUrl),
+    ];
+
+    urls.forEach((url) => {
+      Image.prefetch(url).catch(() => {
+        // Ignore prefetch failures; rendering falls back to normal loading.
+      });
+    });
+  }, [avatarUrl, optimizedEvents, optimizedRecipes]);
+
   const qrTranslateY = qrFloat.interpolate({
     inputRange: [0, 1],
     outputRange: [2, -8],
@@ -78,16 +115,21 @@ export function HomeScreen({
   const toggleSearch = React.useCallback(() => {
     const next = !searchOpen;
     setSearchOpen(next);
+
+    if (next) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+      InteractionManager.runAfterInteractions(() => onPressSearch());
+    } else {
+      inputRef.current?.blur();
+      setQuery("");
+    }
+
     Animated.timing(searchAnim, {
       toValue: next ? 1 : 0,
-      duration: 260,
+      duration: 180,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
-    }).start(() => {
-      if (next) inputRef.current?.focus();
-      if (!next) setQuery("");
-    });
-    onPressSearch();
+    }).start();
   }, [onPressSearch, searchAnim, searchOpen]);
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -97,17 +139,17 @@ export function HomeScreen({
   }, [normalizedQuery, quickAccessItems]);
 
   const filteredRecipes = React.useMemo(() => {
-    if (!normalizedQuery) return recipes;
-    return recipes.filter((item) => item.title.toLowerCase().includes(normalizedQuery));
-  }, [normalizedQuery, recipes]);
+    if (!normalizedQuery) return optimizedRecipes;
+    return optimizedRecipes.filter((item) => item.title.toLowerCase().includes(normalizedQuery));
+  }, [normalizedQuery, optimizedRecipes]);
 
   const filteredEvents = React.useMemo(() => {
-    if (!normalizedQuery) return events;
-    return events.filter((item) => {
+    if (!normalizedQuery) return optimizedEvents;
+    return optimizedEvents.filter((item) => {
       const blob = `${item.title} ${item.location} ${item.date}`.toLowerCase();
       return blob.includes(normalizedQuery);
     });
-  }, [events, normalizedQuery]);
+  }, [normalizedQuery, optimizedEvents]);
 
   const searchHeight = searchAnim.interpolate({
     inputRange: [0, 1],
@@ -125,10 +167,11 @@ export function HomeScreen({
         style={styles.screen}
         contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 8, 22) }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.userInfo} activeOpacity={0.8} onPress={onPressProfilePhoto}>
-            <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
+            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
             <Text style={styles.greeting}>{user.name}</Text>
             <View style={styles.avatarBadge}>
               <Feather name="award" size={10} color="#FFFFFF" />
