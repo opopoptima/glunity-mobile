@@ -119,7 +119,11 @@ export default function HomeScreen({ navigation }: Props) {
         <View style={s.sectionRow}>
           <Text style={s.sectionTitle}>Check Recipes</Text>
           <View style={s.gfBadge}><Text style={s.gfText}>GF</Text></View>
-          <TouchableOpacity style={s.seeAll} id="home-recipes-see-all">
+          <TouchableOpacity
+            style={s.seeAll}
+            id="home-recipes-see-all"
+            onPress={() => navigation.navigate('Recipes')}
+          >
             <Text style={s.seeAllText}>See All →</Text>
           </TouchableOpacity>
         </View>
@@ -129,12 +133,17 @@ export default function HomeScreen({ navigation }: Props) {
           contentContainerStyle={s.hRow}
         >
           {RECIPES.map((r) => (
-            <View key={r.name} style={s.recipeCard}>
+            <TouchableOpacity
+              key={r.name}
+              style={s.recipeCard}
+              activeOpacity={0.88}
+              onPress={() => navigation.navigate('Recipes')}
+            >
               <View style={s.recipeImg}>
                 {r.icon}
               </View>
               <Text style={s.recipeTitle}>{r.name}</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </ScrollView>
 
