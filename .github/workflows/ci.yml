@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  structure-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify docs exist
+        run: |
+          test -f docs/01-architecture-overview.md
+          test -f docs/engineering-ddoc.md
+      - name: Verify api/mobile roots exist
+        run: |
+          test -d api
+          test -d mobile

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Glunity",
+    "slug": "glunity-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "plugins": [
+      "expo-secure-store",
+      "expo-font"
+    ]
+  }
+}

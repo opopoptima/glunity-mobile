@@ -1,0 +1,49 @@
+import type { ComponentProps } from "react";
+import { Ionicons } from "@expo/vector-icons";
+
+type IoniconName = ComponentProps<typeof Ionicons>["name"];
+
+export interface QuickAccessItem {
+  id: string;
+  label: string;
+  icon: IoniconName;
+  onPress: () => void;
+}
+
+export interface Recipe {
+  id: string;
+  title: string;
+  imageUrl: string;
+  onPress: () => void;
+}
+
+export interface GlunityEvent {
+  id: string;
+  title: string;
+  imageUrl: string;
+  location: string;
+  date: string;
+  onPress: () => void;
+}
+
+export interface HomeScreenProps {
+  user: {
+    name: string;
+    avatarUrl: string;
+  };
+  hasNotification?: boolean;
+  onPressScan: () => void;
+  onPressSearch: () => void;
+  onPressNotification: () => void;
+  onPressProfilePhoto?: () => void;
+  quickAccessItems: QuickAccessItem[];
+  recipes: Recipe[];
+  onPressRecipesSeeAll: () => void;
+  events: GlunityEvent[];
+  onPressEventsSeeAll: () => void;
+  onPressNavHome?: () => void;
+  onPressNavEvents?: () => void;
+  onPressNavFab?: () => void;
+  onPressNavReels?: () => void;
+  onPressNavProfile?: () => void;
+}
