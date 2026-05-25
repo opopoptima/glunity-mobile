@@ -41,6 +41,13 @@ export function AppNavigator() {
             return item;
           });
 
+          const dynamicRecipes = homeScreenMockProps.recipes.map(recipe => ({
+            ...recipe,
+            onPress: () => {
+              navigation.navigate('RecipeDetail', { recipeId: recipe.id, initialRecipe: recipe });
+            }
+          }));
+
           const handleProfileNavigation = () => {
             if (user?.profileType === 'pro_commerce') {
               navigation.navigate('SellerProfile');
@@ -54,6 +61,8 @@ export function AppNavigator() {
               {...homeScreenMockProps}
               user={displayUser}
               quickAccessItems={dynamicQuickAccessItems}
+              recipes={dynamicRecipes}
+              onPressRecipesSeeAll={() => navigation.navigate('Recipes')}
               onPressProfilePhoto={handleProfileNavigation}
               onPressNavHome={() => navigation.navigate('Home')}
               onPressNavProfile={handleProfileNavigation}
