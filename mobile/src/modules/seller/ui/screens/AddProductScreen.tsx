@@ -390,7 +390,7 @@ export default function AddProductScreen({ navigation, route }: Props) {
         <View style={s.inputGroup}>
           <Text style={s.label}>Price (TND)</Text>
           <TextInput
-            style={[s.input, s.priceInput]}
+            style={s.input}
             placeholder="e.g. 15.00"
             placeholderTextColor="rgba(46, 46, 46, 0.3)"
             value={price}

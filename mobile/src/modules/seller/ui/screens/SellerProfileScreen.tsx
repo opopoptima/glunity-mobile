@@ -701,11 +701,6 @@ const s = StyleSheet.create({
     marginBottom: 16,
     paddingHorizontal: 4,
   },
-  sectionTitle: {
-    fontSize: 15.3,
-    fontWeight: Font.bold,
-    color: Colors.dark,
-  },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',

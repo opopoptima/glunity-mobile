@@ -43,7 +43,7 @@ const JOURNEY_LEVELS = ['Beginner', 'Aware', 'Safe Eater', 'Fighter', 'Titan'];
 const ACTIVE_INDEX = 2;
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
 
   const bottomInset = Math.max(insets.bottom, 8);

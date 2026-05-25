@@ -202,7 +202,7 @@ export function HomeScreen({
           <View style={styles.sectionRowLeft}>
             <Text style={styles.sectionTitleSecondary}>{homeScreenText.checkRecipesTitle}</Text>
             <View style={styles.gfPill}>
-              <MaterialCommunityIcons name="sparkles" size={10} color="#FFFFFF" />
+              <Ionicons name="sparkles" size={10} color="#FFFFFF" />
               <Text style={styles.gfPillText}>GF</Text>
             </View>
           </View>

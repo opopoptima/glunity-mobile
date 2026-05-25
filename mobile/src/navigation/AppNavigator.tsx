@@ -25,7 +25,7 @@ export function AppNavigator() {
         {({ navigation }) => {
           const { user } = useAuth();
           const displayUser = user ? {
-            name: user.name || homeScreenMockProps.user.name,
+            name: user.fullName || homeScreenMockProps.user.name,
             avatarUrl: user.avatarUrl || homeScreenMockProps.user.avatarUrl,
           } : homeScreenMockProps.user;
 
