@@ -12,10 +12,13 @@ export type AuthStackParamList = {
 
 // ── App (authenticated) stack ─────────────────────────────────────────────────
 export type AppStackParamList = {
-  Home:         undefined;
-  Recipes:      undefined;
-  RecipeDetail: { recipeId?: string; initialRecipe?: any };
-  Profile:      undefined;
-  Settings:     undefined;
-  EditProfile:  undefined;
+  Home:          undefined;
+  Recipes:       undefined;
+  RecipeDetail:  { recipeId?: string; initialRecipe?: any };
+  Profile:       undefined;
+  Settings:      undefined;
+  EditProfile:   undefined;
+  SellerProfile: undefined;
+  AddProduct:    { product?: any } | undefined;
+  SellerStats:   undefined;
 };

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import type { AuthStackParamList } from '../../../navigation/types';
+import type { AuthStackParamList } from '../../../../navigation/types';
 import { AuthInput } from '../../../../shared/components/AuthInput';
 import { AuthButton } from '../../../../shared/components/AuthButton';
 import { WaveBackground } from '../../../../shared/components/WaveBackground';

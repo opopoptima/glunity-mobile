@@ -106,7 +106,16 @@ export default function HomeScreen({ navigation }: Props) {
         <Text style={s.sectionTitle}>Quick Access</Text>
         <View style={s.quickGrid}>
           {QUICK_ACCESS.map((item) => (
-            <TouchableOpacity key={item.label} style={s.quickCard} activeOpacity={0.8}>
+            <TouchableOpacity
+              key={item.label}
+              style={s.quickCard}
+              activeOpacity={0.8}
+              onPress={() => {
+                if (item.label === 'Find Products') {
+                  navigation.navigate('SellerProfile');
+                }
+              }}
+            >
               <View style={s.quickIconBox}>
                 {item.icon}
               </View>
@@ -207,7 +216,13 @@ export default function HomeScreen({ navigation }: Props) {
         <TouchableOpacity
           style={s.navBtn}
           activeOpacity={0.7}
-          onPress={() => navigation.navigate('Profile')}
+          onPress={() => {
+            if (user?.profileType === 'pro_commerce') {
+              navigation.navigate('SellerProfile');
+            } else {
+              navigation.navigate('Profile');
+            }
+          }}
           id="home-nav-profile"
         >
           <Feather name="user" size={22} color={Colors.dark} />

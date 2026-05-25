@@ -12,6 +12,7 @@ const logger          = require('./bootstrap/logger.bootstrap');
 const authRoutes  = require('./modules/auth/auth.routes');
 const usersRoutes = require('./modules/users/users.routes');
 const recipesRoutes = require('./modules/recipes/recipes.routes');
+const productsRoutes = require('./modules/products/products.routes');
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.get('/health', (_req, res) =>
 app.use('/api/auth',  authRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/recipes', recipesRoutes);
+app.use('/api/products', productsRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
