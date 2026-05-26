@@ -6,19 +6,19 @@ import {
   FlatList,
   Image,
   RefreshControl,
-  SafeAreaView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-import { BottomNavBar } from '@/shared/components/BottomNavBar';
-import { Colors, Font, Radius, Spacing } from '@/shared/utils/theme';
+import { AppScaffold } from '@/shared/components/AppScaffold';
+import { useTheme } from '@/shared/context/theme.context';
+import { Radius } from '@/shared/utils/theme';
 import { useAuth } from '@/modules/auth/state/auth.context';
 import productsApi, { Product } from '@/modules/seller/api/products.api';
 import type { AppStackParamList } from '@/navigation/types';
@@ -66,14 +66,34 @@ type Props = NativeStackScreenProps<AppStackParamList, 'ProductsMarket'>;
 
 // ─── Product Card ─────────────────────────────────────────────────────────────
 const ProductCard = React.memo(({ product, onPress }: { product: Product; onPress: () => void }) => {
+  const { theme: T } = useTheme();
   const scaleAnim  = useRef(new Animated.Value(1)).current;
   const imageUri   = useMemo(() => getProductImage(product), [product]);
   const sellerName = useMemo(() => getSellerName(product.sellerId), [product.sellerId]);
 
   const handlePressIn = () =>
-    Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true, speed: 50 }).start();
+    Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: Platform.OS !== 'web', speed: 50 }).start();
   const handlePressOut = () =>
-    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 50 }).start();
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: Platform.OS !== 'web', speed: 50 }).start();
+
+  const s = React.useMemo(() => StyleSheet.create({
+    card: {
+      backgroundColor: T.surface,
+      borderRadius: Radius.lg, overflow: 'hidden',
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 6, elevation: 3,
+    },
+    imageWrap: { width: '100%', height: CARD_W, backgroundColor: T.surfaceAlt, position: 'relative' },
+    cardImage: { width: '100%', height: '100%' },
+    certBadge: {
+      position: 'absolute', top: 6, right: 6, backgroundColor: T.green,
+      borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+    },
+    certBadgeText: { fontSize: 9, fontWeight: '700', fontFamily: 'Poppins_700Bold', color: '#FFFFFF' },
+    cardBody: { padding: 10, gap: 2 },
+    productName: { fontSize: 13, fontWeight: '700', fontFamily: 'Poppins_700Bold', color: T.text, lineHeight: 18 },
+    sellerName: { fontSize: 11, color: T.red, fontWeight: '500', fontFamily: 'Poppins_500Medium' },
+    price: { fontSize: 13, fontWeight: '700', fontFamily: 'Poppins_700Bold', color: T.green, marginTop: 2 },
+  }), [T]);
 
   return (
     <Animated.View style={{ transform: [{ scale: scaleAnim }], width: CARD_W }}>
@@ -106,7 +126,107 @@ const ProductCard = React.memo(({ product, onPress }: { product: Product; onPres
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ProductsMarketScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const { theme: T, isDark } = useTheme();
   const insets   = useSafeAreaInsets();
+
+  const s = React.useMemo(() => StyleSheet.create({
+    safe: { flex: 1, backgroundColor: T.bg },
+    topHeader: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: H_PAD, paddingTop: 16, paddingBottom: 8,
+      backgroundColor: T.bg,
+    },
+    avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: T.surfaceAlt },
+    avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
+    greeting: { fontSize: 18, fontWeight: '500', fontFamily: 'Poppins_500Medium', color: T.text },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    iconBtn: {
+      width: 32, height: 32, borderRadius: 16, backgroundColor: T.surfaceAlt,
+      alignItems: 'center', justifyContent: 'center',
+    },
+
+    // List wrapper — fills all space beneath the global header
+    listContainer: {
+      flex: 1,
+      position: 'relative',
+    },
+
+    // Full-area overlay spinner — purely cosmetic, zero layout impact
+    spinnerOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: T.bg,
+    },
+
+    // FlatList content
+    listContent: {
+      paddingHorizontal: H_PAD,
+      paddingTop: 8,
+    },
+    columnWrapper: {
+      justifyContent: 'space-between',
+      marginBottom: CARD_GAP,
+    },
+
+    // List header items
+    pageTitle: {
+      fontSize: 22,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      color: T.text,
+      marginBottom: 16,
+    },
+    filterRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginBottom: 16,
+      flexWrap: 'wrap',
+    },
+    filterPill: {
+      paddingHorizontal: 16,
+      paddingVertical: 7,
+      borderRadius: Radius.full,
+      backgroundColor: T.surface,
+      borderWidth: 1,
+      borderColor: T.border,
+    },
+    filterPillActive: {
+      backgroundColor: T.green,
+      borderColor: T.green,
+    },
+    filterText: {
+      fontSize: 12,
+      fontWeight: '500',
+      fontFamily: 'Poppins_500Medium',
+      color: T.text,
+    },
+    filterTextActive: {
+      color: '#FFFFFF',
+      fontWeight: '600',
+      fontFamily: 'Poppins_600SemiBold',
+    },
+
+    // Empty state
+    emptyWrap: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingTop: 80,
+      gap: 12,
+    },
+    emptyText: {
+      fontSize: 16,
+      fontWeight: '600',
+      fontFamily: 'Poppins_600SemiBold',
+      color: T.text,
+    },
+    emptySubText: {
+      fontSize: 13,
+      color: T.textSub,
+      textAlign: 'center',
+      paddingHorizontal: 40,
+    },
+  }), [T]);
 
   // All products fetched once from the API
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -149,7 +269,7 @@ export default function ProductsMarketScreen({ navigation }: Props) {
 
   // ── Profile navigation ───────────────────────────────────────────────────────
   const handleProfileNav = useCallback(() => {
-    navigation.navigate(user?.profileType === 'pro_commerce' ? 'SellerProfile' : 'Profile');
+    navigation.navigate(user?.profileType === 'pro_commerce' ? 'SellerProProfile' : 'Profile');
   }, [user, navigation]);
 
   // ── List header — memoised so it only re-renders when the active pill changes
@@ -176,36 +296,29 @@ export default function ProductsMarketScreen({ navigation }: Props) {
   ), [activeFilter]);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
-  return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+  const headerActions = (
+    <View style={s.headerActions}>
+      <TouchableOpacity style={[s.iconBtn, { backgroundColor: T.surfaceAlt }]} activeOpacity={0.7} id="market-search-btn">
+        <Feather name="search" size={18} color={T.text} />
+      </TouchableOpacity>
+      <TouchableOpacity style={[s.iconBtn, { backgroundColor: T.surfaceAlt }]} activeOpacity={0.7} id="market-notif-btn">
+        <Feather name="bell" size={18} color={T.text} />
+      </TouchableOpacity>
+    </View>
+  );
 
-      {/*
-        ══ Top header ══
-        Rendered outside the FlatList in its own fixed View.
-        It is NEVER inside a conditional, so it can never cause the
-        BottomNavBar to shift when data or filter state changes.
-      */}
-      <View style={s.topHeader}>
-        <View style={s.userRow}>
-          {user?.avatarUrl ? (
-            <Image source={{ uri: user.avatarUrl }} style={s.avatar} />
-          ) : (
-            <View style={[s.avatar, s.avatarPlaceholder]}>
-              <Feather name="user" size={18} color={Colors.muted} />
-            </View>
-          )}
-          <Text style={s.greeting}>{user?.fullName?.split(' ')[0] ?? 'You'}</Text>
-        </View>
-        <View style={s.headerActions}>
-          <TouchableOpacity style={s.iconBtn} activeOpacity={0.7} id="market-search-btn">
-            <Feather name="search" size={18} color="#393C40" />
-          </TouchableOpacity>
-          <TouchableOpacity style={s.iconBtn} activeOpacity={0.7} id="market-notif-btn">
-            <Feather name="bell" size={18} color="#393C40" />
-          </TouchableOpacity>
-        </View>
-      </View>
+  return (
+    <AppScaffold
+      title="Market"
+      activeTab="home"
+      rightElement={headerActions}
+      onPressHome={() => navigation.navigate('Home')}
+      onPressEvents={() => navigation.navigate('Map')}
+      onPressCenter={() => {}}
+      onPressReels={() => {}}
+      onPressProfile={handleProfileNav}
+      contentStyle={{ backgroundColor: T.bg }}
+    >
 
       {/*
         ══ List area ══
@@ -227,10 +340,10 @@ export default function ProductsMarketScreen({ navigation }: Props) {
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={
             !initialLoad ? (
-              <View style={s.emptyWrap}>
-                <Feather name="package" size={48} color={Colors.muted} />
-                <Text style={s.emptyText}>No products found</Text>
-                <Text style={s.emptySubText}>Try a different filter or check back later.</Text>
+            <View style={s.emptyWrap}>
+                <Feather name="package" size={48} color={T.textMuted} />
+                <Text style={[s.emptyText, { color: T.text }]}>No products found</Text>
+                <Text style={[s.emptySubText, { color: T.textSub }]}>Try a different filter or check back later.</Text>
               </View>
             ) : null
           }
@@ -238,8 +351,8 @@ export default function ProductsMarketScreen({ navigation }: Props) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[Colors.green]}
-              tintColor={Colors.green}
+              colors={[T.green]}
+              tintColor={T.green}
             />
           }
           renderItem={({ item }) => (
@@ -256,212 +369,13 @@ export default function ProductsMarketScreen({ navigation }: Props) {
           Critically, this does NOT affect the layout of siblings.
         */}
         {initialLoad && (
-          <View style={s.spinnerOverlay} pointerEvents="none">
-            <ActivityIndicator size="large" color={Colors.green} />
+          <View style={[s.spinnerOverlay, { backgroundColor: T.bg }]} pointerEvents="none">
+            <ActivityIndicator size="large" color={T.green} />
           </View>
         )}
       </View>
-
-      {/*
-        ══ Bottom Nav ══
-        Always mounted last, always at the same visual position.
-      */}
-      <BottomNavBar
-        activeTab="home"
-        idPrefix="market-nav"
-        onPressHome={() => navigation.navigate('Home')}
-        onPressEvents={() => {}}
-        onPressCenter={() => {}}
-        onPressReels={() => {}}
-        onPressProfile={handleProfileNav}
-      />
-    </SafeAreaView>
+    </AppScaffold>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-  },
 
-  // Fixed top header — never inside a conditional
-  topHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: H_PAD,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.sm,
-    backgroundColor: Colors.bg,
-  },
-  userRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E5E7EB',
-  },
-  avatarPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  greeting: {
-    fontSize: 18,
-    fontWeight: Font.medium,
-    color: '#343831',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  iconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F0EFED',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // List wrapper — fills all space between top header and BottomNavBar
-  listContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-
-  // Full-area overlay spinner — purely cosmetic, zero layout impact
-  spinnerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.bg,
-  },
-
-  // FlatList content
-  listContent: {
-    paddingHorizontal: H_PAD,
-    paddingTop: Spacing.sm,
-  },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    marginBottom: CARD_GAP,
-  },
-
-  // List header items
-  pageTitle: {
-    fontSize: 22,
-    fontWeight: Font.bold,
-    color: Colors.dark,
-    marginBottom: Spacing.md,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: Spacing.md,
-    flexWrap: 'wrap',
-  },
-  filterPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  filterPillActive: {
-    backgroundColor: Colors.green,
-    borderColor: Colors.green,
-  },
-  filterText: {
-    fontSize: 12,
-    fontWeight: Font.medium,
-    color: Colors.dark,
-  },
-  filterTextActive: {
-    color: Colors.white,
-    fontWeight: Font.semibold,
-  },
-
-  // Product card
-  card: {
-    backgroundColor: Colors.white,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  imageWrap: {
-    width: '100%',
-    height: CARD_W,
-    backgroundColor: '#F3F4F6',
-    position: 'relative',
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  certBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: Colors.green,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  certBadgeText: {
-    fontSize: 9,
-    fontWeight: Font.bold,
-    color: Colors.white,
-  },
-  cardBody: {
-    padding: 10,
-    gap: 2,
-  },
-  productName: {
-    fontSize: 13,
-    fontWeight: Font.bold,
-    color: Colors.dark,
-    lineHeight: 18,
-  },
-  sellerName: {
-    fontSize: 11,
-    color: Colors.primaryRed,
-    fontWeight: Font.medium,
-  },
-  price: {
-    fontSize: 13,
-    fontWeight: Font.bold,
-    color: Colors.green,
-    marginTop: 2,
-  },
-
-  // Empty state
-  emptyWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: Font.semibold,
-    color: Colors.dark,
-  },
-  emptySubText: {
-    fontSize: 13,
-    color: Colors.muted,
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
-});

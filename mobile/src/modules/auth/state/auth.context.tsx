@@ -9,6 +9,8 @@ import React, {
 import { authReducer, initialState, AuthState } from './auth.reducer';
 import authApi, { LoginDto, RegisterDto, UpdateProfileDto } from '../api/auth.api';
 import { TokenStore } from '../../../core/storage/secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setTextMultiplier, loadTextMultiplier } from '@/shared/utils/text-scaling';
 
 function getAuthErrorMessage(err: any, fallback: string): string {
   if (err?.response?.data?.message) {
@@ -29,12 +31,35 @@ interface AuthContextValue extends AuthState {
   logout:        () => Promise<void>;
   updateProfile: (dto: UpdateProfileDto) => Promise<void>;
   clearError:    () => void;
+  textSize:      'Small' | 'Medium' | 'Large';
+  updateTextSize: (size: 'Small' | 'Medium' | 'Large') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
+  const [textSize, setTextSizeState] = React.useState<'Small' | 'Medium' | 'Large'>('Medium');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        await loadTextMultiplier();
+        const saved = await AsyncStorage.getItem('@pref_text_size');
+        if (saved === 'Small' || saved === 'Medium' || saved === 'Large') {
+          setTextSizeState(saved);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, []);
+
+  const updateTextSize = useCallback(async (size: 'Small' | 'Medium' | 'Large') => {
+    setTextSizeState(size);
+    setTextMultiplier(size);
+    await AsyncStorage.setItem('@pref_text_size', size);
+  }, []);
 
   // ── Restore session on app launch ──────────────────────────────────────────
   useEffect(() => {
@@ -118,15 +143,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = useCallback(async (dto: UpdateProfileDto) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
-      // Optimistic update first — feels instant
-      dispatch({ type: 'UPDATE_USER', payload: dto });
-      // Then persist to backend (best-effort; API may not exist yet)
-      try {
-        const updatedUser = await authApi.updateProfile(dto);
-        dispatch({ type: 'UPDATE_USER', payload: updatedUser });
-      } catch {
-        // If backend fails, the optimistic update still stays for this session
-      }
+      const updatedUser = await authApi.updateProfile(dto);
+      dispatch({ type: 'UPDATE_USER', payload: updatedUser });
+    } catch (err) {
+      const message = getAuthErrorMessage(err, 'Failed to update profile.');
+      dispatch({ type: 'SET_ERROR', payload: message });
+      throw err;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -137,8 +159,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ ...state, login, register, logout, updateProfile, clearError }),
-    [state, login, register, logout, updateProfile, clearError],
+    () => ({ ...state, login, register, logout, updateProfile, clearError, textSize, updateTextSize }),
+    [state, login, register, logout, updateProfile, clearError, textSize, updateTextSize],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -17,7 +17,8 @@ import type { AuthStackParamList } from '../../../../navigation/types';
 import { AuthInput } from '../../../../shared/components/AuthInput';
 import { AuthButton } from '../../../../shared/components/AuthButton';
 import { WaveBackground } from '../../../../shared/components/WaveBackground';
-import { Colors, Font, Spacing, Radius } from '../../../../shared/utils/theme';
+import { Radius } from '../../../../shared/utils/theme';
+import { useTheme } from '@/shared/context/theme.context';
 import { useAuth } from '../../state/auth.context';
 import { Feather } from '@expo/vector-icons';
 import type { RegisterProfileType } from '../../api/auth.api';
@@ -49,6 +50,129 @@ const PROFILE_OPTIONS: Array<{ value: RegisterProfileType; label: string }> = [
 
 export default function RegisterScreen({ navigation }: Props) {
   const { register, isLoading, error, clearError } = useAuth();
+  const { theme: T, isDark } = useTheme();
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    safe:  { flex: 1, backgroundColor: T.bg },
+    flex:  { flex: 1 },
+    scroll: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingBottom: 130,
+      paddingTop: 32,
+    },
+
+    divider: {
+      width: '90%',
+      height: 1,
+      backgroundColor: '#FFFFFF',
+      alignSelf: 'center',
+      marginBottom: 32,
+    },
+
+    title: {
+      fontSize: 22,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      color: T.text,
+      textAlign: 'center',
+      letterSpacing: 1.5,
+      marginBottom: 4,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: T.textSub,
+      fontWeight: '500',
+      fontFamily: 'Poppins_500Medium',
+      textAlign: 'center',
+      marginBottom: 24,
+    },
+
+    // Error banner
+    errorBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: T.errorLight,
+      borderWidth: 1,
+      borderColor: T.red,
+      borderRadius: Radius.md,
+      padding: 12,
+      marginBottom: 12,
+    },
+    errorBannerText: { color: T.red, fontSize: 13, fontWeight: '500', fontFamily: 'Poppins_500Medium' },
+
+    hint: {
+      fontSize: 12,
+      color: T.textSub,
+      marginBottom: 24,
+      textAlign: 'center',
+      fontFamily: 'Poppins_400Regular',
+    },
+
+    profileLabel: {
+      fontSize: 13,
+      fontWeight: '500',
+      fontFamily: 'Poppins_500Medium',
+      color: T.textSub,
+      marginTop: 4,
+      marginBottom: 4,
+      letterSpacing: 0.3,
+    },
+    profileGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: 16,
+    },
+    profileChip: {
+      borderWidth: 1,
+      borderColor: T.border,
+      backgroundColor: T.surface,
+      borderRadius: Radius.md,
+      paddingVertical: 9,
+      paddingHorizontal: 12,
+      marginRight: 8,
+      marginBottom: 8,
+    },
+    profileChipSelected: {
+      borderColor: T.green,
+      backgroundColor: T.greenLight,
+    },
+    profileChipText: {
+      fontSize: 13,
+      color: T.text,
+      fontWeight: '500',
+      fontFamily: 'Poppins_500Medium',
+    },
+    profileChipTextSelected: {
+      color: T.green,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+    },
+    profileError: {
+      fontSize: 12,
+      color: T.red,
+      marginTop: -4,
+      marginBottom: 12,
+      fontFamily: 'Poppins_400Regular',
+    },
+
+    btnGroup: { marginBottom: 24 },
+
+    switchRow: {
+      position: 'absolute',
+      bottom: 18,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 5,
+    },
+    switchText: { fontSize: 16, fontWeight: '500', fontFamily: 'Poppins_500Medium', color: '#FFFFFF' },
+    switchLink: { fontSize: 16, fontWeight: '700', fontFamily: 'Poppins_700Bold', color: '#343831' },
+
+    eye: { fontSize: 18 },
+  }), [T]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -120,7 +244,7 @@ export default function RegisterScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={T.bg} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -140,7 +264,7 @@ export default function RegisterScreen({ navigation }: Props) {
           {/* API error banner */}
           {!!error && (
             <View style={styles.errorBanner}>
-              <Feather name="alert-circle" size={18} color={Colors.error} style={{ marginRight: 8 }} />
+              <Feather name="alert-circle" size={18} color={T.red} style={{ marginRight: 8 }} />
               <Text style={styles.errorBannerText}>{error}</Text>
             </View>
           )}
@@ -168,7 +292,7 @@ export default function RegisterScreen({ navigation }: Props) {
             value={form.password}
             onChangeText={set('password')}
             error={errors.password}
-            rightIcon={<Feather name={showPass ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
+            rightIcon={<Feather name={showPass ? 'eye-off' : 'eye'} size={20} color={T.textMuted} />}
             onRightIconPress={() => setShowPass((p) => !p)}
           />
           <AuthInput
@@ -178,7 +302,7 @@ export default function RegisterScreen({ navigation }: Props) {
             value={form.confirm}
             onChangeText={set('confirm')}
             error={errors.confirm}
-            rightIcon={<Feather name={showConfirm ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
+            rightIcon={<Feather name={showConfirm ? 'eye-off' : 'eye'} size={20} color={T.textMuted} />}
             onRightIconPress={() => setShowConfirm((p) => !p)}
           />
 
@@ -243,119 +367,3 @@ export default function RegisterScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe:  { flex: 1, backgroundColor: Colors.bg },
-  flex:  { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: 130,
-    paddingTop: Spacing.xl,
-  },
-
-  divider: {
-    width: '90%',
-    height: 1,
-    backgroundColor: Colors.white,
-    alignSelf: 'center',
-    marginBottom: Spacing.xl,
-  },
-
-  title: {
-    fontSize: 22,
-    fontWeight: Font.bold,
-    color: Colors.dark,
-    textAlign: 'center',
-    letterSpacing: 1.5,
-    marginBottom: Spacing.xs,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.muted,
-    fontWeight: Font.medium,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-  },
-
-  // Error banner
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.errorLight,
-    borderWidth: 1,
-    borderColor: Colors.error,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  errorBannerText: { color: Colors.error, fontSize: 13, fontWeight: Font.medium },
-
-  hint: {
-    fontSize: 12,
-    color: Colors.muted,
-    marginBottom: Spacing.lg,
-    textAlign: 'center',
-  },
-
-  profileLabel: {
-    fontSize: 13,
-    fontWeight: Font.medium,
-    color: Colors.muted,
-    marginTop: Spacing.xs,
-    marginBottom: Spacing.xs,
-    letterSpacing: 0.3,
-  },
-  profileGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: Spacing.md,
-  },
-  profileChip: {
-    borderWidth: 1,
-    borderColor: Colors.inputBorder,
-    backgroundColor: Colors.inputBg,
-    borderRadius: Radius.md,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  profileChipSelected: {
-    borderColor: Colors.green,
-    backgroundColor: Colors.greenLight,
-  },
-  profileChipText: {
-    fontSize: 13,
-    color: Colors.dark,
-    fontWeight: Font.medium,
-  },
-  profileChipTextSelected: {
-    color: Colors.green,
-    fontWeight: Font.bold,
-  },
-  profileError: {
-    fontSize: 12,
-    color: Colors.error,
-    marginTop: -4,
-    marginBottom: Spacing.sm,
-  },
-
-  btnGroup: { marginBottom: Spacing.lg },
-
-  switchRow: {
-    position: 'absolute',
-    bottom: 18,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 5,
-  },
-  switchText: { fontSize: 16, fontWeight: Font.medium, color: Colors.white },
-  switchLink: { fontSize: 16, fontWeight: Font.bold, color: Colors.dark },
-
-  eye: { fontSize: 18 },
-
-});

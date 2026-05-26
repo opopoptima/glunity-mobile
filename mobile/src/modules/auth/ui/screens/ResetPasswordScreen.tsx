@@ -14,7 +14,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/types';
 import { AuthInput } from '@/shared/components/AuthInput';
 import { AuthButton } from '@/shared/components/AuthButton';
-import { Colors, Font, Spacing, Radius } from '@/shared/utils/theme';
+import { Radius } from '@/shared/utils/theme';
+import { useTheme } from '@/shared/context/theme.context';
 import authApi from '../../api/auth.api';
 import { Feather } from '@expo/vector-icons';
 
@@ -24,6 +25,77 @@ type Step = 'form' | 'success' | 'error';
 
 export default function ResetPasswordScreen({ route, navigation }: Props) {
   const token = route.params?.token ?? '';
+  const { theme: T, isDark } = useTheme();
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    safe:  { flex: 1, backgroundColor: T.bg },
+    flex:  { flex: 1 },
+
+    scroll: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingTop: 40,
+      paddingBottom: 140,
+      alignItems: 'center',
+    },
+
+    centeredBox: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+      paddingBottom: 140,
+    },
+
+    iconCircle: {
+      width: 110, height: 110, borderRadius: 55,
+      backgroundColor: T.greenLight,
+      alignItems: 'center', justifyContent: 'center',
+      marginBottom: 24,
+      shadowColor: T.green,
+      shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2,
+      shadowRadius: 16, elevation: 6,
+    },
+    iconCircleRed: { backgroundColor: 'rgba(229,57,53,0.1)' },
+    iconEmoji: { fontSize: 52 },
+
+    title: {
+      fontSize: 24, fontWeight: '700', fontFamily: 'Poppins_700Bold', color: T.text,
+      textAlign: 'center', marginBottom: 12,
+    },
+    subtitle: {
+      fontSize: 14, color: T.textSub, textAlign: 'center',
+      lineHeight: 22, marginBottom: 24, width: '100%',
+      fontFamily: 'Poppins_400Regular',
+    },
+
+    errorBanner: {
+      backgroundColor: T.errorLight, borderWidth: 1, borderColor: T.red,
+      borderRadius: Radius.md, padding: 12, marginBottom: 12,
+      width: '100%',
+    },
+    errorText: { color: T.red, fontSize: 13, fontFamily: 'Poppins_400Regular' },
+
+    hint: { fontSize: 12, color: T.textSub, marginBottom: 24, textAlign: 'center', fontFamily: 'Poppins_400Regular' },
+
+    backWrap: { alignSelf: 'center', marginTop: 24 },
+    backText: { fontSize: 14, fontWeight: '500', fontFamily: 'Poppins_500Medium', color: T.textSub },
+
+    resultTitle: {
+      fontSize: 24, fontWeight: '700', fontFamily: 'Poppins_700Bold', color: T.text,
+      textAlign: 'center', marginBottom: 12,
+    },
+    resultBody: {
+      fontSize: 14, color: T.textSub, textAlign: 'center', lineHeight: 22, fontFamily: 'Poppins_400Regular',
+    },
+
+    eye: { fontSize: 18 },
+    wave: {
+      position: 'absolute', bottom: 0, left: -4, right: -4,
+      height: 110, backgroundColor: T.green,
+      borderTopLeftRadius: 9999, borderTopRightRadius: 9999,
+    },
+  }), [T]);
 
   const [password, setPassword]   = useState('');
   const [confirm, setConfirm]     = useState('');
@@ -72,10 +144,10 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
   if (step === 'success') {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={T.bg} />
         <View style={styles.centeredBox}>
           <View style={styles.iconCircle}>
-            <Feather name="unlock" size={40} color={Colors.green} />
+            <Feather name="unlock" size={40} color={T.green} />
           </View>
           <Text style={styles.resultTitle}>Password Updated!</Text>
           <Text style={styles.resultBody}>
@@ -85,7 +157,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
             label="Go to Login"
             variant="filled"
             onPress={() => navigation.navigate('Login')}
-            containerStyle={{ marginTop: Spacing.xl, width: '100%' }}
+            containerStyle={{ marginTop: 24, width: '100%' }}
           />
         </View>
         <View style={styles.wave} />
@@ -97,7 +169,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
   if (step === 'error') {
     return (
       <SafeAreaView style={styles.safe}>
-        <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={T.bg} />
         <View style={styles.centeredBox}>
           <View style={[styles.iconCircle, styles.iconCircleRed]}>
             <Feather name="clock" size={40} color="#E53935" />
@@ -110,7 +182,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
             label="Request New Link"
             variant="filled"
             onPress={() => navigation.navigate('ForgotPassword')}
-            containerStyle={{ marginTop: Spacing.xl, width: '100%' }}
+            containerStyle={{ marginTop: 24, width: '100%' }}
           />
           <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backWrap}>
             <Text style={styles.backText}>Back to Login</Text>
@@ -124,7 +196,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
   // ── Form ───────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={T.bg} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -136,7 +208,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
         >
           {/* Icon */}
           <View style={styles.iconCircle}>
-            <Feather name="lock" size={40} color={Colors.green} />
+            <Feather name="lock" size={40} color={T.green} />
           </View>
 
           <Text style={styles.title}>Set New Password</Text>
@@ -158,7 +230,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
             value={password}
             onChangeText={setPassword}
             error={errors.password}
-            rightIcon={<Feather name={showPass ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
+            rightIcon={<Feather name={showPass ? 'eye-off' : 'eye'} size={20} color={T.textMuted} />}
             onRightIconPress={() => setShowPass((p) => !p)}
           />
           <AuthInput
@@ -168,7 +240,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
             value={confirm}
             onChangeText={setConfirm}
             error={errors.confirm}
-            rightIcon={<Feather name={showConf ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
+            rightIcon={<Feather name={showConf ? 'eye-off' : 'eye'} size={20} color={T.textMuted} />}
             onRightIconPress={() => setShowConf((p) => !p)}
           />
 
@@ -179,7 +251,7 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
             variant="filled"
             loading={loading}
             onPress={handleReset}
-            containerStyle={{ marginTop: Spacing.sm }}
+            containerStyle={{ marginTop: 12 }}
           />
 
           <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.backWrap}>
@@ -192,72 +264,3 @@ export default function ResetPasswordScreen({ route, navigation }: Props) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe:  { flex: 1, backgroundColor: Colors.bg },
-  flex:  { flex: 1 },
-
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xxl,
-    paddingBottom: 140,
-    alignItems: 'center',
-  },
-
-  centeredBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: 140,
-  },
-
-  iconCircle: {
-    width: 110, height: 110, borderRadius: 55,
-    backgroundColor: Colors.greenLight,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: Spacing.xl,
-    shadowColor: Colors.green,
-    shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2,
-    shadowRadius: 16, elevation: 6,
-  },
-  iconCircleRed: { backgroundColor: 'rgba(229,57,53,0.1)' },
-  iconEmoji: { fontSize: 52 },
-
-  title: {
-    fontSize: 24, fontWeight: Font.bold, color: Colors.dark,
-    textAlign: 'center', marginBottom: Spacing.sm,
-  },
-  subtitle: {
-    fontSize: 14, color: Colors.muted, textAlign: 'center',
-    lineHeight: 22, marginBottom: Spacing.xl, width: '100%',
-  },
-
-  errorBanner: {
-    backgroundColor: Colors.errorLight, borderWidth: 1, borderColor: Colors.error,
-    borderRadius: Radius.md, padding: Spacing.md, marginBottom: Spacing.md,
-    width: '100%',
-  },
-  errorText: { color: Colors.error, fontSize: 13 },
-
-  hint: { fontSize: 12, color: Colors.muted, marginBottom: Spacing.lg, textAlign: 'center' },
-
-  backWrap: { alignSelf: 'center', marginTop: Spacing.lg },
-  backText: { fontSize: 14, fontWeight: Font.medium, color: Colors.muted },
-
-  resultTitle: {
-    fontSize: 24, fontWeight: Font.bold, color: Colors.dark,
-    textAlign: 'center', marginBottom: Spacing.sm,
-  },
-  resultBody: {
-    fontSize: 14, color: Colors.muted, textAlign: 'center', lineHeight: 22,
-  },
-
-  eye: { fontSize: 18 },
-  wave: {
-    position: 'absolute', bottom: 0, left: -4, right: -4,
-    height: 110, backgroundColor: Colors.green,
-    borderTopLeftRadius: 9999, borderTopRightRadius: 9999,
-  },
-});

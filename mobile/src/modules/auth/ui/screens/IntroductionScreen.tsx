@@ -12,6 +12,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '@/navigation/types';
 import { Feather } from '@expo/vector-icons';
+import { useTheme } from '@/shared/context/theme.context';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Intro'>;
 
@@ -174,6 +175,7 @@ const SLIDES = [
 
 // ── Dots Indicator ────────────────────────────────────────────────────────────
 function DotsIndicator({ count, scrollX, screenWidth }: { count: number; scrollX: Animated.Value; screenWidth: number }) {
+  const { theme: T } = useTheme();
   return (
     <View style={dot.row}>
       {Array.from({ length: count }).map((_, i) => (
@@ -197,8 +199,8 @@ function DotsIndicator({ count, scrollX, screenWidth }: { count: number; scrollX
                 outputRange: [0, 1.5, 0],
                 extrapolate: 'clamp',
               }),
-              borderColor: '#C8102E',
-              backgroundColor: '#C8102E',
+              borderColor: T.green,
+              backgroundColor: T.green,
               opacity: scrollX.interpolate({
                 inputRange: [(i - 1) * screenWidth, i * screenWidth, (i + 1) * screenWidth],
                 outputRange: [0.6, 1, 0.6],
@@ -220,46 +222,50 @@ const dot = StyleSheet.create({
 // ── Single Slide ──────────────────────────────────────────────────────────────
 function SlideView({ slide, screenWidth }: { slide: (typeof SLIDES)[0]; screenWidth: number }) {
   const { IllustrationComponent } = slide;
+  const { theme: T } = useTheme();
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    slide: {
+      flex: 1, backgroundColor: T.bg,
+      alignItems: 'center', paddingTop: 95,
+      paddingHorizontal: 26, paddingBottom: 100,
+    },
+    illustrationArea: {
+      width: 316, height: 314,
+      alignItems: 'center', justifyContent: 'center', marginBottom: 32,
+    },
+    greenCircle: {
+      position: 'absolute', width: 316, height: 314,
+      borderRadius: 158, backgroundColor: T.greenLight,
+    },
+    title: {
+      fontWeight: '700', fontSize: 22, lineHeight: 33,
+      fontFamily: 'Poppins_700Bold',
+      textAlign: 'center', letterSpacing: 0.11,
+      color: T.text, textTransform: 'capitalize', marginBottom: 14,
+    },
+    titleAccent: { color: T.green },
+    description: {
+      fontWeight: '500', fontSize: 16, lineHeight: 24,
+      fontFamily: 'Poppins_500Medium',
+      textAlign: 'center', letterSpacing: 0.08, color: T.textSub, width: 340,
+    },
+  }), [T]);
+
   return (
-    <View style={[slideStyles.slide, { width: screenWidth }]}>
-      <View style={slideStyles.illustrationArea}>
-        <View style={slideStyles.greenCircle} />
+    <View style={[styles.slide, { width: screenWidth }]}>
+      <View style={styles.illustrationArea}>
+        <View style={styles.greenCircle} />
         <IllustrationComponent />
       </View>
-      <Text style={slideStyles.title}>
+      <Text style={styles.title}>
         {slide.title}{' '}
-        <Text style={slideStyles.titleAccent}>{slide.titleAccent}</Text>
+        <Text style={styles.titleAccent}>{slide.titleAccent}</Text>
       </Text>
-      <Text style={slideStyles.description}>{slide.description}</Text>
+      <Text style={styles.description}>{slide.description}</Text>
     </View>
   );
 }
-
-const slideStyles = StyleSheet.create({
-  slide: {
-    flex: 1, backgroundColor: '#F6F5F3',
-    alignItems: 'center', paddingTop: 95,
-    paddingHorizontal: 26, paddingBottom: 100,
-  },
-  illustrationArea: {
-    width: 316, height: 314,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 32,
-  },
-  greenCircle: {
-    position: 'absolute', width: 316, height: 314,
-    borderRadius: 158, backgroundColor: 'rgba(139, 195, 74, 0.1)',
-  },
-  title: {
-    fontWeight: '700', fontSize: 22, lineHeight: 33,
-    textAlign: 'center', letterSpacing: 0.11,
-    color: '#2E2E2E', textTransform: 'capitalize', marginBottom: 14,
-  },
-  titleAccent: { color: '#8BC34A' },
-  description: {
-    fontWeight: '500', fontSize: 16, lineHeight: 24,
-    textAlign: 'center', letterSpacing: 0.08, color: '#707070', width: 340,
-  },
-});
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function IntroductionScreen({ navigation }: Props) {
@@ -267,6 +273,7 @@ export default function IntroductionScreen({ navigation }: Props) {
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList<(typeof SLIDES)[number]>>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+  const { theme: T, isDark } = useTheme();
 
   const scrollToIndex = (index: number) => {
     const safeIndex = Math.max(0, Math.min(index, SLIDES.length - 1));
@@ -294,9 +301,31 @@ export default function IntroductionScreen({ navigation }: Props) {
     setActiveIndex(idx);
   };
 
+  const styles = React.useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: T.bg },
+    navBar: {
+      position: 'absolute', bottom: 40, left: 0, right: 0,
+      flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'space-between', paddingHorizontal: 24,
+      zIndex: 5,
+    },
+    backBtn: {
+      width: 56, height: 56, borderRadius: 28, backgroundColor: T.surface,
+      alignItems: 'center', justifyContent: 'center',
+      shadowColor: T.text, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 10,
+      elevation: 6,
+    },
+    nextBtn: {
+      width: 76, height: 76, borderRadius: 38, backgroundColor: T.green,
+      alignItems: 'center', justifyContent: 'center',
+      shadowColor: T.green, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12,
+      elevation: 8,
+    },
+  }), [T]);
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F6F5F3" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={T.bg} />
 
       <Animated.FlatList
         ref={flatListRef}
@@ -323,7 +352,7 @@ export default function IntroductionScreen({ navigation }: Props) {
       {/* Bottom navigation bar */}
       <View style={styles.navBar}>
         <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.8}>
-          <Feather name="arrow-left" size={24} color="#2E2E2E" />
+          <Feather name="arrow-left" size={24} color={T.text} />
         </TouchableOpacity>
 
         <DotsIndicator count={SLIDES.length} scrollX={scrollX} screenWidth={screenWidth} />
@@ -339,25 +368,3 @@ export default function IntroductionScreen({ navigation }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F6F5F3' },
-  navBar: {
-    position: 'absolute', bottom: 40, left: 0, right: 0,
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingHorizontal: 9,
-    zIndex: 5,
-  },
-  backBtn: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: '#FFFFFF',
-    alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0px 2px 14px rgba(0,0,0,0.11)', elevation: 6,
-  },
-  arrowText: { fontSize: 20, color: '#2E2E2E', fontWeight: '600' },
-  nextBtn: {
-    width: 76, height: 76, borderRadius: 38, backgroundColor: '#8BC34A',
-    alignItems: 'center', justifyContent: 'center',
-    boxShadow: '0px 4px 12px rgba(139,195,74,0.35)', elevation: 8,
-  },
-  arrowTextWhite: { fontSize: 26, color: '#FFFFFF', fontWeight: '700' },
-});

@@ -15,12 +15,14 @@ import type { AuthStackParamList } from '@/navigation/types';
 import { AuthInput } from '@/shared/components/AuthInput';
 import { AuthButton } from '@/shared/components/AuthButton';
 import { WaveBackground } from '@/shared/components/WaveBackground';
-import { Colors, Font, Spacing, Radius } from '@/shared/utils/theme';
+import { Radius } from '@/shared/utils/theme';
+import { useTheme } from '@/shared/context/theme.context';
 import authApi from '../../api/auth.api';
 import { Feather } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
+// ── Screen 1 – Email Entry ────────────────────────────────────────────────────
 // ── Screen 1 – Email Entry ────────────────────────────────────────────────────
 function EmailStep({
   initialEmail,
@@ -31,9 +33,68 @@ function EmailStep({
   onSent: (email: string) => void;
   onBack: () => void;
 }) {
+  const { theme: T } = useTheme();
   const [email, setEmail]     = useState(initialEmail ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    flex:  { flex: 1 },
+    scroll: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingTop:        40,
+      paddingBottom:     140,
+    },
+    illustrationBox: {
+      width: 110,
+      height: 110,
+      borderRadius: 55,
+      backgroundColor: T.greenLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      alignSelf: 'center',
+      marginBottom: 24,
+      shadowColor: T.green,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.2,
+      shadowRadius: 16,
+      elevation: 6,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      color: T.text,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: T.textSub,
+      fontWeight: '400',
+      fontFamily: 'Poppins_400Regular',
+      textAlign: 'center',
+      lineHeight: 22,
+      marginBottom: 24,
+    },
+    errorBanner: {
+      backgroundColor: T.errorLight,
+      borderWidth: 1,
+      borderColor: T.red,
+      borderRadius: Radius.md,
+      padding: 12,
+      marginBottom: 12,
+    },
+    errorText: { color: T.red, fontSize: 13, fontFamily: 'Poppins_400Regular' },
+    backWrap: { alignSelf: 'center', marginTop: 24 },
+    backText: {
+      fontSize: 14,
+      fontWeight: '500',
+      fontFamily: 'Poppins_500Medium',
+      color: T.textSub,
+    },
+  }), [T]);
 
   async function handleSubmit() {
     setError('');
@@ -66,7 +127,7 @@ function EmailStep({
       >
         {/* Illustration */}
         <View style={styles.illustrationBox}>
-          <Feather name="mail" size={40} color={Colors.green} />
+          <Feather name="mail" size={40} color={T.green} />
         </View>
 
         <Text style={styles.title}>Forgot Password</Text>
@@ -95,7 +156,7 @@ function EmailStep({
           variant="filled"
           loading={loading}
           onPress={handleSubmit}
-          containerStyle={{ marginTop: Spacing.sm }}
+          containerStyle={{ marginTop: 12 }}
         />
 
         <TouchableOpacity onPress={onBack} style={styles.backWrap} activeOpacity={0.7}>
@@ -114,10 +175,56 @@ function SentStep({
   email: string;
   onBackToLogin: () => void;
 }) {
+  const { theme: T } = useTheme();
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    scroll: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingTop:        40,
+      paddingBottom:     140,
+    },
+    centeredContent: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    mailboxBox: {
+      width: 140,
+      height: 140,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 24,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      color: T.text,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    sentBody: {
+      fontSize: 15,
+      color: T.textSub,
+      textAlign: 'center',
+      lineHeight: 24,
+      marginBottom: 8,
+      fontFamily: 'Poppins_400Regular',
+    },
+    sentEmail: { fontWeight: '700', fontFamily: 'Poppins_700Bold', color: T.text },
+    sentHint: {
+      fontSize: 12,
+      color: T.textSub,
+      textAlign: 'center',
+      lineHeight: 18,
+      fontFamily: 'Poppins_400Regular',
+    },
+  }), [T]);
+
   return (
     <View style={[styles.scroll, styles.centeredContent]}>
       <View style={styles.mailboxBox}>
-        <Feather name="send" size={60} color={Colors.green} />
+        <Feather name="send" size={60} color={T.green} />
       </View>
 
       <Text style={styles.title}>Check Your Inbox</Text>
@@ -133,7 +240,7 @@ function SentStep({
         label="Back to Login"
         variant="filled"
         onPress={onBackToLogin}
-        containerStyle={{ marginTop: Spacing.xl, width: '100%' }}
+        containerStyle={{ marginTop: 24, width: '100%' }}
       />
     </View>
   );
@@ -141,6 +248,7 @@ function SentStep({
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function ForgotPasswordScreen({ navigation, route }: Props) {
+  const { theme: T, isDark } = useTheme();
   const initialEmail = route.params?.email ?? '';
   const [step, setStep]           = useState<'email' | 'sent'>('email');
   const [sentEmail, setSentEmail] = useState('');
@@ -150,9 +258,13 @@ export default function ForgotPasswordScreen({ navigation, route }: Props) {
     setStep('sent');
   }
 
+  const styles = React.useMemo(() => StyleSheet.create({
+    safe:  { flex: 1, backgroundColor: T.bg },
+  }), [T]);
+
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={T.bg} />
 
       {step === 'email' ? (
         <EmailStep
@@ -171,95 +283,3 @@ export default function ForgotPasswordScreen({ navigation, route }: Props) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe:  { flex: 1, backgroundColor: Colors.bg },
-  flex:  { flex: 1 },
-
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingTop:        Spacing.xxl,
-    paddingBottom:     140,
-  },
-  centeredContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  illustrationBox: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: Colors.greenLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: Spacing.xl,
-    shadowColor: Colors.green,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  illustrationEmoji: { fontSize: 52 },
-
-  mailboxBox: {
-    width: 140,
-    height: 140,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.xl,
-  },
-  mailboxEmoji: { fontSize: 80 },
-
-  title: {
-    fontSize: 24,
-    fontWeight: Font.bold,
-    color: Colors.dark,
-    textAlign: 'center',
-    marginBottom: Spacing.sm,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.muted,
-    fontWeight: Font.regular,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: Spacing.xl,
-  },
-
-  errorBanner: {
-    backgroundColor: Colors.errorLight,
-    borderWidth: 1,
-    borderColor: Colors.error,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  errorText: { color: Colors.error, fontSize: 13 },
-
-  backWrap: { alignSelf: 'center', marginTop: Spacing.lg },
-  backText: {
-    fontSize: 14,
-    fontWeight: Font.medium,
-    color: Colors.muted,
-  },
-
-  // Sent state
-  sentBody: {
-    fontSize: 15,
-    color: Colors.muted,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: Spacing.sm,
-  },
-  sentEmail: { fontWeight: Font.bold, color: Colors.dark },
-  sentHint: {
-    fontSize: 12,
-    color: Colors.muted,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-
-});

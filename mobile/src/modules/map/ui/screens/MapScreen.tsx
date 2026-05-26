@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Linking,
   Modal,
   Pressable,
@@ -14,12 +13,13 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BottomNavBar } from '../../../../shared/components/BottomNavBar';
+import { AppScaffold } from '../../../../shared/components/AppScaffold';
 import { FilterPill } from '../components/FilterPill';
 import { PlaceCard } from '../components/PlaceCard';
 import { MapWebView, MapWebViewHandle } from '../components/MapWebView';
 import { locationsApi } from '../../api/locations.api';
 import type { LocationCategory, LocationFilters, MapLocation } from '../../domain/location.types';
+import { useTheme } from '../../../../shared/context/theme.context';
 
 interface MapScreenProps {
   userName?: string;
@@ -30,15 +30,6 @@ interface MapScreenProps {
   onPressNavProfile?: () => void;
   onPressProfilePhoto?: () => void;
 }
-
-const C = {
-  bg: '#F6F5F3',
-  white: '#FFFFFF',
-  text: '#2E2E2E',
-  green: '#8BC34A',
-  greenDeep: '#6FAA2D',
-  muted: '#6B6B6B',
-};
 
 const CATEGORIES: Array<{ key: LocationCategory | 'all'; label: string }> = [
   { key: 'all',        label: 'All' },
@@ -66,6 +57,7 @@ export default function MapScreen({
   onPressProfilePhoto,
 }: MapScreenProps) {
   const insets = useSafeAreaInsets();
+  const { theme: T } = useTheme();
   const mapRef = useRef<MapWebViewHandle>(null);
 
   const [filters, setFilters]       = useState<LocationFilters>({ category: 'all' });
@@ -117,36 +109,30 @@ export default function MapScreen({
     if (selected?.phone) Linking.openURL(`tel:${selected.phone}`).catch(() => {});
   }
 
+  const headerActions = (
+    <View style={styles.headerRight}>
+      <TouchableOpacity style={[styles.iconBtn, { backgroundColor: T.surfaceAlt }]}>
+        <Feather name="search" size={18} color={T.text} />
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.iconBtn, { backgroundColor: T.surfaceAlt }]}>
+        <Feather name="bell" size={18} color={T.text} />
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* ── Top header (avatar / name / search / bell) ──────────────────── */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Pressable onPress={onPressProfilePhoto} hitSlop={8}>
-            <View style={styles.avatarWrap}>
-              {userAvatarUri ? (
-                <Image source={{ uri: userAvatarUri }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback]}>
-                  <Text style={styles.avatarLetter}>{userName.charAt(0).toUpperCase()}</Text>
-                </View>
-              )}
-              <View style={styles.avatarBadge}>
-                <Feather name="check" size={9} color="#FFFFFF" />
-              </View>
-            </View>
-          </Pressable>
-          <Text style={styles.userName} numberOfLines={1}>{userName}</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Feather name="search" size={18} color={C.text} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn}>
-            <Feather name="bell" size={18} color={C.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
+    <AppScaffold
+      title="Events"
+      activeTab="events"
+      rightElement={headerActions}
+      onPressHome={onPressNavHome}
+      onPressEvents={onPressNavEvents}
+      onPressCenter={() => {}}
+      onPressReels={onPressNavReels}
+      onPressProfile={onPressNavProfile}
+      contentStyle={{ backgroundColor: T.bg }}
+    >
+      <View style={[styles.root, { backgroundColor: T.bg }]}>
 
       {/* ── Map + filter pill overlay ──────────────────────────────────── */}
       <View style={styles.mapWrap}>
@@ -163,14 +149,16 @@ export default function MapScreen({
         </View>
 
         {isLoading && (
-          <View style={styles.loadingBadge}>
-            <ActivityIndicator size="small" color={C.green} />
+          <View style={[styles.loadingBadge, { backgroundColor: T.surface }]}
+          >
+            <ActivityIndicator size="small" color={T.green} />
           </View>
         )}
 
         {!!errorMsg && !isLoading && (
-          <View style={styles.errorBadge}>
-            <Text style={styles.errorText} numberOfLines={2}>{errorMsg}</Text>
+          <View style={[styles.errorBadge, { backgroundColor: T.redLight }]}
+          >
+            <Text style={[styles.errorText, { color: T.red }]} numberOfLines={2}>{errorMsg}</Text>
           </View>
         )}
       </View>
@@ -194,25 +182,15 @@ export default function MapScreen({
           />
         ) : null}
       </View>
-
-      {/* ── Bottom navigation (re-using shared component, untouched) ─── */}
-      <BottomNavBar
-        activeTab="events"
-        onPressHome={onPressNavHome}
-        onPressEvents={onPressNavEvents}
-        onPressCenter={() => {}}
-        onPressReels={onPressNavReels}
-        onPressProfile={onPressNavProfile}
-      />
-
+      </View>
       {/* ── Filter sheet ───────────────────────────────────────────────── */}
       <Modal visible={showFilters} animationType="slide" transparent onRequestClose={() => setShowFilters(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setShowFilters(false)}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
+          <Pressable style={[styles.sheet, { backgroundColor: T.surface }]} onPress={() => {}}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Filter places</Text>
+            <Text style={[styles.sheetTitle, { color: T.text }]}>Filter places</Text>
 
-            <Text style={styles.sheetSubtitle}>Category</Text>
+            <Text style={[styles.sheetSubtitle, { color: T.textMuted }]}>Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
               {CATEGORIES.map((c) => {
                 const isActive = (filters.category || 'all') === c.key;
@@ -220,32 +198,32 @@ export default function MapScreen({
                   <Pressable
                     key={c.key}
                     onPress={() => applyFilter({ category: c.key })}
-                    style={[styles.chip, isActive && styles.chipActive]}
+                    style={[styles.chip, { backgroundColor: isActive ? T.green : T.surfaceAlt }]}
                   >
-                    <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{c.label}</Text>
+                    <Text style={[styles.chipText, { color: T.text }, isActive && styles.chipTextActive]}>{c.label}</Text>
                   </Pressable>
                 );
               })}
             </ScrollView>
 
-            <Text style={styles.sheetSubtitle}>Status</Text>
+            <Text style={[styles.sheetSubtitle, { color: T.textMuted }]}>Status</Text>
             <View style={styles.toggleRow}>
               <Pressable
                 onPress={() => applyFilter({ certified: !filters.certified ? true : undefined })}
-                style={[styles.chip, filters.certified && styles.chipActive]}
+                style={[styles.chip, { backgroundColor: filters.certified ? T.green : T.surfaceAlt }]}
               >
                 <Ionicons
                   name="checkmark-circle"
                   size={14}
-                  color={filters.certified ? C.white : C.green}
+                  color={filters.certified ? T.white : T.green}
                 />
-                <Text style={[styles.chipText, filters.certified && styles.chipTextActive]}>Certified only</Text>
+                <Text style={[styles.chipText, { color: T.text }, filters.certified && styles.chipTextActive]}>Certified only</Text>
               </Pressable>
               <Pressable
                 onPress={() => applyFilter({ glutenFree: !filters.glutenFree ? true : undefined })}
-                style={[styles.chip, filters.glutenFree && styles.chipActive]}
+                style={[styles.chip, { backgroundColor: filters.glutenFree ? T.green : T.surfaceAlt }]}
               >
-                <Text style={[styles.chipText, filters.glutenFree && styles.chipTextActive]}>Gluten-free only</Text>
+                <Text style={[styles.chipText, { color: T.text }, filters.glutenFree && styles.chipTextActive]}>Gluten-free only</Text>
               </Pressable>
             </View>
 
@@ -253,17 +231,17 @@ export default function MapScreen({
               onPress={() => { setFilters({ category: 'all' }); setShowFilters(false); }}
               style={styles.clearBtn}
             >
-              <Text style={styles.clearText}>Clear filters</Text>
+              <Text style={[styles.clearText, { color: T.green }]}>Clear filters</Text>
             </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
-    </View>
+    </AppScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg },
+  root: { flex: 1 },
 
   // ── header ────────────────────────────────────────────────────────────────
   header: {
@@ -275,14 +253,14 @@ const styles = StyleSheet.create({
   avatarWrap: { width: 40, height: 40, position: 'relative' },
   avatar: { width: 40, height: 40, borderRadius: 20 },
   avatarFallback: { backgroundColor: '#D7D7D7', alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { fontSize: 16, fontWeight: '600', color: C.text, fontFamily: 'Poppins_600SemiBold' },
+  avatarLetter: { fontSize: 16, fontWeight: '600', fontFamily: 'Poppins_600SemiBold' },
   avatarBadge: {
     position: 'absolute', right: -2, bottom: -2, width: 16, height: 16, borderRadius: 8,
-    backgroundColor: C.green, borderWidth: 2, borderColor: C.bg, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, alignItems: 'center', justifyContent: 'center',
   },
-  userName: { fontSize: 17, fontWeight: '600', color: C.text, fontFamily: 'Poppins_600SemiBold' },
+  userName: { fontSize: 17, fontWeight: '600', fontFamily: 'Poppins_600SemiBold' },
   iconBtn: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: C.white,
+    width: 38, height: 38, borderRadius: 19,
     alignItems: 'center', justifyContent: 'center',
   },
 
@@ -291,16 +269,16 @@ const styles = StyleSheet.create({
   filterPillWrap: { position: 'absolute', top: 14, alignSelf: 'center' },
   loadingBadge: {
     position: 'absolute', top: 16, right: 16,
-    width: 36, height: 36, borderRadius: 18, backgroundColor: C.white,
+    width: 36, height: 36, borderRadius: 18,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
   errorBadge: {
     position: 'absolute', top: 60, left: 16, right: 16,
-    backgroundColor: '#FFE9E9', borderRadius: 12, padding: 12,
+    borderRadius: 12, padding: 12,
   },
-  errorText: { color: '#B71C1C', fontSize: 12, fontFamily: 'Poppins_500Medium' },
+  errorText: { fontSize: 12, fontFamily: 'Poppins_500Medium' },
 
   // ── bottom card slot ──────────────────────────────────────────────────────
   cardSlot: { position: 'absolute', left: 16, right: 16 },
@@ -308,25 +286,24 @@ const styles = StyleSheet.create({
   // ── filter sheet ──────────────────────────────────────────────────────────
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: C.white, borderTopLeftRadius: 26, borderTopRightRadius: 26,
+    borderTopLeftRadius: 26, borderTopRightRadius: 26,
     padding: 20, paddingBottom: 30,
   },
   sheetHandle: {
     alignSelf: 'center', width: 42, height: 4, borderRadius: 2,
     backgroundColor: '#D9D9D9', marginBottom: 14,
   },
-  sheetTitle: { fontSize: 18, fontFamily: 'Poppins_700Bold', color: C.text, marginBottom: 14 },
-  sheetSubtitle: { fontSize: 13, color: C.muted, fontFamily: 'Poppins_500Medium', marginTop: 8, marginBottom: 8 },
+  sheetTitle: { fontSize: 18, fontFamily: 'Poppins_700Bold', marginBottom: 14 },
+  sheetSubtitle: { fontSize: 13, fontFamily: 'Poppins_500Medium', marginTop: 8, marginBottom: 8 },
   chipRow: { gap: 8, paddingVertical: 4, paddingRight: 8 },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
-    backgroundColor: '#F1F1EE',
   },
-  chipActive: { backgroundColor: C.green },
-  chipText: { fontSize: 13, color: C.text, fontFamily: 'Poppins_500Medium' },
-  chipTextActive: { color: C.white },
+  chipActive: {},
+  chipText: { fontSize: 13, fontFamily: 'Poppins_500Medium' },
+  chipTextActive: { color: '#FFFFFF' },
   toggleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   clearBtn: { marginTop: 18, alignItems: 'center', paddingVertical: 12 },
-  clearText: { color: C.greenDeep, fontFamily: 'Poppins_600SemiBold', fontSize: 14 },
+  clearText: { fontFamily: 'Poppins_600SemiBold', fontSize: 14 },
 });

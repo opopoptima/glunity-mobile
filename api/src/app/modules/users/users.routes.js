@@ -12,4 +12,7 @@ router.use(authMiddleware);
 /** PATCH /api/users/me — update authenticated user's profile */
 router.patch('/me', usersController.updateMe);
 
+/** POST /api/users/change-password — update user password */
+router.post('/change-password', usersController.changePassword);
+
 module.exports = router;

@@ -16,7 +16,8 @@ import type { AuthStackParamList } from '../../../../navigation/types';
 import { AuthInput } from '../../../../shared/components/AuthInput';
 import { AuthButton } from '../../../../shared/components/AuthButton';
 import { WaveBackground } from '../../../../shared/components/WaveBackground';
-import { Colors, Font, Spacing, Radius } from '../../../../shared/utils/theme';
+import { Radius } from '../../../../shared/utils/theme';
+import { useTheme } from '@/shared/context/theme.context';
 import { useAuth } from '../../state/auth.context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -25,6 +26,109 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 export default function LoginScreen({ navigation, route }: Props) {
   const { login, isLoading, error, clearError } = useAuth();
   const [success, setSuccess] = useState<string | null>(null);
+  const { theme: T, isDark } = useTheme();
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    safe:  { flex: 1, backgroundColor: T.bg },
+    flex:  { flex: 1 },
+    scroll: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingBottom: 120,
+      paddingTop: 24,
+    },
+
+    // Header area
+    header: { alignItems: 'center', marginBottom: 24 },
+    mascot: { fontSize: 80, marginBottom: 12 },
+    divider: {
+      width: '90%',
+      height: 1,
+      backgroundColor: '#FFFFFF',
+    },
+
+    title: {
+      fontSize: 28,
+      fontWeight: '600',
+      fontFamily: 'Poppins_600SemiBold',
+      color: T.text,
+      textAlign: 'center',
+      marginBottom: 24,
+    },
+
+    // Error banner
+    errorBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: T.errorLight,
+      borderWidth: 1,
+      borderColor: T.red,
+      borderRadius: Radius.md,
+      padding: 12,
+      marginBottom: 12,
+    },
+    errorBannerText: {
+      color: T.red,
+      fontSize: 13,
+      fontWeight: '500',
+      fontFamily: 'Poppins_500Medium',
+    },
+
+    // Success banner
+    successBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#E8F5E9',
+      borderWidth: 1,
+      borderColor: '#8BC34A',
+      borderRadius: Radius.md,
+      padding: 12,
+      marginBottom: 12,
+    },
+    successBannerText: {
+      color: '#388E3C',
+      fontSize: 13,
+      fontWeight: '500',
+      fontFamily: 'Poppins_500Medium',
+    },
+
+    // Forgot
+    forgotWrap: { alignSelf: 'flex-start', marginBottom: 24 },
+    forgot: {
+      fontSize: 14,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      color: T.text,
+    },
+
+    btnGroup: { marginBottom: 24 },
+
+    // Switch
+    switchRow: {
+      position: 'absolute',
+      bottom: 18,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 5,
+    },
+    switchText: {
+      fontSize: 16,
+      fontWeight: '500',
+      fontFamily: 'Poppins_500Medium',
+      color: '#FFFFFF',
+    },
+    switchLink: {
+      fontSize: 16,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      color: '#343831',
+    },
+
+    eyeIcon: { fontSize: 18 },
+  }), [T]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -66,7 +170,7 @@ export default function LoginScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.bg} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={T.bg} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -78,7 +182,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         >
           {/* Header */}
           <View style={styles.header}>
-            <MaterialCommunityIcons name="shield-check-outline" size={80} color={Colors.green} />
+            <MaterialCommunityIcons name="shield-check-outline" size={80} color={T.green} />
             <View style={styles.divider} />
           </View>
 
@@ -96,7 +200,7 @@ export default function LoginScreen({ navigation, route }: Props) {
           {/* API error banner */}
           {!!error && (
             <View style={styles.errorBanner}>
-              <Feather name="alert-circle" size={18} color={Colors.error} style={{ marginRight: 8 }} />
+              <Feather name="alert-circle" size={18} color={T.red} style={{ marginRight: 8 }} />
               <Text style={styles.errorBannerText}>{error}</Text>
             </View>
           )}
@@ -117,7 +221,7 @@ export default function LoginScreen({ navigation, route }: Props) {
             value={password}
             onChangeText={setPassword}
             error={errors.password}
-            rightIcon={<Feather name={showPass ? 'eye-off' : 'eye'} size={20} color={Colors.muted} />}
+            rightIcon={<Feather name={showPass ? 'eye-off' : 'eye'} size={20} color={T.textMuted} />}
             onRightIconPress={() => setShowPass((p) => !p)}
           />
 
@@ -162,100 +266,3 @@ export default function LoginScreen({ navigation, route }: Props) {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe:  { flex: 1, backgroundColor: Colors.bg },
-  flex:  { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: 120,
-    paddingTop: Spacing.lg,
-  },
-
-  // Header area
-  header: { alignItems: 'center', marginBottom: Spacing.lg },
-  mascot: { fontSize: 80, marginBottom: Spacing.md },
-  divider: {
-    width: '90%',
-    height: 1,
-    backgroundColor: Colors.white,
-  },
-
-  title: {
-    fontSize: 28,
-    fontWeight: Font.semibold,
-    color: Colors.dark,
-    textAlign: 'center',
-    marginBottom: Spacing.lg,
-  },
-
-  // Error banner
-  errorBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.errorLight,
-    borderWidth: 1,
-    borderColor: Colors.error,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  errorBannerText: {
-    color: Colors.error,
-    fontSize: 13,
-    fontWeight: Font.medium,
-  },
-
-  // Success banner
-  successBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    borderWidth: 1,
-    borderColor: '#8BC34A',
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  successBannerText: {
-    color: '#388E3C',
-    fontSize: 13,
-    fontWeight: Font.medium,
-  },
-
-  // Forgot
-  forgotWrap: { alignSelf: 'flex-start', marginBottom: Spacing.lg },
-  forgot: {
-    fontSize: 14,
-    fontWeight: Font.bold,
-    color: Colors.dark,
-  },
-
-  btnGroup: { marginBottom: Spacing.lg },
-
-  // Switch
-  switchRow: {
-    position: 'absolute',
-    bottom: 18,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 5,
-  },
-  switchText: {
-    fontSize: 16,
-    fontWeight: Font.medium,
-    color: Colors.white,
-  },
-  switchLink: {
-    fontSize: 16,
-    fontWeight: Font.bold,
-    color: Colors.dark,
-  },
-
-  eyeIcon: { fontSize: 18 },
-
-});

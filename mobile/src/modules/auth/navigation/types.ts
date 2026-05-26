@@ -18,8 +18,11 @@ export type AppStackParamList = {
   Profile: undefined;
   Settings: undefined;
   EditProfile: undefined;
-  SellerProfile: undefined;
+  SellerProfile: { sellerId?: string; seller?: any } | undefined;
   AddProduct: { product?: any } | undefined;
   SellerStats: undefined;
-};
+  ProductsMarket: undefined;
+  ProductDetail: { product: any };
+  Map: undefined;
+  SellerProProfile: undefined;
 };
