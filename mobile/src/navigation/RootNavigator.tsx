@@ -3,27 +3,31 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuth } from '../modules/auth/state/auth.context';
 import { AuthNavigator } from './AuthNavigator';
 import { AppNavigator } from './AppNavigator';
-import { Colors } from '../shared/utils/theme';
+import { useTheme, useSyncDarkModeFromProfile } from '../shared/context/theme.context';
 
 export function RootNavigator() {
-  const { isAuthenticated, isInitialized } = useAuth();
+  const { isAuthenticated, isInitialized, user } = useAuth();
+  const { theme: T } = useTheme();
+
+  // Keep ThemeContext in sync when user profile loads / changes
+  useSyncDarkModeFromProfile(user?.darkMode);
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    splash: {
+      flex: 1,
+      backgroundColor: T.bg,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+  }), [T]);
 
   if (!isInitialized) {
     return (
       <View style={styles.splash}>
-        <ActivityIndicator size="large" color={Colors.green} />
+        <ActivityIndicator size="large" color={T.green} />
       </View>
     );
   }
 
   return isAuthenticated ? <AppNavigator /> : <AuthNavigator />;
 }
-
-const styles = StyleSheet.create({
-  splash: {
-    flex: 1,
-    backgroundColor: Colors.bg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});

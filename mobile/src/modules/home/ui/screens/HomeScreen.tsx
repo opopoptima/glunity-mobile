@@ -4,22 +4,34 @@ import {
   Easing,
   FlatList,
   Image,
+  InteractionManager,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  Platform,
 } from "react-native";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../theme/colors";
 import { homeScreenText } from "../../state/homeData";
 import type { HomeScreenProps } from "../../domain/home.types";
-import { BottomNavBar } from "@/shared/components/BottomNavBar";
+import { AppScaffold } from "@/shared/components/AppScaffold";
+import { useTheme } from "@/shared/context/theme.context";
+import { ScanFrameIcon } from "@/shared/components/icons/ScanFrameIcon";
 
 const ICON_RED = "#C8102E";
-const SCREEN_BG = "#F6F5F3";
+const optimizeUnsplashImage = (url: string, width: number, height: number) => {
+  if (!url.includes("images.unsplash.com")) {
+    return url;
+  }
+
+  const hasQuery = url.includes("?");
+  const separator = hasQuery ? "&" : "?";
+  return `${url}${separator}auto=format&fit=crop&q=75&w=${width}&h=${height}`;
+};
 
 export function HomeScreen({
   user,
@@ -40,11 +52,24 @@ export function HomeScreen({
   onPressNavProfile,
 }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
+  const { theme: T } = useTheme();
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const searchAnim = React.useRef(new Animated.Value(0)).current;
   const qrFloat = React.useRef(new Animated.Value(0)).current;
   const inputRef = React.useRef<TextInput>(null);
+
+  const avatarUrl = React.useMemo(() => optimizeUnsplashImage(user.avatarUrl, 96, 96), [user.avatarUrl]);
+
+  const optimizedRecipes = React.useMemo(
+    () => recipes.map((item) => ({ ...item, imageUrl: optimizeUnsplashImage(item.imageUrl, 400, 320) })),
+    [recipes],
+  );
+
+  const optimizedEvents = React.useMemo(
+    () => events.map((item) => ({ ...item, imageUrl: optimizeUnsplashImage(item.imageUrl, 420, 320) })),
+    [events],
+  );
 
   React.useEffect(() => {
     Animated.loop(
@@ -53,17 +78,31 @@ export function HomeScreen({
           toValue: 1,
           duration: 1800,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(qrFloat, {
           toValue: 0,
           duration: 1800,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]),
     ).start();
   }, [qrFloat]);
+
+  React.useEffect(() => {
+    const urls = [
+      avatarUrl,
+      ...optimizedRecipes.slice(0, 3).map((item) => item.imageUrl),
+      ...optimizedEvents.slice(0, 2).map((item) => item.imageUrl),
+    ];
+
+    urls.forEach((url) => {
+      Image.prefetch(url).catch(() => {
+        // Ignore prefetch failures; rendering falls back to normal loading.
+      });
+    });
+  }, [avatarUrl, optimizedEvents, optimizedRecipes]);
 
   const qrTranslateY = qrFloat.interpolate({
     inputRange: [0, 1],
@@ -78,16 +117,21 @@ export function HomeScreen({
   const toggleSearch = React.useCallback(() => {
     const next = !searchOpen;
     setSearchOpen(next);
+
+    if (next) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+      InteractionManager.runAfterInteractions(() => onPressSearch());
+    } else {
+      inputRef.current?.blur();
+      setQuery("");
+    }
+
     Animated.timing(searchAnim, {
       toValue: next ? 1 : 0,
-      duration: 260,
+      duration: 180,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
-    }).start(() => {
-      if (next) inputRef.current?.focus();
-      if (!next) setQuery("");
-    });
-    onPressSearch();
+    }).start();
   }, [onPressSearch, searchAnim, searchOpen]);
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -97,17 +141,17 @@ export function HomeScreen({
   }, [normalizedQuery, quickAccessItems]);
 
   const filteredRecipes = React.useMemo(() => {
-    if (!normalizedQuery) return recipes;
-    return recipes.filter((item) => item.title.toLowerCase().includes(normalizedQuery));
-  }, [normalizedQuery, recipes]);
+    if (!normalizedQuery) return optimizedRecipes;
+    return optimizedRecipes.filter((item) => item.title.toLowerCase().includes(normalizedQuery));
+  }, [normalizedQuery, optimizedRecipes]);
 
   const filteredEvents = React.useMemo(() => {
-    if (!normalizedQuery) return events;
-    return events.filter((item) => {
+    if (!normalizedQuery) return optimizedEvents;
+    return optimizedEvents.filter((item) => {
       const blob = `${item.title} ${item.location} ${item.date}`.toLowerCase();
       return blob.includes(normalizedQuery);
     });
-  }, [events, normalizedQuery]);
+  }, [normalizedQuery, optimizedEvents]);
 
   const searchHeight = searchAnim.interpolate({
     inputRange: [0, 1],
@@ -119,48 +163,53 @@ export function HomeScreen({
     outputRange: [0, 1],
   });
 
-  return (
-    <View style={styles.root}>
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 8, 22) }]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.userInfo} activeOpacity={0.8} onPress={onPressProfilePhoto}>
-            <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
-            <Text style={styles.greeting}>{user.name}</Text>
-            <View style={styles.avatarBadge}>
-              <Feather name="award" size={10} color="#FFFFFF" />
-            </View>
-          </TouchableOpacity>
+  const headerActions = (
+    <View style={styles.headerActions}>
+      <TouchableOpacity onPress={toggleSearch} activeOpacity={0.8} style={[styles.iconButton, { backgroundColor: T.surfaceAlt }]}>
+        <Feather name="search" size={18} color={T.text} />
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onPressNotification} activeOpacity={0.8} style={[styles.iconButton, { backgroundColor: T.surfaceAlt }]}>
+        <Ionicons name="notifications-outline" size={18} color={T.text} />
+        {hasNotification ? <View style={styles.notificationDot} /> : null}
+      </TouchableOpacity>
+    </View>
+  );
 
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={toggleSearch} activeOpacity={0.8} style={styles.iconButton}>
-              <Feather name="search" size={18} color="#393C40" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onPressNotification} activeOpacity={0.8} style={styles.iconButton}>
-              <Ionicons name="notifications-outline" size={18} color="#393C40" />
-              {hasNotification ? <View style={styles.notificationDot} /> : null}
-            </TouchableOpacity>
-          </View>
-        </View>
+  return (
+    <AppScaffold
+      title="Home"
+      activeTab="home"
+      rightElement={headerActions}
+      onPressHome={onPressNavHome}
+      onPressEvents={onPressNavEvents}
+      onPressCenter={onPressNavFab}
+      onPressReels={onPressNavReels}
+      onPressProfile={onPressNavProfile}
+      contentStyle={{ backgroundColor: T.bg }}
+    >
+      <View style={[styles.root, { backgroundColor: T.bg }]}>
+        <ScrollView
+          style={[styles.screen, { backgroundColor: T.bg }]}
+          contentContainerStyle={[styles.content, { paddingTop: 14 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
 
         <Animated.View style={[styles.searchWrap, { height: searchHeight, opacity: searchOpacity }]}>
-          <View style={styles.searchInner}>
-            <Feather name="search" size={16} color="#6B7280" />
+          <View style={[styles.searchInner, { backgroundColor: T.surface, borderColor: T.border }]}>
+            <Feather name="search" size={16} color={T.textMuted} />
             <TextInput
               ref={inputRef}
               value={query}
               onChangeText={setQuery}
               placeholder="Search products, recipes, events"
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={T.textMuted}
               underlineColorAndroid="transparent"
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: T.text }]}
             />
             {!!query && (
               <TouchableOpacity activeOpacity={0.8} onPress={() => setQuery("")}>
-                <Ionicons name="close-circle" size={16} color="#9CA3AF" />
+                <Ionicons name="close-circle" size={16} color={T.textMuted} />
               </TouchableOpacity>
             )}
           </View>
@@ -170,9 +219,17 @@ export function HomeScreen({
           <Animated.View
             style={{
               transform: [{ translateY: qrTranslateY }, { scale: qrScale }],
+              justifyContent: 'center',
+              alignItems: 'center',
+              position: 'relative',
+              width: 84,
+              height: 84,
             }}
           >
-            <Ionicons name="qr-code" size={84} color="#FFFFFF" />
+            <ScanFrameIcon size={84} color="#FFFFFF" strokeWidth={2.2} />
+            <View style={{ position: 'absolute' }}>
+              <Ionicons name="qr-code" size={44} color="#FFFFFF" />
+            </View>
           </Animated.View>
           <Text style={styles.heroSubtitle}>{homeScreenText.qrSubtitle}</Text>
           <TouchableOpacity activeOpacity={0.85} onPress={onPressScan} style={styles.scanCta}>
@@ -180,7 +237,7 @@ export function HomeScreen({
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitlePrimary}>{homeScreenText.quickAccessTitle}</Text>
+        <Text style={[styles.sectionTitlePrimary, { color: T.text }]}>{homeScreenText.quickAccessTitle}</Text>
 
         <View style={styles.quickGrid}>
           {filteredQuickAccess.map((item) => (
@@ -188,19 +245,19 @@ export function HomeScreen({
               key={item.id}
               activeOpacity={0.85}
               onPress={item.onPress}
-              style={styles.quickCard}
+              style={[styles.quickCard, { backgroundColor: T.surface }]}
             >
-              <View style={styles.quickIconWrap}>
-                <Ionicons name={item.icon} size={22} color={ICON_RED} />
+              <View style={[styles.quickIconWrap, { backgroundColor: T.greenLight }]}>
+                <Ionicons name={item.icon} size={22} color={T.green} />
               </View>
-              <Text style={styles.quickCardLabel}>{item.label}</Text>
+              <Text style={[styles.quickCardLabel, { color: T.text }]}>{item.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         <View style={styles.sectionRow}>
           <View style={styles.sectionRowLeft}>
-            <Text style={styles.sectionTitleSecondary}>{homeScreenText.checkRecipesTitle}</Text>
+            <Text style={[styles.sectionTitleSecondary, { color: T.text }]}>{homeScreenText.checkRecipesTitle}</Text>
             <View style={styles.gfPill}>
               <Ionicons name="sparkles" size={10} color="#FFFFFF" />
               <Text style={styles.gfPillText}>GF</Text>
@@ -218,9 +275,9 @@ export function HomeScreen({
           contentContainerStyle={styles.recipesList}
           showsHorizontalScrollIndicator={false}
           renderItem={({ item }) => (
-            <TouchableOpacity activeOpacity={0.85} onPress={item.onPress} style={styles.recipeCard}>
-              <Image source={{ uri: item.imageUrl }} style={styles.recipeImage} />
-              <Text style={styles.recipeName} numberOfLines={2}>
+            <TouchableOpacity activeOpacity={0.85} onPress={item.onPress} style={[styles.recipeCard, { backgroundColor: T.surface }]}>
+              <Image source={{ uri: item.imageUrl }} resizeMode="cover" style={styles.recipeImage} />
+              <Text style={[styles.recipeName, { color: T.text }]} numberOfLines={2}>
                 {item.title}
               </Text>
             </TouchableOpacity>
@@ -228,7 +285,7 @@ export function HomeScreen({
         />
 
         <View style={[styles.sectionRow, styles.eventsHeader]}>
-          <Text style={styles.sectionTitleSecondary}>{homeScreenText.checkEventsTitle}</Text>
+          <Text style={[styles.sectionTitleSecondary, { color: T.text }]}>{homeScreenText.checkEventsTitle}</Text>
           <TouchableOpacity activeOpacity={0.8} onPress={onPressEventsSeeAll}>
             <Text style={styles.seeAll}>See All</Text>
           </TouchableOpacity>
@@ -236,21 +293,21 @@ export function HomeScreen({
 
         <View style={styles.eventsRow}>
           {filteredEvents.map((item) => (
-            <TouchableOpacity key={item.id} activeOpacity={0.85} onPress={item.onPress} style={styles.eventCard}>
+            <TouchableOpacity key={item.id} activeOpacity={0.85} onPress={item.onPress} style={[styles.eventCard, { backgroundColor: T.surface }]}>
               <Image source={{ uri: item.imageUrl }} style={styles.eventImage} />
               <View style={styles.eventBody}>
-                <Text style={styles.eventTitle} numberOfLines={2}>
+                <Text style={[styles.eventTitle, { color: T.text }]} numberOfLines={2}>
                   {item.title}
                 </Text>
                 <View style={styles.metaRow}>
-                  <Ionicons name="location-outline" size={10} color={ICON_RED} />
-                  <Text style={styles.metaText} numberOfLines={1}>
+                  <Ionicons name="location-outline" size={10} color={T.green} />
+                  <Text style={[styles.metaText, { color: T.textSub }]} numberOfLines={1}>
                     {item.location}
                   </Text>
                 </View>
                 <View style={styles.metaRow}>
-                  <Ionicons name="calendar-outline" size={10} color={ICON_RED} />
-                  <Text style={styles.metaText} numberOfLines={1}>
+                  <Ionicons name="calendar-outline" size={10} color={T.green} />
+                  <Text style={[styles.metaText, { color: T.textSub }]} numberOfLines={1}>
                     {item.date}
                   </Text>
                 </View>
@@ -261,28 +318,17 @@ export function HomeScreen({
 
         <View style={{ height: 116 + insets.bottom }} />
       </ScrollView>
-
-      <BottomNavBar
-        activeTab="home"
-        idPrefix="home-nav"
-        onPressHome={onPressNavHome}
-        onPressEvents={onPressNavEvents}
-        onPressCenter={onPressNavFab}
-        onPressReels={onPressNavReels}
-        onPressProfile={onPressNavProfile}
-      />
-    </View>
+      </View>
+    </AppScaffold>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: SCREEN_BG,
   },
   screen: {
     flex: 1,
-    backgroundColor: SCREEN_BG,
   },
   content: {
     paddingHorizontal: 12,
@@ -334,7 +380,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginBottom: 10,
     borderRadius: 14,
-    backgroundColor: SCREEN_BG,
   },
   searchInner: {
     height: 44,
@@ -507,7 +552,6 @@ const styles = StyleSheet.create({
   recipeImage: {
     width: "100%",
     height: 140,
-    resizeMode: "cover",
   },
   recipeName: {
     marginTop: 8,

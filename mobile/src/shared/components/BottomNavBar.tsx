@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../context/theme.context';
+import { ScanFrameIcon } from './icons/ScanFrameIcon';
 
 type TabKey = 'home' | 'events' | 'reels' | 'profile';
 
@@ -15,12 +17,6 @@ interface BottomNavBarProps {
   onPressProfile?: () => void;
 }
 
-const C = {
-  bg: '#F6F5F3',
-  dark: '#2E2E2E',
-  green: '#8BC34A',
-};
-
 export function BottomNavBar({
   activeTab,
   idPrefix = 'nav',
@@ -31,85 +27,119 @@ export function BottomNavBar({
   onPressProfile,
 }: BottomNavBarProps) {
   const insets = useSafeAreaInsets();
+  const { theme: C } = useTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: C.surface,
+      borderTopWidth: 1,
+      borderTopColor: C.border,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingBottom: Math.max(insets.bottom, 12),
+      shadowColor: '#000000',
+      shadowOpacity: 0.06,
+      shadowOffset: { width: 0, height: -3 },
+      shadowRadius: 8,
+      elevation: 10,
+    },
+    bottomBar: {
+      height: 60,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 24,
+    },
+    iconFrame: {
+      width: 32,
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    iconFrameActive: {},
+    navItem: {
+      width: 56,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+    },
+    navLabel: {
+      fontSize: 10,
+      lineHeight: 14,
+      fontWeight: '500',
+      color: C.textMuted,
+      fontFamily: 'Poppins_500Medium',
+    },
+    navLabelActive: {
+      color: C.green,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+    },
+    fabButton: {
+      position: 'absolute',
+      alignSelf: 'center',
+      top: -24,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: C.green,
+      borderWidth: 4,
+      borderColor: C.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000000',
+      shadowOpacity: 0.15,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 8,
+      elevation: 10,
+    },
+  }), [C, insets]);
 
   const getLabelStyle = (tab: TabKey) => [styles.navLabel, activeTab === tab ? styles.navLabelActive : null];
-  const getIconColor = (tab: TabKey) => (activeTab === tab ? C.green : C.dark);
+  const getIconColor = (tab: TabKey) => (activeTab === tab ? C.green : C.textMuted);
+  const getIconFrameStyle = (tab: TabKey) => [styles.iconFrame, activeTab === tab ? styles.iconFrameActive : null];
 
   return (
-    <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.8} onPress={onPressHome} id={`${idPrefix}-home`}>
-        <Feather name="home" size={22} color={getIconColor('home')} />
-        <Text style={getLabelStyle('home')}>Home</Text>
-      </TouchableOpacity>
+    <View style={styles.container} pointerEvents="box-none">
+      <View style={styles.bottomBar}>
+        <TouchableOpacity style={styles.navItem} activeOpacity={0.8} onPress={onPressHome} id={`${idPrefix}-home`}>
+          <View style={getIconFrameStyle('home')}>
+            <Feather name="home" size={22} color={getIconColor('home')} />
+          </View>
+          <Text style={getLabelStyle('home')}>Home</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.8} onPress={onPressEvents} id={`${idPrefix}-events`}>
-        <Feather name="calendar" size={22} color={getIconColor('events')} />
-        <Text style={getLabelStyle('events')}>Events</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} activeOpacity={0.8} onPress={onPressEvents} id={`${idPrefix}-events`}>
+          <View style={getIconFrameStyle('events')}>
+            <Feather name="calendar" size={22} color={getIconColor('events')} />
+          </View>
+          <Text style={getLabelStyle('events')}>Events</Text>
+        </TouchableOpacity>
+
+        <View style={styles.navItem} />
+
+        <TouchableOpacity style={styles.navItem} activeOpacity={0.8} onPress={onPressReels} id={`${idPrefix}-reels`}>
+          <View style={getIconFrameStyle('reels')}>
+            <MaterialCommunityIcons name="movie-play-outline" size={24} color={getIconColor('reels')} />
+          </View>
+          <Text style={getLabelStyle('reels')}>Reels</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.navItem} activeOpacity={0.8} onPress={onPressProfile} id={`${idPrefix}-profile`}>
+          <View style={getIconFrameStyle('profile')}>
+            <Feather name="user" size={22} color={getIconColor('profile')} />
+          </View>
+          <Text style={getLabelStyle('profile')}>Profile</Text>
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity style={styles.fabButton} activeOpacity={0.85} onPress={onPressCenter} id={`${idPrefix}-fab`}>
-        <Ionicons name="qr-code" size={24} color="#FFFFFF" />
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.8} onPress={onPressReels} id={`${idPrefix}-reels`}>
-        <MaterialCommunityIcons name="movie-play-outline" size={24} color={getIconColor('reels')} />
-        <Text style={getLabelStyle('reels')}>Reels</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.8} onPress={onPressProfile} id={`${idPrefix}-profile`}>
-        <Feather name="user" size={22} color={getIconColor('profile')} />
-        <Text style={getLabelStyle('profile')}>Profile</Text>
+        <ScanFrameIcon size={28} color="#FFFFFF" strokeWidth={2.0} />
       </TouchableOpacity>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  bottomBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 96,
-    backgroundColor: C.bg,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    paddingHorizontal: 18,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-  navItem: {
-    width: 52,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 2,
-    paddingBottom: 2,
-  },
-  navLabel: {
-    fontSize: 8.5,
-    lineHeight: 15,
-    fontWeight: '500',
-    color: C.dark,
-    fontFamily: 'Poppins_400Regular',
-  },
-  navLabelActive: {
-    color: C.green,
-  },
-  fabButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: C.green,
-    borderWidth: 4,
-    borderColor: C.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-    shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 8 },
-    shadowRadius: 12,
-    elevation: 8,
-  },
-});

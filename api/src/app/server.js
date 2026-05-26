@@ -1,13 +1,17 @@
 'use strict';
 
+
+
+
+
 // ── 1. Load .env FIRST (before any other import reads process.env) ─────────────
 require('./bootstrap/env.bootstrap');
 
 // ── 2. Config & bootstrap ──────────────────────────────────────────────────────
-const env       = require('./config/env');
+const env = require('./config/env');
 const connectDB = require('./bootstrap/db.bootstrap');
-const logger    = require('./bootstrap/logger.bootstrap');
-const app       = require('./app');
+const logger = require('./bootstrap/logger.bootstrap');
+const app = require('./app');
 
 // ── 3. Boot sequence ───────────────────────────────────────────────────────────
 async function boot() {
@@ -16,8 +20,8 @@ async function boot() {
   const server = app.listen(env.port, () => {
     logger.info(`🚀 GlUnity API running`, {
       port: env.port,
-      env:  env.node,
-      url:  `http://localhost:${env.port}`,
+      env: env.node,
+      url: `http://localhost:${env.port}`,
     });
   });
 
@@ -34,7 +38,7 @@ async function boot() {
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT',  () => shutdown('SIGINT'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
   process.on('unhandledRejection', (reason) => {
     logger.error('Unhandled promise rejection', { reason: String(reason) });

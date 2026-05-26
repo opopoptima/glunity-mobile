@@ -1,8 +1,9 @@
 import React from 'react';
-import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AuthProvider } from './src/modules/auth/state/auth.context';
+import { ThemeProvider } from './src/shared/context/theme.context';
+import { ThemedNavigationContainer } from './src/shared/components/ThemedNavigationContainer';
 import { RootNavigator } from './src/navigation/RootNavigator';
 // @ts-ignore
 import {
@@ -13,40 +14,25 @@ import {
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
 
+import { initTextScaling } from './src/shared/utils/text-scaling';
+
+initTextScaling();
+
 let hasPatchedDefaultFonts = false;
 
-/**
- * Deep-link / URL mapping.
- *
- * When the user clicks an email link such as:
- *   http://localhost:8081/reset-password?token=abc123
- *   http://localhost:8081/email-verified?verified=1
- *
- * React Navigation translates those URLs into the matching screen + params.
- */
-const linking: LinkingOptions<ReactNavigation.RootParamList> = {
+// Deep-link / URL mapping
+const linking = {
   prefixes: [
     'http://localhost:8081',
     'http://localhost:8082',
     'http://localhost:8083',
     'http://localhost:8090',
-    'glunity://',             // native deep link scheme
+    'glunity://',
   ],
   config: {
     screens: {
-      // The navigator names must match your stack structure.
-      // AuthNavigator is rendered directly by RootNavigator, so we
-      // reference screens inside it at the top level here.
-      ResetPassword:  {
-        path: 'reset-password',
-        parse: { token: (t: string) => t },
-      },
-      EmailVerified: {
-        path: 'email-verified',
-        parse: {
-          success: (v: string) => v !== '0' && v !== 'false',
-        },
-      },
+      ResetPassword:  { path: 'reset-password', parse: { token: (t: string) => t } },
+      EmailVerified:  { path: 'email-verified', parse: { success: (v: string) => v !== '0' && v !== 'false' } },
       Login:          'login',
       Register:       'register',
       ForgotPassword: 'forgot-password',
@@ -83,11 +69,13 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <NavigationContainer linking={linking}>
-        <AuthProvider>
-          <RootNavigator />
-        </AuthProvider>
-      </NavigationContainer>
+      <AuthProvider>
+        <ThemeProvider>
+          <ThemedNavigationContainer linking={linking as any}>
+            <RootNavigator />
+          </ThemedNavigationContainer>
+        </ThemeProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

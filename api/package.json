@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon src/app/server.js",
     "start": "node src/app/server.js",
-    "seed:recipes": "node scripts/seed-recipes.js",
+    "seed:recipes":   "node scripts/seed-recipes.js",
+    "seed:locations": "node scripts/seed-locations.js",
     "lint": "echo \"api lint placeholder\"",
     "test": "echo \"api test placeholder\""
   },

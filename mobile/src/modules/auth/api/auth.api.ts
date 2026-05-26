@@ -34,6 +34,9 @@ export interface UpdateProfileDto {
   fullName?: string;
   phone?: string;
   bio?: string;
+  avatarUrl?: string;
+  darkMode?: boolean;
+  language?: string;
 }
 
 export interface AuthResponse {
@@ -84,6 +87,11 @@ const authApi = {
 
   async resendVerification(email: string): Promise<{ success: boolean; message: string }> {
     const { data } = await http.post<{ success: boolean; message: string }>('/auth/resend-verification', { email });
+    return data;
+  },
+
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const { data } = await http.post<{ success: boolean; message: string }>('/users/change-password', { currentPassword, newPassword });
     return data;
   },
 };

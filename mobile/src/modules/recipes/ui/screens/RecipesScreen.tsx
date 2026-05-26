@@ -1,7 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  SafeAreaView,
-  StatusBar,
   View,
   Text,
   StyleSheet,
@@ -10,13 +8,13 @@ import {
   FlatList,
   Image,
 } from 'react-native';
-import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { AppStackParamList } from '@/modules/auth/navigation/types';
-import { Colors, Font } from '@/shared/utils/theme';
 import { useAuth } from '@/modules/auth/state/auth.context';
-import { BottomNavBar } from '@/shared/components/BottomNavBar';
+import { AppScaffold } from '@/shared/components/AppScaffold';
+import { useTheme } from '@/shared/context/theme.context';
 import recipesApi, { Recipe, RecipeCategory } from '../../api/recipes.api';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Recipes'>;
@@ -93,6 +91,229 @@ function getRecipeImage(recipe: Recipe): string {
 
 export default function RecipesScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const { theme: T } = useTheme();
+
+  const s = React.useMemo(() => StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: T.bg,
+    },
+    mainContainer: {
+      flex: 1,
+      position: 'relative',
+      paddingBottom: 96,
+    },
+    content: {
+      paddingBottom: 40,
+    },
+    topbar: {
+      paddingHorizontal: 22,
+      paddingTop: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    userInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    avatarWrap: {
+      position: 'relative',
+      width: 42,
+      height: 42,
+    },
+    avatar: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: T.surfaceAlt,
+    },
+    checkBadge: {
+      position: 'absolute',
+      right: -2,
+      bottom: -2,
+      width: 15,
+      height: 15,
+      borderRadius: 7.5,
+      backgroundColor: T.green,
+      borderWidth: 1.5,
+      borderColor: T.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    userName: {
+      fontSize: 16,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      color: T.text,
+    },
+    topIcons: {
+      flexDirection: 'row',
+      gap: 16,
+    },
+    iconBtn: {
+      width: 32,
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    heroTitle: {
+      paddingHorizontal: 22,
+      fontSize: 27,
+      color: T.text,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      marginTop: 10,
+    },
+    heroSub: {
+      paddingHorizontal: 22,
+      marginTop: 4,
+      fontSize: 13.5,
+      color: T.red,
+      fontWeight: '600',
+      fontFamily: 'Poppins_600SemiBold',
+      textTransform: 'capitalize',
+    },
+    filters: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 22,
+      marginTop: 20,
+      gap: 12,
+    },
+    filterPill: {
+      height: 44,
+      borderRadius: 22,
+      paddingHorizontal: 20,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: 'rgba(0,0,0,0.06)',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    filterPillActive: {
+      backgroundColor: T.green,
+    },
+    filterPillIdle: {
+      backgroundColor: T.surface,
+    },
+    filterText: {
+      fontSize: 14.5,
+      fontWeight: '600',
+      fontFamily: 'Poppins_600SemiBold',
+    },
+    filterTextActive: {
+      color: '#FFFFFF',
+    },
+    filterTextIdle: {
+      color: T.text,
+    },
+    cardsRow: {
+      gap: 16,
+      paddingHorizontal: 22,
+      paddingTop: 24,
+      paddingBottom: 16,
+    },
+    recipeCard: {
+      width: 172,
+      backgroundColor: T.surface,
+      borderRadius: 24,
+      padding: 12,
+      shadowColor: 'rgba(0,0,0,0.06)',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.1,
+      shadowRadius: 10,
+      elevation: 4,
+    },
+    recipeImageContainer: {
+      width: 148,
+      height: 148,
+      borderRadius: 74,
+      overflow: 'hidden',
+      alignSelf: 'center',
+      backgroundColor: T.surfaceAlt,
+      marginBottom: 12,
+      shadowColor: '#000000',
+      shadowOpacity: 0.08,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 6,
+    },
+    recipeImage: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
+    },
+    recipeBody: {
+      paddingHorizontal: 4,
+    },
+    recipeName: {
+      color: T.red,
+      fontSize: 15,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      marginBottom: 4,
+    },
+    recipeDesc: {
+      color: T.textSub,
+      fontSize: 11,
+      lineHeight: 16,
+      fontFamily: 'Poppins_400Regular',
+    },
+    popularHeaderRow: {
+      paddingHorizontal: 22,
+      paddingTop: 10,
+      paddingBottom: 14,
+    },
+    popularTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: T.text,
+      fontFamily: 'Poppins_700Bold',
+    },
+    popCard: {
+      marginHorizontal: 22,
+      backgroundColor: T.surface,
+      borderRadius: 24,
+      padding: 12,
+      shadowColor: 'rgba(0,0,0,0.06)',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.1,
+      shadowRadius: 10,
+      elevation: 4,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+    },
+    popImg: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: T.surfaceAlt,
+    },
+    popInfo: {
+      flex: 1,
+      paddingRight: 4,
+    },
+    popName: {
+      color: T.red,
+      fontSize: 15,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+      marginBottom: 4,
+    },
+    popDesc: {
+      color: T.textSub,
+      fontSize: 11.5,
+      lineHeight: 16,
+      fontFamily: 'Poppins_400Regular',
+    },
+  }), [T]);
+
   const [activeCategory, setActiveCategory] = useState<RecipeCategory>('tunisian');
   const [items, setItems] = useState<Recipe[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -117,44 +338,44 @@ export default function RecipesScreen({ navigation }: Props) {
 
   const popular = useMemo(() => {
     const source = loaded && items.length > 0 ? items : MOCK_RECIPES;
-    // Find quinoa salad or get the third item
     const salad = source.find(r => r.title.toLowerCase().includes('salad') || r.title.toLowerCase().includes('quinoa'));
     return salad ? [salad] : source.slice(2, 3);
   }, [items, loaded]);
 
+  const headerActions = (
+    <View style={s.topIcons}>
+      <TouchableOpacity activeOpacity={0.8} style={[s.iconBtn, { backgroundColor: T.surfaceAlt }]}> 
+        <Feather name="search" size={20} color={T.text} />
+      </TouchableOpacity>
+      <TouchableOpacity activeOpacity={0.8} style={[s.iconBtn, { backgroundColor: T.surfaceAlt }]}> 
+        <Feather name="bell" size={20} color={T.text} />
+      </TouchableOpacity>
+    </View>
+  );
+
   return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F6F5F3" />
-
-      <View style={s.mainContainer}>
+    <AppScaffold
+      title="Recipes"
+      activeTab="home"
+      rightElement={headerActions}
+      onPressHome={() => navigation.navigate('Home')}
+      onPressEvents={() => navigation.navigate('Map')}
+      onPressCenter={() => {}}
+      onPressReels={() => {}}
+      onPressProfile={() => {
+        if (user?.profileType === 'pro_commerce') {
+          navigation.navigate('SellerProProfile');
+        } else {
+          navigation.navigate('Profile');
+        }
+      }}
+      contentStyle={{ backgroundColor: T.bg }}
+    >
+      <View style={[s.mainContainer, { backgroundColor: T.bg }]}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
-          {/* Header Row */}
-          <View style={s.topbar}>
-            <View style={s.userInfo}>
-              <View style={s.avatarWrap}>
-                <Image
-                  source={{ uri: user?.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop' }}
-                  style={s.avatar}
-                />
-                <View style={s.checkBadge}>
-                  <Feather name="check" size={8} color="#FFFFFF" />
-                </View>
-              </View>
-              <Text style={s.userName}>{user?.fullName?.split(' ')[0] || 'Yassmine'}</Text>
-            </View>
-            <View style={s.topIcons}>
-              <TouchableOpacity activeOpacity={0.8} style={s.iconBtn}>
-                <Feather name="search" size={20} color="#2E2E2E" />
-              </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.8} style={s.iconBtn}>
-                <Feather name="bell" size={20} color="#2E2E2E" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
           {/* Heading */}
-          <Text style={s.heroTitle}>Gluten-Free Recipes</Text>
-          <Text style={s.heroSub}>Healthy and nutritious food recipes</Text>
+          <Text style={[s.heroTitle, { color: T.text }]}>Gluten-Free Recipes</Text>
+          <Text style={[s.heroSub, { color: T.red }]}>Healthy and nutritious food recipes</Text>
 
           {/* Filter Tabs */}
           <View style={s.filters}>
@@ -165,7 +386,7 @@ export default function RecipesScreen({ navigation }: Props) {
                   key={f.key}
                   onPress={() => setActiveCategory(f.key)}
                   activeOpacity={0.85}
-                  style={[s.filterPill, active ? s.filterPillActive : s.filterPillIdle]}
+                  style={[s.filterPill, active ? s.filterPillActive : [s.filterPillIdle, { backgroundColor: T.surface }]]}
                 >
                   {active && (
                     <MaterialCommunityIcons
@@ -175,7 +396,7 @@ export default function RecipesScreen({ navigation }: Props) {
                       style={{ marginRight: 6 }}
                     />
                   )}
-                  <Text style={[s.filterText, active ? s.filterTextActive : s.filterTextIdle]}>
+                  <Text style={[s.filterText, active ? s.filterTextActive : [s.filterTextIdle, { color: T.text }]]}>
                     {f.label}
                   </Text>
                 </TouchableOpacity>
@@ -192,7 +413,7 @@ export default function RecipesScreen({ navigation }: Props) {
             contentContainerStyle={s.cardsRow}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={s.recipeCard}
+                style={[s.recipeCard, { backgroundColor: T.surface }]}
                 activeOpacity={0.9}
                 onPress={() => navigation.navigate('RecipeDetail', { recipeId: item._id, initialRecipe: item })}
               >
@@ -200,8 +421,8 @@ export default function RecipesScreen({ navigation }: Props) {
                   <Image source={{ uri: getRecipeImage(item) }} style={s.recipeImage} />
                 </View>
                 <View style={s.recipeBody}>
-                  <Text style={s.recipeName} numberOfLines={1}>{item.title}</Text>
-                  <Text style={s.recipeDesc} numberOfLines={2}>{item.description}</Text>
+                  <Text style={[s.recipeName, { color: T.text }]} numberOfLines={1}>{item.title}</Text>
+                  <Text style={[s.recipeDesc, { color: T.textSub }]} numberOfLines={2}>{item.description}</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -209,264 +430,29 @@ export default function RecipesScreen({ navigation }: Props) {
 
           {/* Popular Section */}
           <View style={s.popularHeaderRow}>
-            <Text style={s.popularTitle}>
-              Popular <Text style={{ color: '#8BC34A' }}>recipes</Text>
+            <Text style={[s.popularTitle, { color: T.text }]}>
+              Popular <Text style={{ color: T.green }}>recipes</Text>
             </Text>
           </View>
 
           {popular.map((item) => (
             <TouchableOpacity
               key={`pop-${item._id}`}
-              style={s.popCard}
+              style={[s.popCard, { backgroundColor: T.surface }]}
               activeOpacity={0.88}
               onPress={() => navigation.navigate('RecipeDetail', { recipeId: item._id, initialRecipe: item })}
             >
               <Image source={{ uri: getRecipeImage(item) }} style={s.popImg} />
               <View style={s.popInfo}>
-                <Text style={s.popName}>{item.title}</Text>
-                <Text style={s.popDesc} numberOfLines={3}>{item.description}</Text>
+                <Text style={[s.popName, { color: T.text }]}>{item.title}</Text>
+                <Text style={[s.popDesc, { color: T.textSub }]} numberOfLines={3}>{item.description}</Text>
               </View>
             </TouchableOpacity>
           ))}
         </ScrollView>
-
-        <BottomNavBar
-          activeTab="home"
-          idPrefix="home-nav"
-          onPressHome={() => navigation.navigate('Home')}
-          onPressEvents={() => {}}
-          onPressCenter={() => {}}
-          onPressReels={() => {}}
-          onPressProfile={() => {
-            if (user?.profileType === 'pro_commerce') {
-              navigation.navigate('SellerProfile');
-            } else {
-              navigation.navigate('Profile');
-            }
-          }}
-        />
       </View>
-    </SafeAreaView>
+    </AppScaffold>
   );
 }
 
-const s = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#F6F5F3',
-  },
-  mainContainer: {
-    flex: 1,
-    position: 'relative',
-    paddingBottom: 96,
-  },
-  content: {
-    paddingBottom: 40,
-  },
-  topbar: {
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  avatarWrap: {
-    position: 'relative',
-    width: 42,
-    height: 42,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#E5E7EB',
-  },
-  checkBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
-    backgroundColor: '#8BC34A',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2E2E2E',
-    fontFamily: Font.bold,
-  },
-  topIcons: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  iconBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroTitle: {
-    paddingHorizontal: 22,
-    fontSize: 27,
-    color: '#2E2E2E',
-    fontWeight: '700',
-    fontFamily: Font.bold,
-    marginTop: 10,
-  },
-  heroSub: {
-    paddingHorizontal: 22,
-    marginTop: 4,
-    fontSize: 13.5,
-    color: '#C8102E',
-    fontWeight: '600',
-    fontFamily: Font.semibold,
-    textTransform: 'capitalize',
-  },
-  filters: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-    marginTop: 20,
-    gap: 12,
-  },
-  filterPill: {
-    height: 44,
-    borderRadius: 22,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: 'rgba(0,0,0,0.06)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  filterPillActive: {
-    backgroundColor: '#8BC34A',
-  },
-  filterPillIdle: {
-    backgroundColor: '#FFFFFF',
-  },
-  filterText: {
-    fontSize: 14.5,
-    fontWeight: '600',
-    fontFamily: Font.semibold,
-  },
-  filterTextActive: {
-    color: '#FFFFFF',
-  },
-  filterTextIdle: {
-    color: '#2E2E2E',
-  },
-  cardsRow: {
-    gap: 16,
-    paddingHorizontal: 22,
-    paddingTop: 24,
-    paddingBottom: 16,
-  },
-  recipeCard: {
-    width: 172,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 12,
-    shadowColor: 'rgba(0,0,0,0.06)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  recipeImageContainer: {
-    width: 148,
-    height: 148,
-    borderRadius: 74,
-    overflow: 'hidden',
-    alignSelf: 'center',
-    backgroundColor: '#F3F4F6',
-    marginBottom: 12,
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-  },
-  recipeImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  recipeBody: {
-    paddingHorizontal: 4,
-  },
-  recipeName: {
-    color: '#C8102E',
-    fontSize: 15,
-    fontWeight: '700',
-    fontFamily: Font.bold,
-    marginBottom: 4,
-  },
-  recipeDesc: {
-    color: 'rgba(46, 46, 46, 0.5)',
-    fontSize: 11,
-    lineHeight: 16,
-    fontFamily: Font.regular,
-  },
-  popularHeaderRow: {
-    paddingHorizontal: 22,
-    paddingTop: 10,
-    paddingBottom: 14,
-  },
-  popularTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#2E2E2E',
-    fontFamily: Font.bold,
-  },
-  popCard: {
-    marginHorizontal: 22,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 12,
-    shadowColor: 'rgba(0,0,0,0.06)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  popImg: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#F3F4F6',
-  },
-  popInfo: {
-    flex: 1,
-    paddingRight: 4,
-  },
-  popName: {
-    color: '#C8102E',
-    fontSize: 15,
-    fontWeight: '700',
-    fontFamily: Font.bold,
-    marginBottom: 4,
-  },
-  popDesc: {
-    color: 'rgba(46, 46, 46, 0.5)',
-    fontSize: 11.5,
-    lineHeight: 16,
-    fontFamily: Font.regular,
-  },
-});
+

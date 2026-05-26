@@ -1,11 +1,8 @@
 import React from 'react';
 import {
-  SafeAreaView,
-  StatusBar,
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   Image,
 } from 'react-native';
@@ -13,9 +10,9 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { AppStackParamList } from '@/modules/auth/navigation/types';
-import { Colors, Font } from '@/shared/utils/theme';
 import { useAuth } from '@/modules/auth/state/auth.context';
-import { BottomNavBar } from '@/shared/components/BottomNavBar';
+import { useTheme } from '@/shared/context/theme.context';
+import { AppScaffold } from '@/shared/components/AppScaffold';
 import recipesApi, { Recipe } from '../../api/recipes.api';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'RecipeDetail'>;
@@ -63,6 +60,195 @@ function getRecipeImage(recipe: Recipe): string {
 
 export default function RecipeDetailScreen({ navigation, route }: Props) {
   const { user } = useAuth();
+  const { theme: T } = useTheme();
+
+  const s = React.useMemo(() => StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: T.bg,
+    },
+    mainContainer: {
+      flex: 1,
+      position: 'relative',
+      paddingBottom: 96,
+    },
+    content: {
+      paddingBottom: 40,
+    },
+    topbar: {
+      paddingHorizontal: 22,
+      paddingTop: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 12,
+    },
+    userInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    avatarWrap: {
+      position: 'relative',
+      width: 42,
+      height: 42,
+    },
+    avatar: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: T.surfaceAlt,
+    },
+    checkBadge: {
+      position: 'absolute',
+      right: -2,
+      bottom: -2,
+      width: 15,
+      height: 15,
+      borderRadius: 7.5,
+      backgroundColor: T.green,
+      borderWidth: 1.5,
+      borderColor: T.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    userName: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: T.text,
+      fontFamily: 'Poppins_700Bold',
+    },
+    topIcons: {
+      flexDirection: 'row',
+      gap: 16,
+    },
+    iconBtn: {
+      width: 32,
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    backRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 22,
+      paddingTop: 16,
+      gap: 12,
+      marginBottom: 18,
+    },
+    backBtn: {
+      width: 32,
+      height: 32,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    title: {
+      fontSize: 27,
+      fontWeight: '700',
+      color: T.text,
+      fontFamily: 'Poppins_700Bold',
+    },
+    sectionTitle: {
+      paddingHorizontal: 22,
+      fontSize: 22,
+      fontWeight: '700',
+      color: T.text,
+      fontFamily: 'Poppins_700Bold',
+      marginBottom: 16,
+    },
+    nutritionHeroRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 22,
+      gap: 16,
+    },
+    nutritionList: {
+      flex: 1,
+      gap: 12,
+    },
+    nutritionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    nutriCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: T.green,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2,
+      shadowColor: '#000000',
+      shadowOpacity: 0.1,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 6,
+      elevation: 3,
+    },
+    nutriValue: {
+      color: '#FFFFFF',
+      fontWeight: '700',
+      fontSize: 15,
+      fontFamily: 'Poppins_700Bold',
+    },
+    nutriPill: {
+      backgroundColor: T.surface,
+      borderRadius: 18,
+      paddingLeft: 22,
+      paddingRight: 16,
+      height: 36,
+      justifyContent: 'center',
+      marginLeft: -14,
+      zIndex: 1,
+      shadowColor: 'rgba(0,0,0,0.04)',
+      shadowOpacity: 0.08,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    nutriLabel: {
+      color: T.text,
+      fontSize: 11,
+      fontWeight: '700',
+      fontFamily: 'Poppins_700Bold',
+    },
+    heroFoodContainer: {
+      width: 176,
+      height: 176,
+      borderRadius: 88,
+      overflow: 'hidden',
+      backgroundColor: T.surfaceAlt,
+      shadowColor: '#000000',
+      shadowOpacity: 0.12,
+      shadowOffset: { width: 0, height: 6 },
+      shadowRadius: 12,
+      elevation: 5,
+    },
+    heroFoodImage: {
+      width: '100%',
+      height: '100%',
+      resizeMode: 'cover',
+    },
+    ingredientsWrap: {
+      paddingHorizontal: 22,
+      gap: 6,
+    },
+    ingredientsText: {
+      fontSize: 15,
+      color: T.textSub,
+      lineHeight: 22,
+      fontFamily: 'Poppins_400Regular',
+    },
+    stepsWrap: {
+      paddingHorizontal: 22,
+    },
+    stepText: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: T.textSub,
+      fontFamily: 'Poppins_400Regular',
+    },
+  }), [T]);
+
   const [recipe, setRecipe] = React.useState<Recipe>(route.params?.initialRecipe || FALLBACK_RECIPE);
 
   React.useEffect(() => {
@@ -86,45 +272,27 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
   ];
 
   return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F6F5F3" />
-
-      <View style={s.mainContainer}>
+    <AppScaffold
+      title={recipe.title}
+      activeTab="home"
+      onBack={() => navigation.goBack()}
+      onPressHome={() => navigation.navigate('Home')}
+      onPressEvents={() => navigation.navigate('Map')}
+      onPressCenter={() => {}}
+      onPressReels={() => {}}
+      onPressProfile={() => {
+        if (user?.profileType === 'pro_commerce') {
+          navigation.navigate('SellerProProfile');
+        } else {
+          navigation.navigate('Profile');
+        }
+      }}
+      contentStyle={{ backgroundColor: T.bg }}
+    >
+      <View style={[s.mainContainer, { backgroundColor: T.bg }]}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
-          {/* Top Bar */}
-          <View style={s.topbar}>
-            <View style={s.userInfo}>
-              <View style={s.avatarWrap}>
-                <Image
-                  source={{ uri: user?.avatarUrl || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop' }}
-                  style={s.avatar as any}
-                />
-                <View style={s.checkBadge}>
-                  <Feather name="check" size={8} color="#FFFFFF" />
-                </View>
-              </View>
-              <Text style={s.userName}>{user?.fullName?.split(' ')[0] || 'Yassmine'}</Text>
-            </View>
-            <View style={s.topIcons}>
-              <TouchableOpacity activeOpacity={0.8} style={s.iconBtn}>
-                <Feather name="search" size={20} color="#2E2E2E" />
-              </TouchableOpacity>
-              <TouchableOpacity activeOpacity={0.8} style={s.iconBtn}>
-                <Feather name="bell" size={20} color="#2E2E2E" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Back Action Row + Recipe Title */}
-          <View style={s.backRow}>
-            <TouchableOpacity style={s.backBtn} activeOpacity={0.8} onPress={() => navigation.goBack()}>
-              <Feather name="arrow-left" size={24} color="#2E2E2E" />
-            </TouchableOpacity>
-            <Text style={s.title}>{recipe.title}</Text>
-          </View>
-
-          {/* Nutritions Section Heading */}
-          <Text style={s.sectionTitle}>Nutritions</Text>
+          {/* Nutrition Section */}
+          <Text style={[s.sectionTitle, { color: T.text }]}>Nutritions</Text>
 
           {/* Hero Row: Stacked circles on Left, Circular food plate on Right */}
           <View style={s.nutritionHeroRow}>
@@ -134,8 +302,8 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
                   <View style={s.nutriCircle}>
                     <Text style={s.nutriValue}>{n.value}</Text>
                   </View>
-                  <View style={s.nutriPill}>
-                    <Text style={s.nutriLabel}>{n.label}</Text>
+                  <View style={[s.nutriPill, { backgroundColor: T.surface }]}>
+                    <Text style={[s.nutriLabel, { color: T.text }]}>{n.label}</Text>
                   </View>
                 </View>
               ))}
@@ -146,229 +314,29 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
           </View>
 
           {/* Ingredients Section */}
-          <Text style={[s.sectionTitle, { marginTop: 24, marginBottom: 8 }]}>Ingredients</Text>
+          <Text style={[s.sectionTitle, { color: T.text, marginTop: 24, marginBottom: 8 }]}>Ingredients</Text>
           <View style={s.ingredientsWrap}>
             {recipe.ingredients.map((ing, idx) => (
-              <Text key={`${idx}-${ing}`} style={s.ingredientsText}>
+              <Text key={`${idx}-${ing}`} style={[s.ingredientsText, { color: T.textSub }]}>
                 • {ing}
               </Text>
             ))}
           </View>
 
           {/* Recipe Preparation Section */}
-          <Text style={[s.sectionTitle, { marginTop: 24, marginBottom: 8 }]}>Receipe Preparation</Text>
+          <Text style={[s.sectionTitle, { color: T.text, marginTop: 24, marginBottom: 8 }]}>Recipe Preparation</Text>
           <View style={s.stepsWrap}>
             {recipe.steps.map((step, idx) => (
-              <Text key={`${idx}-${step}`} style={s.stepText}>
+              <Text key={`${idx}-${step}`} style={[s.stepText, { color: T.textSub }]}>
                 {step}
               </Text>
             ))}
           </View>
         </ScrollView>
 
-        <BottomNavBar
-          activeTab="home"
-          idPrefix="home-nav"
-          onPressHome={() => navigation.navigate('Home')}
-          onPressEvents={() => {}}
-          onPressCenter={() => {}}
-          onPressReels={() => {}}
-          onPressProfile={() => {
-            if (user?.profileType === 'pro_commerce') {
-              navigation.navigate('SellerProfile');
-            } else {
-              navigation.navigate('Profile');
-            }
-          }}
-        />
       </View>
-    </SafeAreaView>
+    </AppScaffold>
   );
 }
 
-const s = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#F6F5F3',
-  },
-  mainContainer: {
-    flex: 1,
-    position: 'relative',
-    paddingBottom: 96,
-  },
-  content: {
-    paddingBottom: 40,
-  },
-  topbar: {
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  avatarWrap: {
-    position: 'relative',
-    width: 42,
-    height: 42,
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#E5E7EB',
-  },
-  checkBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
-    backgroundColor: '#8BC34A',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2E2E2E',
-    fontFamily: Font.bold,
-  },
-  topIcons: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  iconBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-    paddingTop: 16,
-    gap: 12,
-    marginBottom: 18,
-  },
-  backBtn: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 27,
-    fontWeight: '700',
-    color: '#2E2E2E',
-    fontFamily: Font.bold,
-  },
-  sectionTitle: {
-    paddingHorizontal: 22,
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#2E2E2E',
-    fontFamily: Font.bold,
-    marginBottom: 16,
-  },
-  nutritionHeroRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-    gap: 16,
-  },
-  nutritionList: {
-    flex: 1,
-    gap: 12,
-  },
-  nutritionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  nutriCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#8BC34A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-    shadowColor: '#000000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  nutriValue: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 15,
-    fontFamily: Font.bold,
-  },
-  nutriPill: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    paddingLeft: 22,
-    paddingRight: 16,
-    height: 36,
-    justifyContent: 'center',
-    marginLeft: -14,
-    zIndex: 1,
-    shadowColor: 'rgba(0,0,0,0.04)',
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  nutriLabel: {
-    color: '#2E2E2E',
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: Font.bold,
-  },
-  heroFoodContainer: {
-    width: 176,
-    height: 176,
-    borderRadius: 88,
-    overflow: 'hidden',
-    backgroundColor: '#F3F4F6',
-    shadowColor: '#000000',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  heroFoodImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  ingredientsWrap: {
-    paddingHorizontal: 22,
-    gap: 6,
-  },
-  ingredientsText: {
-    fontSize: 15,
-    color: 'rgba(46, 46, 46, 0.6)',
-    lineHeight: 22,
-    fontFamily: Font.regular,
-  },
-  stepsWrap: {
-    paddingHorizontal: 22,
-  },
-  stepText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: 'rgba(46, 46, 46, 0.6)',
-    fontFamily: Font.regular,
-  },
-});
+
