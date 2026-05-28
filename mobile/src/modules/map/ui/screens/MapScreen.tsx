@@ -394,7 +394,7 @@ export default function MapScreen({
 
       {/* ── Bottom navigation (re-using shared component, untouched) ─── */}
       <BottomNavBar
-        activeTab="events"
+        activeTab="home"
         onPressHome={onPressNavHome}
         onPressEvents={onPressNavEvents}
         onPressCenter={() => {}}

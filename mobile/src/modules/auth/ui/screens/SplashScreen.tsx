@@ -126,6 +126,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 10,
     letterSpacing: 0.2,
+    fontFamily: 'Poppins_700Bold',
   },
 
   /* ─── "Sans Gluten, Sans probleme" ─── */
@@ -136,6 +137,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#FAFAFA',
     letterSpacing: 0.1,
+    fontFamily: 'Poppins_500Medium',
   },
 
   /* ─── Petit cœur (haut) ─── */
