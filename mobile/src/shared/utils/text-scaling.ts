@@ -2,7 +2,7 @@ import { Text, TextInput, View, StatusBar, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { globalIsRTL } from '../context/language.context';
 
-let sizeMultiplier = 1.0;
+let sizeMultiplier = 1.08;
 let darkModeEnabled = false;
 
 export function getTextMultiplier() {
@@ -11,11 +11,11 @@ export function getTextMultiplier() {
 
 export function setTextMultiplier(size: 'Small' | 'Medium' | 'Large') {
   if (size === 'Small') {
-    sizeMultiplier = 0.85;
+    sizeMultiplier = 0.95;
   } else if (size === 'Large') {
-    sizeMultiplier = 1.25;
+    sizeMultiplier = 1.20;
   } else {
-    sizeMultiplier = 1.0;
+    sizeMultiplier = 1.08;
   }
 }
 
@@ -32,9 +32,11 @@ export async function loadTextMultiplier() {
     const size = await AsyncStorage.getItem('@pref_text_size');
     if (size === 'Small' || size === 'Medium' || size === 'Large') {
       setTextMultiplier(size);
+    } else {
+      setTextMultiplier('Medium');
     }
   } catch (e) {
-    sizeMultiplier = 1.0;
+    sizeMultiplier = 1.08;
   }
 }
 
@@ -138,28 +140,25 @@ let hasPatchedThemeScaling = false;
 
 function getScaledFontSize(baseSize: number): number {
   const multiplier = sizeMultiplier;
-  if (multiplier === 1.0) return baseSize;
-
   const isArabic = globalIsRTL;
 
   if (multiplier > 1.0) {
-    // Large setting: scale body text, but progressively cap headers to prevent layout breakage
+    // Progressive scaling for larger sizes to prevent layout breakages
     if (baseSize >= 24) {
-      // Arabic characters have tall ascenders/descenders, cap more strictly (+3% vs +5%)
-      return Math.round(baseSize * (isArabic ? 1.03 : 1.05));
+      const factor = 1.0 + (multiplier - 1.0) * 0.4;
+      return Math.round(baseSize * factor);
     }
     if (baseSize >= 18) {
-      // Sub-headers: cap at +5% for Arabic vs +8% for English/French
-      return Math.round(baseSize * (isArabic ? 1.05 : 1.08));
+      const factor = 1.0 + (multiplier - 1.0) * 0.6;
+      return Math.round(baseSize * factor);
     }
-    // Body/button/input text: cap at +10% for Arabic to prevent vertical overlapping/clipping vs +15% Latin
-    const maxMultiplier = isArabic ? 1.10 : 1.15;
+    const maxMultiplier = isArabic ? 1.12 : 1.20;
     const safeMultiplier = Math.min(multiplier, maxMultiplier);
     return Math.round(baseSize * safeMultiplier);
   } else {
-    // Small setting
+    // Small setting (e.g. 0.95)
     if (baseSize >= 18) {
-      return Math.round(baseSize * 0.95); // Don't shrink headings excessively
+      return Math.round(baseSize * 0.98); // Don't shrink headings excessively
     }
     return Math.round(baseSize * multiplier);
   }

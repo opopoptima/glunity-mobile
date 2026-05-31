@@ -110,6 +110,31 @@ const userSchema = new Schema(
       default: true,
     },
 
+    twoFactorEnabled: {
+      type: Boolean,
+      default: false,
+    },
+
+    dataSharingEnabled: {
+      type: Boolean,
+      default: true,
+    },
+
+    publicProfileEnabled: {
+      type: Boolean,
+      default: false,
+    },
+
+    twoFactorCode: {
+      type: String,
+      select: false,
+    },
+
+    twoFactorCodeExpires: {
+      type: Date,
+      select: false,
+    },
+
     pushToken: {
       type: String, // Expo push token
       trim: true,
@@ -182,6 +207,9 @@ userSchema.methods.toPublic = function () {
     darkMode: this.darkMode,
     pushEnabled: this.pushEnabled,
     emailEnabled: this.emailEnabled,
+    twoFactorEnabled: this.twoFactorEnabled,
+    dataSharingEnabled: this.dataSharingEnabled,
+    publicProfileEnabled: this.publicProfileEnabled,
     emailVerified: this.emailVerified,
     isActive: this.isActive,
     createdAt: this.createdAt,

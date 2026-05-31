@@ -26,7 +26,7 @@ function getAuthErrorMessage(err: any, fallback: string): string {
 }
 
 interface AuthContextValue extends AuthState {
-  login:         (dto: LoginDto) => Promise<void>;
+  login:         (dto: LoginDto) => Promise<any>;
   register:      (dto: RegisterDto) => Promise<void>;
   logout:        () => Promise<void>;
   updateProfile: (dto: UpdateProfileDto) => Promise<void>;
@@ -34,6 +34,7 @@ interface AuthContextValue extends AuthState {
   clearError:    () => void;
   textSize:      'Small' | 'Medium' | 'Large';
   updateTextSize: (size: 'Small' | 'Medium' | 'Large') => Promise<void>;
+  verify2Fa:     (userId: string, code: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -88,14 +89,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await authApi.login(dto);
 
-      if (!res.data.user.emailVerified) {
+      if (res.data.twoFactorRequired) {
+        dispatch({ type: 'SET_LOADING', payload: false });
+        return res.data;
+      }
+
+      if (res.data.user && !res.data.user.emailVerified) {
         await TokenStore.clearTokens();
         dispatch({ type: 'CLEAR_USER' });
         dispatch({ type: 'SET_ERROR', payload: 'Please verify your email before logging in.' });
         throw new Error('EMAIL_NOT_VERIFIED');
       }
 
-      dispatch({ type: 'SET_USER', payload: res.data.user });
+      if (res.data.user) {
+        dispatch({ type: 'SET_USER', payload: res.data.user });
+      }
+      return res.data;
     } catch (err: any) {
       if (err?.message === 'EMAIL_NOT_VERIFIED') {
         throw err;
@@ -174,9 +183,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_ERROR', payload: null });
   }, []);
 
+  const verify2Fa = useCallback(async (userId: string, code: string) => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    try {
+      const res = await authApi.verify2Fa(userId, code);
+      if (res.data.user) {
+        dispatch({ type: 'SET_USER', payload: res.data.user });
+      }
+      return res.data;
+    } catch (err: any) {
+      const message = getAuthErrorMessage(err, 'Verification failed. Please try again.');
+      dispatch({ type: 'SET_ERROR', payload: message });
+      throw err;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  }, []);
+
   const value = useMemo(
-    () => ({ ...state, login, register, logout, updateProfile, checkIn, clearError, textSize, updateTextSize }),
-    [state, login, register, logout, updateProfile, checkIn, clearError, textSize, updateTextSize],
+    () => ({ ...state, login, register, logout, updateProfile, checkIn, clearError, textSize, updateTextSize, verify2Fa }),
+    [state, login, register, logout, updateProfile, checkIn, clearError, textSize, updateTextSize, verify2Fa],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

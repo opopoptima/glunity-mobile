@@ -285,8 +285,21 @@ export default function SellerProProfileScreen({ navigation }: Props) {
       alignItems: 'center', width: '47%', position: 'relative',
       borderWidth: 1, borderColor: T.border,
       boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)', elevation: 2,
-      minHeight: 185,
+      minHeight: 210,
+      justifyContent: 'flex-start',
+    },
+    badgeNameWrap: {
+      height: 36,
       justifyContent: 'center',
+      alignItems: 'center',
+      width: '100%',
+    },
+    badgeDescWrap: {
+      height: 42,
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      width: '100%',
+      marginTop: 4,
     },
     badgeItemLocked: { backgroundColor: T.surfaceAlt, borderColor: T.border, opacity: 0.85 },
     badgeIconWrap: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
@@ -466,8 +479,12 @@ export default function SellerProProfileScreen({ navigation }: Props) {
                       resizeMode="contain"
                     />
                   </View>
-                  <Text style={s.badgeName}>{t(badge.name)}</Text>
-                  <Text style={s.badgeDesc}>{t(badge.description)}</Text>
+                  <View style={s.badgeNameWrap}>
+                    <Text style={s.badgeName} numberOfLines={2}>{t(badge.name)}</Text>
+                  </View>
+                  <View style={s.badgeDescWrap}>
+                    <Text style={s.badgeDesc} numberOfLines={3}>{t(badge.description)}</Text>
+                  </View>
                   {!unlocked && (
                     <View style={s.badgeLockIcon}>
                       <Feather name="lock" size={11} color={T.textMuted} />

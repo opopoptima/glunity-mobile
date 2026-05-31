@@ -39,6 +39,9 @@ export interface AuthUser {
   darkMode: boolean;
   pushEnabled?: boolean;
   emailEnabled?: boolean;
+  twoFactorEnabled?: boolean;
+  dataSharingEnabled?: boolean;
+  publicProfileEnabled?: boolean;
 }
 
 export interface UpdateProfileDto {
@@ -50,22 +53,37 @@ export interface UpdateProfileDto {
   language?: string;
   pushEnabled?: boolean;
   emailEnabled?: boolean;
+  twoFactorEnabled?: boolean;
+  dataSharingEnabled?: boolean;
+  publicProfileEnabled?: boolean;
 }
 
 export interface AuthResponse {
   success: boolean;
   data: {
-    user: AuthUser;
-    accessToken: string;
-    refreshToken: string;
-    expiresIn: number;
+    user?: AuthUser;
+    accessToken?: string;
+    refreshToken?: string;
+    expiresIn?: number;
+    twoFactorRequired?: boolean;
+    userId?: string;
   };
 }
 
 const authApi = {
   async login(dto: LoginDto): Promise<AuthResponse> {
     const { data } = await http.post<AuthResponse>('/auth/login', dto);
-    await TokenStore.setTokens(data.data.accessToken, data.data.refreshToken);
+    if (data.data && data.data.accessToken && data.data.refreshToken) {
+      await TokenStore.setTokens(data.data.accessToken, data.data.refreshToken);
+    }
+    return data;
+  },
+
+  async verify2Fa(userId: string, code: string): Promise<AuthResponse> {
+    const { data } = await http.post<AuthResponse>('/auth/verify-2fa', { userId, code });
+    if (data.data && data.data.accessToken && data.data.refreshToken) {
+      await TokenStore.setTokens(data.data.accessToken, data.data.refreshToken);
+    }
     return data;
   },
 

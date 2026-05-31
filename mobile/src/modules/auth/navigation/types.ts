@@ -3,7 +3,7 @@ export type AuthStackParamList = {
   Splash: undefined;
   Intro: undefined;
   Welcome: undefined;
-  Login: undefined;
+  Login: { successMessage?: string } | undefined;
   Register: undefined;
   ForgotPassword: { email?: string } | undefined;
   ResetPassword: { token: string };   // ← arrives via deep link ?token=xxx
@@ -30,4 +30,5 @@ export type AppStackParamList = {
   SellerProProfile: undefined;
   Notifications: undefined;
   PatientResources: undefined;
+  Privacy: undefined;
 };

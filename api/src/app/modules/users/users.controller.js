@@ -6,7 +6,7 @@ const AppError     = require('../../common/errors/app-error');
 const { hashPassword, verifyPassword } = require('../../common/utils/password');
 
 // Whitelist of fields users are allowed to update
-const ALLOWED_FIELDS = ['fullName', 'phone', 'bio', 'language', 'darkMode', 'pushToken', 'pushEnabled', 'emailEnabled'];
+const ALLOWED_FIELDS = ['fullName', 'phone', 'bio', 'language', 'darkMode', 'pushToken', 'pushEnabled', 'emailEnabled', 'twoFactorEnabled', 'dataSharingEnabled', 'publicProfileEnabled'];
 
 const usersController = {
   /** PATCH /api/users/me — update the authenticated user's profile */

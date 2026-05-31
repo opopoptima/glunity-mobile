@@ -549,14 +549,27 @@ export default function ProfileScreen({ navigation }: Props) {
       alignItems: 'center',
       flex: 1,
       minWidth: 96,
-      minHeight: 180,
-      justifyContent: 'center',
+      minHeight: 190,
+      justifyContent: 'flex-start',
       position: 'relative',
       borderWidth: 1,
       borderColor: T.border,
       boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
       elevation: 2,
       overflow: 'hidden',
+    },
+    badgeNameWrap: {
+      height: 36,
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: '100%',
+    },
+    badgeDescWrap: {
+      height: 42,
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      width: '100%',
+      marginTop: 4,
     },
     badgeItemLocked: {
       backgroundColor: T.surfaceAlt,
@@ -902,8 +915,12 @@ export default function ProfileScreen({ navigation }: Props) {
                       resizeMode="contain"
                     />
                   </View>
-                  <Text style={s.badgeName}>{t(badge.name)}</Text>
-                  <Text style={s.badgeDesc}>{t(badge.description)}</Text>
+                  <View style={s.badgeNameWrap}>
+                    <Text style={s.badgeName} numberOfLines={2}>{t(badge.name)}</Text>
+                  </View>
+                  <View style={s.badgeDescWrap}>
+                    <Text style={s.badgeDesc} numberOfLines={3}>{t(badge.description)}</Text>
+                  </View>
                   
                   {!isUnlocked && (
                     <View style={s.badgeLockIcon}>

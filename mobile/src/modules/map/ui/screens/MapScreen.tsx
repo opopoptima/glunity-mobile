@@ -339,7 +339,6 @@ export default function MapScreen({
             style={styles.myLocationBtn}
             onPress={handleMyLocation}
             activeOpacity={0.8}
-            title="My Location"
           >
             {locatingUser ? (
               <ActivityIndicator size="small" color={T.green} />

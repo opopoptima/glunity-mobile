@@ -19,6 +19,7 @@ import type { AppStackParamList } from '@/navigation/types';
 import productsApi from '../../api/products.api';
 import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
+import { useLanguage } from '@/shared/context/language.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'AddProduct'>;
@@ -27,6 +28,7 @@ const CATEGORIES = ['Bakery', 'Pastry & Cakes', 'Breads & Buns', 'Flour & Mixes'
 
 export default function AddProductScreen({ navigation, route }: Props) {
   const { theme: T } = useTheme();
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const screenWidth = Math.min(windowWidth, 600);

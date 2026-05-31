@@ -1,6 +1,6 @@
 import http from '../../../core/network/http.client';
 
-export type NotificationType = 'system' | 'event' | 'product' | 'community';
+export type NotificationType = 'system' | 'event' | 'product' | 'community' | 'achievement';
 
 export interface Notification {
   id: string;
