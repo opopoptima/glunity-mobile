@@ -40,6 +40,22 @@ const locationsController = {
     const doc    = await service.create(req.body, userId);
     res.status(201).json(mapper.toLocationResponse(doc));
   }),
+
+  /** POST /api/locations/:id/click */
+  incrementClicks: asyncHandler(async (req, res) => {
+    const Location = require('../../../database/models/location.model');
+    const User = require('../../../database/models/user.model');
+    const location = await Location.findById(req.params.id);
+    if (!location) {
+      return res.status(404).json({ success: false, message: 'Location not found' });
+    }
+    if (location.createdBy) {
+      await User.findByIdAndUpdate(location.createdBy, {
+        $inc: { 'storeInfo.mapClicks': 1 }
+      });
+    }
+    res.status(200).json({ success: true });
+  }),
 };
 
 module.exports = locationsController;

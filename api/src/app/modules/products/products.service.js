@@ -20,6 +20,10 @@ class ProductsService {
 		return product;
 	}
 
+	async incrementViews(id) {
+		return productsRepository.incrementViews(id);
+	}
+
 	async list(query = {}) {
 		const { page = 1, limit = 20, category, search, sellerId } = query;
 		

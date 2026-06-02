@@ -60,6 +60,11 @@ const productsApi = {
     const { data } = await http.delete<{ success: boolean; message: string }>(`/products/${id}`);
     return data;
   },
+
+  /** Fire-and-forget: increment view counter for a product */
+  async trackView(id: string): Promise<void> {
+    await http.post(`/products/${id}/view`);
+  },
 };
 
 export default productsApi;

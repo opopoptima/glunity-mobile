@@ -4,8 +4,8 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Image,
 } from 'react-native';
+import FastImage from '@/shared/components/FastImageWrapper';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -18,27 +18,18 @@ import recipesApi, { Recipe } from '../../api/recipes.api';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'RecipeDetail'>;
 
-const FALLBACK_RECIPE: Recipe = {
-  _id: 'fallback',
-  title: 'Gluten-Free Pizza',
-  slug: 'gluten-free-pizza',
+const EMPTY_RECIPE: Recipe = {
+  _id: '',
+  title: 'Loading recipe...',
+  slug: '',
   category: 'tunisian',
-  description: 'Healthy and delicious gluten-free recipe.',
-  ingredients: [
-    'Gluten-free pizza flour blend',
-    'Yeast and warm water',
-    'Tomato sauce',
-    'Fresh mozzarella cheese',
-    'Fresh basil leaves',
-    'Olive oil',
-  ],
-  steps: [
-    'Mix flour, yeast, and water to form the dough.Let the dough rise for 30 minutes.',
-  ],
-  nutritionInfo: { calories: 370, carbs: 35, protein: 6.8 },
-  photos: ['https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400'],
+  description: '',
+  ingredients: [],
+  steps: [],
+  nutritionInfo: { calories: 0, carbs: 0, protein: 0 },
+  photos: [],
   videos: [],
-  authorId: 'fallback-author',
+  authorId: '',
   isFavorite: false,
   favoriteCount: 0,
 };
@@ -260,7 +251,7 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
     },
   }), [T, isRTL]);
 
-  const [recipe, setRecipe] = React.useState<Recipe>(route.params?.initialRecipe || FALLBACK_RECIPE);
+  const [recipe, setRecipe] = React.useState<Recipe>(route.params?.initialRecipe || EMPTY_RECIPE);
 
   React.useEffect(() => {
     const recipeId = route.params?.recipeId;
@@ -320,7 +311,7 @@ export default function RecipeDetailScreen({ navigation, route }: Props) {
               ))}
             </View>
             <View style={s.heroFoodContainer}>
-              <Image source={{ uri: getRecipeImage(recipe) }} style={s.heroFoodImage as any} />
+              <FastImage source={{ uri: getRecipeImage(recipe) }} resizeMode={FastImage.resizeMode.cover} style={s.heroFoodImage as any} />
             </View>
           </View>
 

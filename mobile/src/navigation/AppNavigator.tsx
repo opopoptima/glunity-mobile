@@ -1,5 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useNavigation } from '@react-navigation/native';
 import type { AppStackParamList } from '../modules/auth/navigation/types';
 
 import HomeScreen        from '../modules/home/ui/screens/HomeScreen';
@@ -7,10 +8,12 @@ import { homeScreenMockProps } from '../modules/home/state/homeData';
 import { eventsApi } from '../modules/home/api/events.api';
 import RecipesScreen     from '../modules/recipes/ui/screens/RecipesScreen';
 import RecipeDetailScreen from '../modules/recipes/ui/screens/RecipeDetailScreen';
+import recipesApi from '../modules/recipes/api/recipes.api';
 import { useAuth } from '../modules/auth/state/auth.context';
 import ProfileScreen     from '../modules/profile/ui/screens/ProfileScreen';
 import SettingsScreen    from '../modules/profile/ui/screens/SettingsScreen';
 import EditProfileScreen from '../modules/profile/ui/screens/EditProfileScreen';
+import EditStoreScreen from '../modules/seller/ui/screens/EditStoreScreen';
 import SellerProfileScreen    from '../modules/seller/ui/screens/SellerProfileScreen';
 import SellerProProfileScreen from '../modules/seller/ui/screens/SellerProProfileScreen';
 import AddProductScreen        from '../modules/seller/ui/screens/AddProductScreen';
@@ -26,90 +29,110 @@ import PatientResourcesScreen from '../modules/patient-resources/ui/screens/Pati
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
+function HomeScreenContainer() {
+  const navigation = useNavigation<any>();
+  const { user } = useAuth();
+  const displayUser = user ? {
+    name: user.fullName || homeScreenMockProps.user.name,
+    avatarUrl: user.avatarUrl || homeScreenMockProps.user.avatarUrl,
+  } : homeScreenMockProps.user;
+
+  const dynamicQuickAccessItems = homeScreenMockProps.quickAccessItems.map(item => {
+    if (item.id === 'find-products') {
+      return { ...item, onPress: () => navigation.navigate('ProductsMarket') };
+    }
+    if (item.id === 'map') {
+      return { ...item, onPress: () => navigation.navigate('Map') };
+    }
+    if (item.id === 'patient-resources') {
+      return { ...item, onPress: () => navigation.navigate('PatientResources') };
+    }
+    if (item.id === 'community') {
+      return { ...item, onPress: () => navigation.navigate('Events') };
+    }
+    return item;
+  });
+
+  const [recipes, setRecipes] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        // Limit to exactly 3 recipes on the Home screen
+        const list = await recipesApi.list({ limit: 3 });
+        if (!mounted) return;
+        const withHandlers = list.map(recipe => ({
+          id: recipe._id,
+          title: recipe.title,
+          imageUrl: (recipe.photos && recipe.photos.length > 0 && recipe.photos[0]) || 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=400',
+          onPress: () => {
+            navigation.navigate('RecipeDetail', { recipeId: recipe._id, initialRecipe: recipe });
+          }
+        }));
+        setRecipes(withHandlers);
+      } catch (err) {
+        // Keep empty on error
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const [events, setEvents] = React.useState(homeScreenMockProps.events);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const list = await eventsApi.list();
+        if (!mounted) return;
+        const withHandlers = list.map(ev => ({ ...ev, onPress: () => navigation.navigate('EventDetail', { eventId: ev.id }) }));
+        setEvents(withHandlers);
+      } catch (err) {
+        // Keep mock events on error
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const handleProfileNavigation = () => {
+    if (user?.profileType === 'pro_commerce') {
+      navigation.navigate('SellerProProfile');
+    } else {
+      navigation.navigate('Profile');
+    }
+  };
+
+  return (
+    <HomeScreen
+      {...homeScreenMockProps}
+      user={displayUser}
+      quickAccessItems={dynamicQuickAccessItems}
+      recipes={recipes}
+      events={events}
+      onPressRecipesSeeAll={() => navigation.navigate('Recipes')}
+      onPressEventsSeeAll={() => navigation.navigate('Events')}
+      onPressProfilePhoto={handleProfileNavigation}
+      onPressNotification={() => navigation.navigate('Notifications')}
+      onPressNavHome={() => navigation.navigate('Home')}
+      onPressNavEvents={() => navigation.navigate('Events')}
+      onPressNavProfile={handleProfileNavigation}
+    />
+  );
+}
+
 export function AppNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{ headerShown: false, animation: 'slide_from_right' }}
     >
-      <Stack.Screen name="Home">
-        {({ navigation }) => {
-          const { user } = useAuth();
-          const displayUser = user ? {
-            name: user.fullName || homeScreenMockProps.user.name,
-            avatarUrl: user.avatarUrl || homeScreenMockProps.user.avatarUrl,
-          } : homeScreenMockProps.user;
-
-          const dynamicQuickAccessItems = homeScreenMockProps.quickAccessItems.map(item => {
-            if (item.id === 'find-products') {
-              return { ...item, onPress: () => navigation.navigate('ProductsMarket') };
-            }
-            if (item.id === 'map') {
-              return { ...item, onPress: () => navigation.navigate('Map') };
-            }
-            if (item.id === 'patient-resources') {
-              return { ...item, onPress: () => navigation.navigate('PatientResources') };
-            }
-            if (item.id === 'community') {
-              return { ...item, onPress: () => navigation.navigate('Events') };
-            }
-            return item;
-          });
-
-          const dynamicRecipes = homeScreenMockProps.recipes.map(recipe => ({
-            ...recipe,
-            onPress: () => {
-              navigation.navigate('RecipeDetail', { recipeId: recipe.id, initialRecipe: recipe });
-            }
-          }));
-
-          const [events, setEvents] = React.useState(homeScreenMockProps.events);
-
-          React.useEffect(() => {
-            let mounted = true;
-            (async () => {
-              try {
-                const list = await eventsApi.list();
-                if (!mounted) return;
-                const withHandlers = list.map(ev => ({ ...ev, onPress: () => navigation.navigate('EventDetail', { eventId: ev.id }) }));
-                setEvents(withHandlers);
-              } catch (err) {
-                // Keep mock events on error
-              }
-            })();
-            return () => { mounted = false; };
-          }, [navigation]);
-
-          const handleProfileNavigation = () => {
-            if (user?.profileType === 'pro_commerce') {
-              navigation.navigate('SellerProProfile');
-            } else {
-              navigation.navigate('Profile');
-            }
-          };
-
-          return (
-            <HomeScreen
-              {...homeScreenMockProps}
-              user={displayUser}
-              quickAccessItems={dynamicQuickAccessItems}
-              recipes={dynamicRecipes}
-              events={events}
-              onPressRecipesSeeAll={() => navigation.navigate('Recipes')}
-              onPressEventsSeeAll={() => navigation.navigate('Events')}
-              onPressProfilePhoto={handleProfileNavigation}
-              onPressNotification={() => navigation.navigate('Notifications')}
-              onPressNavHome={() => navigation.navigate('Home')}
-              onPressNavEvents={() => navigation.navigate('Events')}
-              onPressNavProfile={handleProfileNavigation}
-            />
-          );
-        }}
-      </Stack.Screen>
+      <Stack.Screen name="Home" component={HomeScreenContainer} />
       <Stack.Screen name="Recipes"         component={RecipesScreen} />
       <Stack.Screen name="RecipeDetail"    component={RecipeDetailScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="Profile"         component={ProfileScreen}     options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="Settings"        component={SettingsScreen} />
       <Stack.Screen name="EditProfile"     component={EditProfileScreen} />
+      <Stack.Screen name="EditStore"       component={EditStoreScreen} />
       <Stack.Screen name="SellerProfile"      component={SellerProfileScreen} />
       <Stack.Screen name="SellerProProfile"   component={SellerProProfileScreen} options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="AddProduct"         component={AddProductScreen} />

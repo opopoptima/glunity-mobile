@@ -40,6 +40,10 @@ class ProductsRepository {
 	async deleteById(id) {
 		return Product.findByIdAndDelete(id);
 	}
+
+	async incrementViews(id) {
+		return Product.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true });
+	}
 }
 
 module.exports = new ProductsRepository();

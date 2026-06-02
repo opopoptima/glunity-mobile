@@ -67,7 +67,7 @@ export default function RegisterScreen({ navigation }: Props) {
     divider: {
       width: '90%',
       height: 1,
-      backgroundColor: '#FFFFFF',
+      backgroundColor: T.border,
       alignSelf: 'center',
       marginBottom: 8,
     },
@@ -364,7 +364,7 @@ export default function RegisterScreen({ navigation }: Props) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <WaveBackground />
+      <WaveBackground color={T.green} />
 
       <View style={styles.switchRow}>
         <Text style={styles.switchText}>{t('Already Account? ')}</Text>

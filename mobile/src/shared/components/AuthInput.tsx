@@ -7,7 +7,8 @@ import {
   TextInputProps,
   TouchableOpacity,
 } from 'react-native';
-import { Colors, Font, Radius, Spacing } from '../utils/theme';
+import { Font, Radius, Spacing } from '../utils/theme';
+import { useTheme } from '../context/theme.context';
 
 interface AuthInputProps extends TextInputProps {
   label: string;
@@ -27,6 +28,55 @@ export function AuthInput({
   ...rest
 }: AuthInputProps) {
   const [focused, setFocused] = useState(false);
+  const { theme: T } = useTheme();
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    wrapper: {
+      marginBottom: Spacing.md,
+      alignSelf: 'stretch',
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: Font.medium,
+      color: T.textMuted,
+      marginBottom: Spacing.xs,
+      letterSpacing: 0.3,
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 52,
+      paddingVertical: 10,
+      backgroundColor: T.inputBg,
+      borderWidth: 1,
+      borderColor: T.inputBorder,
+      borderRadius: Radius.md,
+      paddingHorizontal: Spacing.md,
+    },
+    inputFocused: {
+      borderColor: T.green,
+      backgroundColor: T.greenLight,
+    },
+    inputError: {
+      borderColor: T.red,
+      backgroundColor: T.redLight,
+    },
+    input: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: Font.regular,
+      color: T.text,
+      textAlignVertical: 'center',
+    },
+    icon: {
+      paddingLeft: Spacing.sm,
+    },
+    errorText: {
+      fontSize: 12,
+      color: T.red,
+      marginTop: 4,
+    },
+  }), [T]);
 
   return (
     <View style={styles.wrapper}>
@@ -40,7 +90,7 @@ export function AuthInput({
       >
         <TextInput
           style={[styles.input, style]}
-          placeholderTextColor={Colors.muted}
+          placeholderTextColor={T.textMuted}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           autoCapitalize="none"
@@ -57,51 +107,3 @@ export function AuthInput({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrapper: {
-    marginBottom: Spacing.md,
-    alignSelf: 'stretch',
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: Font.medium,
-    color: Colors.muted,
-    marginBottom: Spacing.xs,
-    letterSpacing: 0.3,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 52,
-    paddingVertical: 10,
-    backgroundColor: Colors.inputBg,
-    borderWidth: 1,
-    borderColor: Colors.inputBorder,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-  },
-  inputFocused: {
-    borderColor: Colors.green,
-    backgroundColor: Colors.greenLight,
-  },
-  inputError: {
-    borderColor: Colors.error,
-    backgroundColor: Colors.errorLight,
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: Font.regular,
-    color: Colors.dark,
-    textAlignVertical: 'center',
-  },
-  icon: {
-    paddingLeft: Spacing.sm,
-  },
-  errorText: {
-    fontSize: 12,
-    color: Colors.error,
-    marginTop: 4,
-  },
-});

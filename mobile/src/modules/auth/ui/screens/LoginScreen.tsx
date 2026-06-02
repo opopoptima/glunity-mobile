@@ -50,7 +50,7 @@ export default function LoginScreen({ navigation, route }: Props) {
     divider: {
       width: '90%',
       height: 1,
-      backgroundColor: '#FFFFFF',
+      backgroundColor: T.border,
     },
 
     title: {
@@ -274,7 +274,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </View>
 
-      <WaveBackground />
+      <WaveBackground color={T.green} />
     </SafeAreaView>
   );
 }

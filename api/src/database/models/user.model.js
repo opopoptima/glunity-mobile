@@ -14,6 +14,20 @@ const imageSchema = new Schema(
   { _id: false },
 );
 
+// ─── Sub-schema: Store info ───────────────────────────────────────────────────
+const storeSchema = new Schema(
+  {
+    storeName: { type: String, trim: true, default: '' },
+    description: { type: String, trim: true, default: '' },
+    address: { type: String, trim: true, default: '' },
+    operatingHours: { type: String, trim: true, default: '' },
+    phone: { type: String, trim: true, match: [/^\+?[\d\s\-().]{7,20}$/, 'Invalid phone number'], default: '' },
+    imageUrl: { type: String, trim: true, default: '' },
+    mapClicks: { type: Number, default: 0 },
+  },
+  { _id: false },
+);
+
 // ─── User Schema ──────────────────────────────────────────────────────────────
 const userSchema = new Schema(
   {
@@ -40,6 +54,8 @@ const userSchema = new Schema(
       trim: true,
       match: [/^\+?[\d\s\-().]{7,20}$/, 'Invalid phone number'],
     },
+
+    storeInfo: storeSchema,
 
     // ── Security ─────────────────────────────────────────────────────────────
     passwordHash: {
@@ -150,6 +166,7 @@ userSchema.methods.toPublic = function () {
     fullName: this.fullName,
     email: this.email,
     phone: this.phone,
+    storeInfo: this.storeInfo,
     profileType: this.profileType,
     avatarUrl: this.avatarUrl,
     streakDays: this.streakDays,

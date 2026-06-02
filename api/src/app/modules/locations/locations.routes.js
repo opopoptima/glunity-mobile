@@ -15,6 +15,7 @@ const router = Router();
 
 // ── Public — anyone can browse the collaborative map ──────────────────────────
 router.get('/',     listLocationsSchema, validate, controller.list);
+router.post('/:id/click', controller.incrementClicks);
 router.get('/:id',  getLocationSchema,   validate, controller.getOne);
 
 // ── Authenticated — community members can suggest a new spot ──────────────────

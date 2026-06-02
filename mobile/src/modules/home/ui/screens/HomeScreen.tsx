@@ -14,6 +14,7 @@ import {
   Platform,
 } from "react-native";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import FastImage from "@/shared/components/FastImageWrapper";
 import EventCard from '@/modules/events/components/EventCard';
 import HomeEventCard from '../../components/HomeEventCard';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -428,11 +429,11 @@ export function HomeScreen({
       ...optimizedEvents.slice(0, 2).map((item) => item.imageUrl),
     ];
 
-    urls.forEach((url) => {
-      Image.prefetch(url).catch(() => {
-        // Ignore prefetch failures; rendering falls back to normal loading.
-      });
-    });
+    try {
+      FastImage.preload(urls.map((url) => ({ uri: url })));
+    } catch (err) {
+      // Ignore preload errors
+    }
   }, [avatarUrl, optimizedEvents, optimizedRecipes]);
 
   const qrTranslateY = qrFloat.interpolate({
@@ -607,7 +608,7 @@ export function HomeScreen({
           showsHorizontalScrollIndicator={false}
           renderItem={({ item }) => (
             <TouchableOpacity activeOpacity={0.85} onPress={item.onPress} style={[styles.recipeCard, { backgroundColor: T.surface }]}>
-              <Image source={{ uri: item.imageUrl }} resizeMode="cover" style={styles.recipeImage} />
+              <FastImage source={{ uri: item.imageUrl }} resizeMode={FastImage.resizeMode.cover} style={styles.recipeImage} />
               <Text style={[styles.recipeName, { color: T.text }]} numberOfLines={2}>
                 {item.title}
               </Text>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
   useWindowDimensions,
   ActivityIndicator,
 } from 'react-native';
@@ -18,38 +22,9 @@ import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
 import productsApi, { Product } from '../../api/products.api';
+import reviewsApi, { Review } from '../../api/reviews.api';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'SellerProfile'>;
-
-const REVIEWS = [
-  {
-    id: '1',
-    author: 'Aziz Ayari',
-    rating: 4,
-    comment: 'The gluten-free croissants are absolutely wonderful! Best bakery in Tunis.',
-    time: '2 hours ago',
-    initials: 'AA',
-    bgColor: '#E8F5E9',
-  },
-  {
-    id: '2',
-    author: 'Aziz Ayari',
-    rating: 4,
-    comment: "100% safe for celiac. Their bread doesn't crumble at all! Highly recommend.",
-    time: 'Yesterday',
-    initials: 'AA',
-    bgColor: '#E8F5E9',
-  },
-  {
-    id: '3',
-    author: 'Aziz Ayari',
-    rating: 4,
-    comment: 'Very tasty treats and friendly staff. Love the Tunis branch.',
-    time: '3 days ago',
-    initials: 'AA',
-    bgColor: '#E8F5E9',
-  },
-];
 
 const getProductImage = (images?: string[], category?: string) => {
   const uri = images?.[0];
@@ -82,13 +57,26 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
   const { isRTL } = useLanguage();
   const { width: windowWidth } = useWindowDimensions();
   const screenWidth = Math.min(windowWidth, 600);
-  
+
   const targetSellerId = route?.params?.sellerId;
   const targetSeller = route?.params?.seller;
   const isOwnProfile = !targetSellerId || targetSellerId === user?._id;
 
+  // Sellers can only VIEW; non-sellers (celiac / proche / pro_health) can WRITE
+  const isSeller = user?.profileType === 'pro_commerce';
+  const canWriteReview = !isOwnProfile && !isSeller;
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ── Review state ──────────────────────────────────────────────────────────
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewProductId, setReviewProductId] = useState<string | undefined>(undefined);
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   const s = React.useMemo(() => StyleSheet.create({
     safe: { flex: 1, backgroundColor: T.bg },
@@ -518,30 +506,43 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
 
     // Reviews list & Cards
     reviewsList: {
-      gap: 16,
-      paddingHorizontal: 4,
+      gap: 14,
     },
     reviewCard: {
       backgroundColor: T.surface,
-      borderRadius: Radius.lg,
-      padding: 14,
+      borderRadius: 20,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: T.border,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
+      shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 1,
+      shadowRadius: 6,
+      elevation: 2,
     },
-    reviewUserInfoRow: {
+    reviewCardTop: {
       flexDirection: isRTL ? 'row-reverse' : 'row',
       alignItems: 'center',
-      marginBottom: 8,
+      marginBottom: 10,
     },
-    reviewAvatarImage: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+    reviewInitialRing: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
       marginRight: isRTL ? 0 : 12,
       marginLeft: isRTL ? 12 : 0,
+      borderWidth: 2,
+    },
+    reviewAvatarImage: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      marginRight: isRTL ? 0 : 12,
+      marginLeft: isRTL ? 12 : 0,
+      borderWidth: 2,
+      borderColor: T.border,
     },
     reviewAuthorBox: {
       flex: 1,
@@ -553,21 +554,41 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
       fontWeight: '700',
       fontFamily: 'Poppins_700Bold',
       color: T.text,
-      marginBottom: 2,
+      marginBottom: 3,
       textAlign: isRTL ? 'right' : 'left',
     },
     starsRow: {
       flexDirection: isRTL ? 'row-reverse' : 'row',
+      alignItems: 'center',
+      gap: 3,
+    },
+    reviewDateText: {
+      fontSize: 10,
+      color: T.textMuted,
+      fontFamily: 'Poppins_400Regular',
+      marginLeft: 6,
     },
     reviewComment: {
-      fontSize: 12,
+      fontSize: 13,
       color: T.textSub,
-      lineHeight: 18,
+      lineHeight: 20,
       textAlign: isRTL ? 'right' : 'left',
+      fontFamily: 'Poppins_400Regular',
+    },
+    reviewSummaryBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: T.surfaceAlt,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      gap: 5,
+      borderWidth: 1,
+      borderColor: T.border,
     },
   }), [T, screenWidth, isRTL]);
 
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
       const sid = isOwnProfile ? user?._id : targetSellerId;
@@ -580,22 +601,89 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isOwnProfile, user?._id, targetSellerId]);
+
+  // Fetch reviews for the first product belonging to this seller
+  const fetchReviews = useCallback(async (productList: Product[]) => {
+    try {
+      setReviewsLoading(true);
+      if (productList.length > 0) {
+        const firstPid = productList[0]._id;
+        setReviewProductId(firstPid);
+        const data = await reviewsApi.list({ productId: firstPid, limit: 10 });
+        setReviews(data);
+      } else {
+        setReviews([]);
+      }
+    } catch {
+      setReviews([]);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchProducts();
-  }, [user?._id, targetSellerId]);
+  }, [fetchProducts]);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      fetchProducts();
-    });
+    const unsubscribe = navigation.addListener('focus', fetchProducts);
     return unsubscribe;
-  }, [navigation, user?._id, targetSellerId]);
+  }, [navigation, fetchProducts]);
 
-  const displayName = isOwnProfile 
-    ? (user?.fullName || 'Pure Treats Bakery') 
-    : (targetSeller?.fullName || 'Pure Treats Bakery');
+  // After products load, fetch reviews
+  useEffect(() => {
+    fetchReviews(products);
+  }, [products, fetchReviews]);
+
+  const handleSubmitReview = async () => {
+    if (!reviewComment.trim() || submittingReview) return;
+    try {
+      setSubmittingReview(true);
+      const created = await reviewsApi.create({
+        productId: reviewProductId,
+        rating: reviewRating,
+        comment: reviewComment.trim(),
+      });
+      setReviews(prev => [created, ...prev]);
+      setShowReviewModal(false);
+      setReviewComment('');
+      setReviewRating(5);
+    } catch (err: any) {
+      console.error('Failed to submit review', err);
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const avgRating = reviews.length > 0
+    ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
+    : null;
+
+  // Time-ago helper
+  const timeAgo = (iso?: string) => {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    if (d < 30) return `${d}d ago`;
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Deterministic avatar color from name
+  const AVATAR_COLORS = ['#4ADE80', '#60A5FA', '#F472B6', '#FBBF24', '#A78BFA', '#34D399'];
+  const nameColor = (name?: string) => {
+    if (!name) return AVATAR_COLORS[0];
+    const idx = name.charCodeAt(0) % AVATAR_COLORS.length;
+    return AVATAR_COLORS[idx];
+  };
+
+  const currentSeller = isOwnProfile ? user : targetSeller;
+  const displayName = currentSeller?.fullName || 'Pure Treats Bakery';
+
 
   return (
     <AppScaffold
@@ -626,17 +714,17 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
         {/* ── Bakery Hero Image Cover ───────────────────────────────────────── */}
         <View style={s.heroContainer}>
           <Image
-            source={{ uri: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=600' }}
+            source={{ uri: currentSeller?.storeInfo?.imageUrl || 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=600' }}
             style={s.heroImage}
           />
         </View>
 
         {/* ── Bakery Info Header ────────────────────────────────────────────── */}
         <View style={s.bakeryHeaderRow}>
-          <Text style={s.bakeryName}>{displayName}</Text>
+          <Text style={s.bakeryName}>{currentSeller?.storeInfo?.storeName || displayName}</Text>
           <View style={s.gfTag}>
             <MaterialCommunityIcons name="storefront" size={14} color={T.textMuted} />
-            <Text style={s.gfTagText}>100% Gluten-Free Bakery</Text>
+            <Text style={s.gfTagText}>{currentSeller?.storeInfo?.description || '100% Gluten-Free Bakery'}</Text>
           </View>
         </View>
 
@@ -651,39 +739,39 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
           </View>
         </View>
 
-        {/* ── Contact and Location Details ──────────────────────────────────── */}
-        <View style={s.detailsList}>
-          {/* Address */}
-          <View style={s.detailsItem}>
-            <View style={s.detailsIconBox}>
-              <Feather name="map-pin" size={15} color={T.red} />
-            </View>
-            <View style={s.detailsTextBox}>
-              <Text style={s.detailsText}>125 Rue Casablanca, Tunis</Text>
-              <Text style={s.detailsDistance}>2.4 km away</Text>
-            </View>
-          </View>
-
-          {/* Operating Hours */}
-          <View style={s.detailsItem}>
-            <View style={s.detailsIconBox}>
-              <Feather name="clock" size={15} color={T.red} />
-            </View>
-            <View style={s.detailsTextBox}>
-              <Text style={s.detailsText}>Open today • 08:00 - 19:00</Text>
-            </View>
-          </View>
-
-          {/* Phone */}
-          <View style={s.detailsItem}>
-            <View style={s.detailsIconBox}>
-              <Feather name="phone" size={15} color={T.red} />
-            </View>
-            <View style={s.detailsTextBox}>
-              <Text style={s.detailsText}>+216 12 345 678</Text>
-            </View>
-          </View>
-        </View>
+         {/* ── Contact and Location Details ──────────────────────────────────── */}
+         <View style={s.detailsList}>
+           {/* Address */}
+           <View style={s.detailsItem}>
+             <View style={s.detailsIconBox}>
+               <Feather name="map-pin" size={15} color={T.red} />
+             </View>
+             <View style={s.detailsTextBox}>
+               <Text style={s.detailsText}>{currentSeller?.storeInfo?.address || '125 Rue Casablanca, Tunis'}</Text>
+               <Text style={s.detailsDistance}>2.4 km away</Text>
+             </View>
+           </View>
+ 
+           {/* Operating Hours */}
+           <View style={s.detailsItem}>
+             <View style={s.detailsIconBox}>
+               <Feather name="clock" size={15} color={T.red} />
+             </View>
+             <View style={s.detailsTextBox}>
+               <Text style={s.detailsText}>{currentSeller?.storeInfo?.operatingHours || 'Open today • 08:00 - 19:00'}</Text>
+             </View>
+           </View>
+ 
+           {/* Phone */}
+           <View style={s.detailsItem}>
+             <View style={s.detailsIconBox}>
+               <Feather name="phone" size={15} color={T.red} />
+             </View>
+             <View style={s.detailsTextBox}>
+               <Text style={s.detailsText}>{currentSeller?.storeInfo?.phone || currentSeller?.phone || '+216 12 345 678'}</Text>
+             </View>
+           </View>
+         </View>
 
         {/* ── Quick Action Grid or Follow/Message Buttons ────────────────────── */}
         {!isOwnProfile ? (
@@ -708,7 +796,12 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
         ) : (
           <View style={s.actionGrid}>
             {/* Edit Info Button */}
-            <TouchableOpacity style={[s.actionButton, s.whiteButton]} activeOpacity={0.7} id="action-edit-info">
+            <TouchableOpacity
+              style={[s.actionButton, s.whiteButton]}
+              activeOpacity={0.7}
+              id="action-edit-info"
+              onPress={() => navigation.navigate('EditStore')}
+            >
               <View style={s.actionIconContainer}>
                 <Feather name="edit-2" size={20} color={T.text} />
               </View>
@@ -817,40 +910,253 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
         {/* ── Recent Reviews Header ─────────────────────────────────────────── */}
         <View style={s.reviewsHeaderRow}>
           <Text style={s.sectionTitle}>Recent Reviews</Text>
-          <View style={s.ratingContainer}>
-            <Text style={s.ratingText}>4.8</Text>
-            <FontAwesome name="star" size={14} color={T.red} style={{ marginLeft: 6 }} />
-          </View>
+          {avgRating ? (
+            <View style={s.reviewSummaryBadge}>
+              <FontAwesome name="star" size={12} color="#F59E0B" />
+              <Text style={{ fontSize: 13, fontWeight: '700', fontFamily: 'Poppins_700Bold', color: T.text }}>
+                {avgRating}
+              </Text>
+              <Text style={{ fontSize: 11, color: T.textMuted, fontFamily: 'Poppins_400Regular' }}>
+                ({reviews.length})
+              </Text>
+            </View>
+          ) : null}
         </View>
+
+        {/* Write a Review button — only for authenticated non-seller visitors */}
+        {canWriteReview && products.length > 0 && (
+          <TouchableOpacity
+            id="btn-write-review"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: T.greenLight,
+              borderRadius: 16,
+              paddingHorizontal: 18,
+              paddingVertical: 13,
+              marginBottom: 18,
+              gap: 10,
+              borderWidth: 1.5,
+              borderColor: T.green,
+              shadowColor: T.green,
+              shadowOffset: { width: 0, height: 3 },
+              shadowOpacity: 0.15,
+              shadowRadius: 6,
+              elevation: 3,
+            }}
+            activeOpacity={0.8}
+            onPress={() => setShowReviewModal(true)}
+          >
+            <View style={{
+              width: 32, height: 32, borderRadius: 10,
+              backgroundColor: `${T.green}22`,
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Feather name="edit-3" size={15} color={T.green} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: T.green, fontFamily: 'Poppins_600SemiBold', fontSize: 14, fontWeight: '600' }}>
+                Write a Review
+              </Text>
+              <Text style={{ color: T.textMuted, fontFamily: 'Poppins_400Regular', fontSize: 11, marginTop: 1 }}>
+                Share your experience
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={T.green} />
+          </TouchableOpacity>
+        )}
 
         {/* ── Reviews Feed ─────────────────────────────────────────────────── */}
         <View style={s.reviewsList}>
-          {REVIEWS.map((rev, idx) => (
-            <View key={idx} style={s.reviewCard}>
-              <View style={s.reviewUserInfoRow}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=150' }}
-                  style={s.reviewAvatarImage}
-                />
-                <View style={s.reviewAuthorBox}>
-                  <Text style={s.reviewAuthor}>{rev.author}</Text>
-                  <View style={s.starsRow}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <FontAwesome
-                        key={star}
-                        name="star"
-                        size={12}
-                        color={star <= rev.rating ? T.red : T.border}
-                        style={{ marginRight: 3 }}
-                      />
-                    ))}
+          {reviewsLoading ? (
+            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+              <ActivityIndicator color={T.green} size="large" />
+            </View>
+          ) : reviews.length === 0 ? (
+            <View style={{
+              alignItems: 'center', paddingVertical: 36,
+              backgroundColor: T.surface, borderRadius: 20,
+              borderWidth: 1, borderColor: T.border,
+              borderStyle: 'dashed',
+            }}>
+              <View style={{
+                width: 56, height: 56, borderRadius: 28,
+                backgroundColor: T.surfaceAlt,
+                alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+              }}>
+                <FontAwesome name="star-o" size={24} color={T.textMuted} />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: '600', fontFamily: 'Poppins_600SemiBold', color: T.text, marginBottom: 4 }}>
+                No reviews yet
+              </Text>
+              <Text style={{ fontSize: 12, color: T.textMuted, fontFamily: 'Poppins_400Regular' }}>
+                {canWriteReview ? 'Be the first to leave a review!' : 'Customer reviews will appear here.'}
+              </Text>
+            </View>
+          ) : (
+            reviews.map((rev) => {
+              const initials = (rev.user?.fullName ?? 'A').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+              const color = nameColor(rev.user?.fullName);
+              return (
+                <View key={rev.id} style={s.reviewCard}>
+                  {/* Top row: avatar + name + stars + date */}
+                  <View style={s.reviewCardTop}>
+                    {rev.user?.avatarUrl ? (
+                      <Image source={{ uri: rev.user.avatarUrl }} style={s.reviewAvatarImage} />
+                    ) : (
+                      <View style={[s.reviewInitialRing, {
+                        backgroundColor: `${color}18`,
+                        borderColor: `${color}55`,
+                      }]}>
+                        <Text style={{ color, fontWeight: '700', fontSize: 15, fontFamily: 'Poppins_700Bold' }}>
+                          {initials}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={s.reviewAuthorBox}>
+                      <Text style={s.reviewAuthor}>{rev.user?.fullName ?? 'Anonymous'}</Text>
+                      <View style={s.starsRow}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <FontAwesome
+                            key={star}
+                            name={star <= rev.rating ? 'star' : 'star-o'}
+                            size={11}
+                            color={star <= rev.rating ? '#F59E0B' : T.border}
+                          />
+                        ))}
+                        <Text style={s.reviewDateText}>{timeAgo(rev.createdAt)}</Text>
+                      </View>
+                    </View>
+                    {/* Rating badge pill */}
+                    <View style={{
+                      backgroundColor: rev.rating >= 4 ? `${T.green}18` : rev.rating >= 3 ? `#F59E0B18` : `${T.red}18`,
+                      borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4,
+                      flexDirection: 'row', alignItems: 'center', gap: 3,
+                    }}>
+                      <Text style={{
+                        fontSize: 12, fontWeight: '700', fontFamily: 'Poppins_700Bold',
+                        color: rev.rating >= 4 ? T.green : rev.rating >= 3 ? '#F59E0B' : T.red,
+                      }}>
+                        {rev.rating}.0
+                      </Text>
+                    </View>
+                  </View>
+                  {/* Comment with left accent bar */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ width: 3, borderRadius: 2, backgroundColor: `${color}55`, alignSelf: 'stretch' }} />
+                    <Text style={s.reviewComment}>{rev.comment}</Text>
                   </View>
                 </View>
-              </View>
-              <Text style={s.reviewComment}>{rev.comment}</Text>
-            </View>
-          ))}
+              );
+            })
+          )}
         </View>
+
+
+        {/* ── Write Review Modal (non-sellers only) ─────────────────────────── */}
+        <Modal
+          visible={showReviewModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowReviewModal(false)}
+        >
+          <KeyboardAvoidingView
+            style={{ flex: 1, justifyContent: 'flex-end' }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <View style={{
+              backgroundColor: T.surface,
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              padding: 24,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.12,
+              shadowRadius: 12,
+              elevation: 20,
+            }}>
+              {/* Handle */}
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: T.border, alignSelf: 'center', marginBottom: 20 }} />
+
+              <Text style={{ fontSize: 17, fontWeight: '700', fontFamily: 'Poppins_700Bold', color: T.text, marginBottom: 4 }}>
+                Write a Review
+              </Text>
+              <Text style={{ fontSize: 12, color: T.textMuted, fontFamily: 'Poppins_400Regular', marginBottom: 20 }}>
+                Share your experience with {displayName}
+              </Text>
+
+              {/* Star picker */}
+              <Text style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, fontFamily: 'Poppins_500Medium' }}>Your rating</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <TouchableOpacity key={star} onPress={() => setReviewRating(star)} id={`star-${star}`}>
+                    <FontAwesome
+                      name="star"
+                      size={28}
+                      color={star <= reviewRating ? T.red : T.border}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Comment input */}
+              <Text style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, fontFamily: 'Poppins_500Medium' }}>Your comment</Text>
+              <TextInput
+                id="review-comment-input"
+                value={reviewComment}
+                onChangeText={setReviewComment}
+                placeholder="Tell others about your experience..."
+                placeholderTextColor={T.textMuted}
+                multiline
+                numberOfLines={4}
+                style={{
+                  borderWidth: 1,
+                  borderColor: T.border,
+                  borderRadius: 14,
+                  padding: 14,
+                  color: T.text,
+                  backgroundColor: T.bg,
+                  fontFamily: 'Poppins_400Regular',
+                  fontSize: 13,
+                  minHeight: 90,
+                  textAlignVertical: 'top',
+                  marginBottom: 20,
+                }}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity
+                  id="btn-cancel-review"
+                  style={{
+                    flex: 1, height: 48, borderRadius: 14,
+                    borderWidth: 1, borderColor: T.border,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}
+                  onPress={() => { setShowReviewModal(false); setReviewComment(''); setReviewRating(5); }}
+                >
+                  <Text style={{ color: T.textMuted, fontFamily: 'Poppins_500Medium', fontSize: 14 }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  id="btn-submit-review"
+                  style={{
+                    flex: 2, height: 48, borderRadius: 14,
+                    backgroundColor: T.green,
+                    alignItems: 'center', justifyContent: 'center',
+                    opacity: submittingReview || !reviewComment.trim() ? 0.6 : 1,
+                  }}
+                  onPress={handleSubmitReview}
+                  disabled={submittingReview || !reviewComment.trim()}
+                >
+                  {submittingReview ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontFamily: 'Poppins_600SemiBold', fontSize: 14, fontWeight: '600' }}>Submit Review</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
 
         {/* Spacer for bottom navigation overlap prevention */}
         <View style={{ height: 110 }} />

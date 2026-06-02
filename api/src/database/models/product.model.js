@@ -45,6 +45,10 @@ const productSchema = new Schema(
 			required: [true, 'Price is required'],
 			min: [0, 'Price cannot be negative'],
 		},
+		views: {
+			type: Number,
+			default: 0,
+		},
 	},
 	{
 		timestamps: true,
@@ -68,6 +72,7 @@ productSchema.methods.toPublic = function toPublic() {
 		certifiedGF: this.certifiedGF,
 		ingredients: this.ingredients,
 		price: this.price,
+		views: this.views,
 		createdAt: this.createdAt,
 		updatedAt: this.updatedAt,
 	};

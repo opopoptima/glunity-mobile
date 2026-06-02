@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import {
   Dimensions,
   Image,
@@ -17,6 +17,7 @@ import { Radius } from '@/shared/utils/theme';
 import { useAuth } from '@/modules/auth/state/auth.context';
 import type { AppStackParamList } from '@/navigation/types';
 import type { Product } from '@/modules/seller/api/products.api';
+import productsApi from '@/modules/seller/api/products.api';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
 
@@ -77,6 +78,13 @@ export default function ProductDetailScreen({ route, navigation }: Props) {
   const { theme: T } = useTheme();
   const { t }       = useLanguage();
   const insets      = useSafeAreaInsets();
+
+  useEffect(() => {
+    // Silently track this product view on open (fire-and-forget)
+    if (product?._id) {
+      productsApi.trackView(product._id).catch(() => {});
+    }
+  }, [product?._id]);
 
   const s = React.useMemo(() => StyleSheet.create({
     safe: {

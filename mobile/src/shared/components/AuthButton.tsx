@@ -7,7 +7,8 @@ import {
   TouchableOpacityProps,
   ViewStyle,
 } from 'react-native';
-import { Colors, Font, Radius, Spacing } from '../utils/theme';
+import { Font, Radius } from '../utils/theme';
+import { useTheme } from '../context/theme.context';
 
 interface AuthButtonProps extends TouchableOpacityProps {
   label: string;
@@ -24,7 +25,38 @@ export function AuthButton({
   disabled,
   ...rest
 }: AuthButtonProps) {
+  const { theme: T } = useTheme();
   const isFilled = variant === 'filled';
+
+  const styles = React.useMemo(() => StyleSheet.create({
+    button: {
+      height: 54,
+      borderRadius: Radius.md,
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: '100%',
+    },
+    filled: {
+      backgroundColor: T.green,
+    },
+    outlined: {
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderColor: T.green,
+    },
+    disabled: {
+      opacity: 0.55,
+    },
+    label: {
+      fontSize: 17,
+      fontWeight: Font.bold,
+      color: T.white,
+      letterSpacing: 0.5,
+    },
+    labelOutlined: {
+      color: T.green,
+    },
+  }), [T]);
 
   return (
     <TouchableOpacity
@@ -39,7 +71,7 @@ export function AuthButton({
       {...rest}
     >
       {loading ? (
-        <ActivityIndicator color={isFilled ? Colors.white : Colors.green} />
+        <ActivityIndicator color={isFilled ? T.white : T.green} />
       ) : (
         <Text style={[styles.label, !isFilled && styles.labelOutlined]}>
           {label}
@@ -48,33 +80,3 @@ export function AuthButton({
     </TouchableOpacity>
   );
 }
-
-const styles = StyleSheet.create({
-  button: {
-    height: 54,
-    borderRadius: Radius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-  },
-  filled: {
-    backgroundColor: Colors.green,
-  },
-  outlined: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: Colors.green,
-  },
-  disabled: {
-    opacity: 0.55,
-  },
-  label: {
-    fontSize: 17,
-    fontWeight: Font.bold,
-    color: Colors.white,
-    letterSpacing: 0.5,
-  },
-  labelOutlined: {
-    color: Colors.green,
-  },
-});

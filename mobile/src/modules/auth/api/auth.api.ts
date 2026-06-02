@@ -16,12 +16,21 @@ export interface RegisterDto {
   language?: string;
 }
 
+export interface StoreInfo {
+  storeName?: string;
+  description?: string;
+  address?: string;
+  operatingHours?: string;
+  phone?: string;
+}
+
 export interface AuthUser {
   _id: string;
   fullName: string;
   email: string;
   phone?: string;
   bio?: string;
+  storeInfo?: StoreInfo;
   profileType: string;
   avatarUrl: string | null;
   emailVerified: boolean;
@@ -34,9 +43,36 @@ export interface UpdateProfileDto {
   fullName?: string;
   phone?: string;
   bio?: string;
+  storeInfo?: StoreInfo;
   avatarUrl?: string;
   darkMode?: boolean;
   language?: string;
+}
+
+export interface SellerStats {
+  // Traffic
+  views: number;
+  viewsLast30Days: number;
+  mapClicks: number;
+  mapClicksLast30Days: number;
+  // Reviews
+  rating: string | null;
+  totalReviews: number;
+  ratingDistribution: { 1: number; 2: number; 3: number; 4: number; 5: number };
+  // Products
+  productsCount: number;
+  certifiedGFCount: number;
+  avgPrice: number;
+  topCategories: { name: string; count: number }[];
+  mostViewedProduct: string;
+  // Engagement
+  topInteractionDay: string;
+  // Charts
+  chartData: number[];      // 7 days (Sun→Sat)
+  chartData30d: number[];   // 30 days
+  // Account
+  memberSince: string;
+  accountAgeDays: number;
 }
 
 export interface AuthResponse {
@@ -74,6 +110,11 @@ const authApi = {
   async updateProfile(dto: UpdateProfileDto): Promise<AuthUser> {
     const { data } = await http.patch<{ success: boolean; data: { user: AuthUser } }>('/users/me', dto);
     return data.data.user;
+  },
+
+  async getSellerStats(): Promise<SellerStats> {
+    const { data } = await http.get<{ success: boolean; data: SellerStats }>('/users/me/seller-stats');
+    return data.data;
   },
   async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
     const { data } = await http.post<{ success: boolean; message: string }>('/auth/forgot-password', { email });

@@ -46,4 +46,12 @@ export const locationsApi = {
     const res = await http.get<OneResponse>(`/locations/${id}`);
     return res.data.data;
   },
+
+  async incrementClicks(id: string): Promise<void> {
+    try {
+      await http.post(`/locations/${id}/click`);
+    } catch (err) {
+      console.warn('Failed to increment map click:', err);
+    }
+  },
 };

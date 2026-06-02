@@ -287,6 +287,7 @@ export default function MapScreen({
       if (loc && isFinite(loc.lat) && isFinite(loc.lng)) {
         mapRef.current?.flyTo(loc.lng, loc.lat, 16);
       }
+      locationsApi.incrementClicks(id);
     }
   }
 

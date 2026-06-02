@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
-  Image,
   TextInput,
   Animated,
   Easing,
 } from 'react-native';
+import FastImage from '@/shared/components/FastImageWrapper';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -29,53 +29,7 @@ const FILTERS: Array<{ key: RecipeCategory; label: string }> = [
   { key: 'quick', label: 'Quick' },
 ];
 
-const MOCK_RECIPES: Recipe[] = [
-  {
-    _id: 'mock-1',
-    title: 'Gluten-Free Pizza',
-    slug: 'gluten-free-pizza',
-    category: 'tunisian',
-    description: 'Homemade GF crust topped with fresh mozzarella and basil.',
-    ingredients: ['Gluten-free flour', 'Tomato sauce', 'Mozzarella', 'Basil'],
-    steps: ['Prepare dough', 'Add toppings', 'Bake at 220C'],
-    nutritionInfo: { calories: 370, carbs: 35, protein: 6.8 },
-    photos: ['https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400'],
-    videos: [],
-    authorId: 'mock-author',
-    isFavorite: false,
-    favoriteCount: 0,
-  },
-  {
-    _id: 'mock-2',
-    title: 'Tunisian Brik',
-    slug: 'tunisian-brik',
-    category: 'tunisian',
-    description: 'Crispy gluten-free pastry filled with egg, tuna, and parsley.',
-    ingredients: ['GF pastry sheet', 'Egg', 'Tuna', 'Parsley'],
-    steps: ['Fill pastry', 'Fold', 'Fry until golden'],
-    nutritionInfo: { calories: 290, carbs: 22, protein: 12 },
-    photos: ['https://images.unsplash.com/photo-1541532713592-79a0317b6b77?w=400'],
-    videos: [],
-    authorId: 'mock-author',
-    isFavorite: false,
-    favoriteCount: 0,
-  },
-  {
-    _id: 'mock-3',
-    title: 'Quinoa Salad',
-    slug: 'quinoa-salad',
-    category: 'quick',
-    description: 'Refreshing salad with quinoa, cucumber, tomatoes, and lemon dressing.',
-    ingredients: ['Quinoa', 'Tomato', 'Cucumber', 'Lemon'],
-    steps: ['Cook quinoa', 'Mix ingredients', 'Season'],
-    nutritionInfo: { calories: 240, carbs: 28, protein: 8.5 },
-    photos: ['https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400'],
-    videos: [],
-    authorId: 'mock-author',
-    isFavorite: false,
-    favoriteCount: 0,
-  },
-];
+// MOCK_RECIPES removed completely.
 
 function getRecipeImage(recipe: Recipe): string {
   if (recipe.photos && recipe.photos.length > 0 && recipe.photos[0]) {
@@ -409,9 +363,9 @@ export default function RecipesScreen({ navigation }: Props) {
       setLoaded(false);
       try {
         const fromApi = await recipesApi.list({ category: activeCategory, limit: 30 });
-        setItems(fromApi);
+        setItems(fromApi || []);
       } catch {
-        setItems(MOCK_RECIPES);
+        setItems([]);
       } finally {
         setLoaded(true);
       }
@@ -419,7 +373,7 @@ export default function RecipesScreen({ navigation }: Props) {
   }, [activeCategory]);
 
   const filtered = useMemo(() => {
-    const source = loaded && items.length > 0 ? items : MOCK_RECIPES;
+    const source = items;
     let list = source.filter((r) => r.category === activeCategory);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -430,13 +384,13 @@ export default function RecipesScreen({ navigation }: Props) {
       );
     }
     return list;
-  }, [activeCategory, items, loaded, searchQuery]);
+  }, [activeCategory, items, searchQuery]);
 
   const popular = useMemo(() => {
-    const source = loaded && items.length > 0 ? items : MOCK_RECIPES;
+    const source = items;
     const salad = source.find(r => r.title.toLowerCase().includes('salad') || r.title.toLowerCase().includes('quinoa'));
-    return salad ? [salad] : source.slice(2, 3);
-  }, [items, loaded]);
+    return salad ? [salad] : (source.length > 2 ? source.slice(2, 3) : source.slice(0, 1));
+  }, [items]);
 
   const headerActions = (
     <View style={s.topIcons}>
@@ -532,7 +486,7 @@ export default function RecipesScreen({ navigation }: Props) {
                 onPress={() => navigation.navigate('RecipeDetail', { recipeId: item._id, initialRecipe: item })}
               >
                 <View style={s.recipeImageContainer}>
-                  <Image source={{ uri: getRecipeImage(item) }} style={s.recipeImage} />
+                  <FastImage source={{ uri: getRecipeImage(item) }} resizeMode={FastImage.resizeMode.cover} style={s.recipeImage} />
                 </View>
                 <View style={s.recipeBody}>
                   <Text style={[s.recipeName, { color: T.text }]} numberOfLines={1}>{item.title}</Text>
@@ -556,7 +510,7 @@ export default function RecipesScreen({ navigation }: Props) {
               activeOpacity={0.88}
               onPress={() => navigation.navigate('RecipeDetail', { recipeId: item._id, initialRecipe: item })}
             >
-              <Image source={{ uri: getRecipeImage(item) }} style={s.popImg} />
+              <FastImage source={{ uri: getRecipeImage(item) }} resizeMode={FastImage.resizeMode.cover} style={s.popImg} />
               <View style={s.popInfo}>
                 <Text style={[s.popName, { color: T.text }]}>{item.title}</Text>
                 <Text style={[s.popDesc, { color: T.textSub }]} numberOfLines={3}>{item.description}</Text>

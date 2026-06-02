@@ -12,6 +12,9 @@ router.use(authMiddleware);
 /** PATCH /api/users/me — update authenticated user's profile */
 router.patch('/me', usersController.updateMe);
 
+/** GET /api/users/me/seller-stats — get authenticated user's seller statistics */
+router.get('/me/seller-stats', usersController.getSellerStats);
+
 /** POST /api/users/change-password — update user password */
 router.post('/change-password', usersController.changePassword);
 

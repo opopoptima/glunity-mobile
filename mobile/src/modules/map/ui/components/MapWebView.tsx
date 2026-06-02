@@ -13,6 +13,7 @@ interface MapWebViewProps {
   initialCenter?: { lng: number; lat: number };
   initialZoom?: number;
   onSelectLocation?: (id: string | null) => void;
+  onMapPress?: (lat: number, lng: number) => void;
   focusedId?: string | null;
   userLocation?: { lat: number; lng: number } | null;
 }
@@ -79,6 +80,7 @@ function buildHtml(greenColor: string): string {
     var map=L.map('map',{zoomControl:true,attributionControl:false}).setView([${DEFAULT_CENTER.lat},${DEFAULT_CENTER.lng}],14);
     map.on('click',function(ev){
       send('deselect',{});
+      send('mapPress',{lat:ev.latlng.lat,lng:ev.latlng.lng});
     });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',{maxZoom:19,subdomains:'abcd'}).addTo(map);
     var layer=L.layerGroup().addTo(map);
@@ -94,7 +96,7 @@ function buildHtml(greenColor: string): string {
     function iconFor(c){return ICONS[c]||ICONS.other;}
     function send(t,p){var m=JSON.stringify({type:t,payload:p});if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(m);}else if(window.parent&&window.parent!==window){window.parent.postMessage(m,'*');}}
     function separate(items){var g={};items.forEach(function(it){var k=Math.round(it.lat*100000)+'|'+Math.round(it.lng*100000);(g[k]=g[k]||[]).push(it);});var out=[];Object.keys(g).forEach(function(k){var gr=g[k];if(gr.length===1){out.push(gr[0]);return;}gr.forEach(function(it,i){var a=(i/gr.length)*Math.PI*2,r=0.00014*(1+Math.floor(i/2));out.push(Object.assign({},it,{lat:it.lat+Math.cos(a)*r,lng:it.lng+Math.sin(a)*r}));});});return out;}
-    function render(items){layer.clearLayers();if(!items||!items.length)return;separate(items).forEach(function(loc){var cat=loc.category||'other';var cls='gl-pin cat-'+cat+(loc.isFocus?' focus':'');var html='<div class="'+cls+'"><div class="pin-badge">'+iconFor(cat)+'</div><div class="pin-tail"></div></div>';var icon=L.divIcon({html:html,className:'',iconSize:[48,56],iconAnchor:[24,56]});var tags='';if(loc.glutenFree)tags+='<span class="gl-tag gl-gf">GF Friendly</span>';if(loc.certified)tags+='<span class="gl-tag gl-cert">Certified</span>';var popup='<div class="gl-name">'+(loc.name||'')+'</div>'+(loc.address?'<div class="gl-addr">'+loc.address+'</div>':'')+(tags?'<div class="gl-tags">'+tags+'</div>':'');var m=L.marker([loc.lat,loc.lng],{icon:icon}).bindPopup(popup);m.on('click',function(ev){L.DomEvent.stopPropagation(ev);send('select',{id:loc.id});});layer.addLayer(m);});}
+    function render(items){layer.clearLayers();if(!items||!items.length)return;separate(items).forEach(function(loc){var cat=loc.category||'other';var cls='gl-pin cat-'+cat+(loc.isFocus?' focus':'');var html='<div class="'+cls+'"><div class="pin-badge">'+iconFor(cat)+'</div><div class="pin-tail"></div></div>';var icon=L.divIcon({html:html,className:'',iconSize:[48,56],iconAnchor:[24,56]});var tags='';if(loc.glutenFree)tags+='<span class="gl-tag gl-gf">GF Friendly</span>';if(loc.certified)tags+='<span class="gl-tag gl-cert">Certified</span>';var imgHtml='';if(loc.images&&loc.images.length>0&&loc.images[0].url){imgHtml='<div style="margin-bottom:8px;border-radius:10px;overflow:hidden;height:90px;width:180px;"><img src="'+loc.images[0].url+'" style="width:100%;height:100%;object-fit:cover;" /></div>';}var popup=imgHtml+'<div class="gl-name">'+(loc.name||'')+'</div>'+(loc.address?'<div class="gl-addr">'+loc.address+'</div>':'')+(tags?'<div class="gl-tags">'+tags+'</div>':'');var m=L.marker([loc.lat,loc.lng],{icon:icon}).bindPopup(popup);m.on('click',function(ev){L.DomEvent.stopPropagation(ev);send('select',{id:loc.id});});layer.addLayer(m);});}
     var userMarker=null,userCircle=null;
     function updateUserLocation(lat,lng){
       if(!lat||!lng){
@@ -124,7 +126,7 @@ function buildHtml(greenColor: string): string {
 }
 
 export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(
-  function MapWebView({ locations, initialCenter, initialZoom, onSelectLocation, focusedId, userLocation }, ref) {
+  function MapWebView({ locations, initialCenter, initialZoom, onSelectLocation, onMapPress, focusedId, userLocation }, ref) {
     const { theme: T } = useTheme();
     const html = useMemo(() => buildHtml(T.green), [T.green]);
     const webRef = useRef<WebView | null>(null);
@@ -155,6 +157,9 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(
           }
           if (data.type === 'deselect') {
             onSelectLocation?.(null);
+          }
+          if (data.type === 'mapPress' && data.payload) {
+            onMapPress?.(data.payload.lat, data.payload.lng);
           }
           if (data.type === 'ready') {
             const payload = (locations || []).map((l) => Object.assign({}, l, { isFocus: !!(focusedId && l.id === focusedId) }));
@@ -208,6 +213,7 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(
         const data = JSON.parse(e.nativeEvent.data);
         if (data.type === 'select' && data.payload?.id) onSelectLocation?.(data.payload.id);
         if (data.type === 'deselect') onSelectLocation?.(null);
+        if (data.type === 'mapPress' && data.payload) onMapPress?.(data.payload.lat, data.payload.lng);
         if (data.type === 'ready') {
           const payload = (locations || []).map((l) => Object.assign({}, l, { isFocus: !!(focusedId && l.id === focusedId) }));
           const msg = JSON.stringify({ type: 'setLocations', payload });

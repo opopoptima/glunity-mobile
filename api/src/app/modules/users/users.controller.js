@@ -1,6 +1,8 @@
 'use strict';
 
 const User         = require('../../../database/models/user.model');
+const Product      = require('../../../database/models/product.model');
+const Review       = require('../../../database/models/review.model');
 const asyncHandler = require('../../common/utils/async-handler');
 const AppError     = require('../../common/errors/app-error');
 const { hashPassword, verifyPassword } = require('../../common/utils/password');
@@ -22,6 +24,14 @@ const usersController = {
       updates.avatar = { url: req.body.avatarUrl };
     }
 
+    if (req.body.storeInfo !== undefined) {
+      // If storeInfo is provided, we merge it.
+      // E.g. $set: { 'storeInfo.address': '...', 'storeInfo.operatingHours': '...' }
+      for (const [key, value] of Object.entries(req.body.storeInfo)) {
+        updates[`storeInfo.${key}`] = value;
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
       throw AppError.badRequest('No valid fields provided to update', 'NO_FIELDS');
     }
@@ -33,6 +43,75 @@ const usersController = {
     );
 
     if (!user) throw AppError.notFound('User');
+
+    // Auto-synchronize store location on the collaborative Map
+    if (user.profileType === 'pro_commerce' && req.body.storeInfo !== undefined) {
+      try {
+        const Location = require('../../../database/models/location.model');
+        const storeInfo = user.storeInfo || {};
+        const addressStr = (storeInfo.address || '').trim();
+        
+        let storeName = (storeInfo.storeName || '').trim();
+        if (storeName.length < 2) {
+          storeName = (user.fullName || '').trim();
+        }
+        if (storeName.length < 2) {
+          storeName = 'Gluten-Free Store';
+        }
+
+        const phone = (storeInfo.phone || user.phone || '').trim();
+        const description = (storeInfo.description || '').trim();
+        const imageUrl = (storeInfo.imageUrl || '').trim();
+
+        // 1. Determine if coordinates are specified in the address
+        let coordinates = null;
+        const coordMatch = addressStr.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+        if (coordMatch) {
+          const lat = parseFloat(coordMatch[1]);
+          const lng = parseFloat(coordMatch[2]);
+          if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+            coordinates = [lng, lat]; // GeoJSON [lng, lat]
+          }
+        }
+
+        // 2. Find existing location or create new
+        const locationDoc = await Location.findOne({ createdBy: user._id });
+
+        if (locationDoc) {
+          locationDoc.name = storeName;
+          locationDoc.description = description;
+          locationDoc.phone = phone;
+          locationDoc.address = addressStr;
+          locationDoc.images = imageUrl ? [{ url: imageUrl }] : [];
+          if (coordinates) {
+            locationDoc.location = {
+              type: 'Point',
+              coordinates: coordinates
+            };
+          }
+          await locationDoc.save();
+        } else {
+          const defaultCoords = coordinates || [10.18153, 36.80649]; // Tunis fallback
+          await Location.create({
+            name: storeName,
+            description: description,
+            category: 'grocery',
+            glutenFree: true,
+            certified: true,
+            address: addressStr,
+            phone: phone,
+            images: imageUrl ? [{ url: imageUrl }] : [],
+            location: {
+              type: 'Point',
+              coordinates: defaultCoords
+            },
+            createdBy: user._id
+          });
+        }
+      } catch (err) {
+        console.error('Error auto-syncing location for user:', user._id, err);
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -65,6 +144,158 @@ const usersController = {
     res.status(200).json({
       success: true,
       message: 'Password changed successfully',
+    });
+  }),
+
+  /** GET /api/users/me/seller-stats — get seller dashboard statistics */
+  getSellerStats: asyncHandler(async (req, res) => {
+    const sellerId = req.user._id;
+    const now = new Date();
+
+    // ── 1. Products ──────────────────────────────────────────────────────────
+    const products = await Product.find({ sellerId }).select('_id name price category certifiedGF createdAt views');
+    const productsCount = products.length;
+    const productIds = products.map(p => p._id);
+
+    // Certified GF count
+    const certifiedGFCount = products.filter(p => p.certifiedGF).length;
+
+    // Average price
+    const avgPrice = productsCount > 0
+      ? (products.reduce((sum, p) => sum + (p.price || 0), 0) / productsCount).toFixed(2)
+      : '0.00';
+
+    // Categories breakdown
+    const categoryCounts = {};
+    products.forEach(p => {
+      if (p.category) categoryCounts[p.category] = (categoryCounts[p.category] || 0) + 1;
+    });
+    const topCategories = Object.entries(categoryCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([name, count]) => ({ name, count }));
+
+    // ── 2. Reviews ───────────────────────────────────────────────────────────
+    const reviews = await Review.find({ productId: { $in: productIds } }).select('rating productId createdAt');
+    const totalReviews = reviews.length;
+
+    const rating = totalReviews > 0
+      ? (reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews).toFixed(1)
+      : null;
+
+    // Rating distribution (1–5 stars)
+    const ratingDist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    reviews.forEach(r => { ratingDist[Math.round(r.rating)] = (ratingDist[Math.round(r.rating)] || 0) + 1; });
+
+    // Most reviewed product
+    const reviewsByProduct = {};
+    reviews.forEach(r => {
+      const pid = r.productId?.toString();
+      if (pid) reviewsByProduct[pid] = (reviewsByProduct[pid] || 0) + 1;
+    });
+    let mostViewedProduct = productsCount > 0 ? products[0].name : 'No products yet';
+    let maxReviewCount = 0;
+    products.forEach(p => {
+      const cnt = reviewsByProduct[p._id.toString()] || 0;
+      if (cnt > maxReviewCount) { maxReviewCount = cnt; mostViewedProduct = p.name; }
+    });
+
+    // Top interaction day from review timestamps
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+    reviews.forEach(r => { if (r.createdAt) dayCounts[new Date(r.createdAt).getDay()]++; });
+    const topDayIdx = dayCounts.indexOf(Math.max(...dayCounts));
+    const topInteractionDay = totalReviews > 0 ? dayNames[topDayIdx] : 'Saturday';
+
+    // ── 3. Analytics — real data only, no fake scaling ──────────────────────
+    // All-time product views (sum of actual Product.views counters)
+    const viewsAllTime = products.reduce((sum, p) => sum + (p.views || 0), 0);
+
+    // Map clicks from actual DB counter (incremented on each map marker click)
+    const latestUser = await User.findById(req.user._id).select('storeInfo');
+    const mapClicksAllTime = (latestUser && latestUser.storeInfo && latestUser.storeInfo.mapClicks) || 0;
+
+    // For the dashboard KPI cards, show the real totals
+    // 7d views = total views (we don't have per-day granularity without event logs)
+    const views = viewsAllTime;
+    const viewsLast30Days = viewsAllTime; // same total — we track lifetime not windowed
+
+    // Map clicks: same real count for both periods
+    const mapClicks = mapClicksAllTime;
+    const mapClicksLast30Days = mapClicksAllTime;
+
+    // ── 4. Chart data — real counts per day (from review timestamps) ─────────
+    const chartWeek = [];
+    const chartLabels = [];
+    const shortDayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now - i * 24 * 60 * 60 * 1000);
+      const dayIdx = d.getDay();
+
+      // Count reviews that were posted on this exact calendar date
+      const reviewsOnDay = reviews.filter(r => {
+        if (!r.createdAt) return false;
+        const rd = new Date(r.createdAt);
+        return rd.getFullYear() === d.getFullYear() &&
+               rd.getMonth() === d.getMonth() &&
+               rd.getDate() === d.getDate();
+      }).length;
+
+      // Real value: number of reviews on this day (each review = one real interaction)
+      chartWeek.push(reviewsOnDay);
+      chartLabels.push(shortDayNames[dayIdx]);
+    }
+
+    // 30-day chart — real review counts per day
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const recentReviews30d = reviews.filter(r => r.createdAt && new Date(r.createdAt) >= thirtyDaysAgo);
+    const chartData30d = Array(30).fill(0);
+    recentReviews30d.forEach(r => {
+      const daysAgo = Math.floor((now - new Date(r.createdAt)) / (24 * 60 * 60 * 1000));
+      const idx = Math.min(29, Math.max(0, 29 - daysAgo));
+      chartData30d[idx] += 1;
+    });
+    // No scaling — raw real review counts per day
+    const chartData30dScaled = chartData30d;
+
+    // ── 5. Account age ───────────────────────────────────────────────────────
+    const memberSinceDate = req.user.createdAt
+      ? new Date(req.user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      : 'Unknown';
+
+    const accountAgeDays = req.user.createdAt
+      ? Math.floor((now - new Date(req.user.createdAt)) / (24 * 60 * 60 * 1000))
+      : 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        // Traffic
+        views,
+        viewsLast30Days,
+        mapClicks,
+        mapClicksLast30Days,
+        // Reviews
+        rating,
+        totalReviews,
+        ratingDistribution: ratingDist,
+        // Products
+        productsCount,
+        certifiedGFCount,
+        avgPrice: parseFloat(avgPrice),
+        topCategories,
+        mostViewedProduct,
+        // Engagement
+        topInteractionDay,
+        // Charts
+        chartData: chartWeek,
+        chartLabels,
+        chartData30d: chartData30dScaled,
+        // Account
+        memberSince: memberSinceDate,
+        accountAgeDays,
+      },
     });
   }),
 };

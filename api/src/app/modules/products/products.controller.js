@@ -25,6 +25,12 @@ class ProductsController {
 			const { id } = req.params;
 			const product = await productsService.getById(id);
 			
+			// Increment views if the requester is not the seller
+			const userId = req.user?._id || req.user?.id;
+			if (!userId || product.sellerId._id?.toString() !== userId.toString()) {
+				await productsService.incrementViews(id);
+			}
+
 			res.status(200).json({
 				success: true,
 				data: productsMapper.toPublic(product),
@@ -76,6 +82,28 @@ class ProductsController {
 				success: true,
 				message: 'Product deleted successfully',
 			});
+		} catch (error) {
+			next(error);
+		}
+	}
+
+	/** POST /api/products/:id/view — lightweight view counter increment */
+	async incrementView(req, res, next) {
+		try {
+			const { id } = req.params;
+			// Fetch only sellerId to check ownership
+			const Product = require('../../../database/models/product.model');
+			const product = await Product.findById(id).select('sellerId');
+			if (!product) {
+				return res.status(404).json({ success: false, message: 'Product not found' });
+			}
+			// Only count views from non-sellers
+			const userId = req.user?._id?.toString() || req.user?.id?.toString();
+			const sellerId = product.sellerId?._id?.toString() || product.sellerId?.toString();
+			if (!userId || userId !== sellerId) {
+				await Product.findByIdAndUpdate(id, { $inc: { views: 1 } });
+			}
+			res.status(200).json({ success: true });
 		} catch (error) {
 			next(error);
 		}
