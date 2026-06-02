@@ -38,7 +38,7 @@ const recipesRepository = {
 		return Recipe.findOneAndUpdate(
 			{ _id: id, authorId },
 			{ $set: updates },
-			{ new: true, runValidators: true },
+			{ returnDocument: 'after', runValidators: true },
 		);
 	},
 
@@ -50,7 +50,7 @@ const recipesRepository = {
 		return Recipe.findByIdAndUpdate(
 			recipeId,
 			value ? { $addToSet: { favoritedBy: userId } } : { $pull: { favoritedBy: userId } },
-			{ new: true },
+			{ returnDocument: 'after' },
 		);
 	},
 };

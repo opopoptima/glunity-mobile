@@ -33,7 +33,7 @@ class ProductsRepository {
 	}
 
 	async updateById(id, updateData) {
-		return Product.findByIdAndUpdate(id, updateData, { new: true })
+		return Product.findByIdAndUpdate(id, updateData, { returnDocument: 'after' })
 			.populate('sellerId', 'fullName avatar');
 	}
 
@@ -42,7 +42,7 @@ class ProductsRepository {
 	}
 
 	async incrementViews(id) {
-		return Product.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true });
+		return Product.findByIdAndUpdate(id, { $inc: { views: 1 } }, { returnDocument: 'after' });
 	}
 }
 

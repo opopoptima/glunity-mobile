@@ -39,7 +39,7 @@ const usersController = {
     const user = await User.findByIdAndUpdate(
       req.user._id,
       { $set: updates },
-      { new: true, runValidators: true },
+      { returnDocument: 'after', runValidators: true },
     );
 
     if (!user) throw AppError.notFound('User');

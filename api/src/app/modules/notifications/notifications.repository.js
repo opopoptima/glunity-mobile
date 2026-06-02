@@ -23,7 +23,7 @@ const notificationsRepository = {
 		return Notification.findOneAndUpdate(
 			{ _id: id, userId },
 			{ $set: { isRead: true } },
-			{ new: true }
+			{ returnDocument: 'after' }
 		).lean();
 	},
 

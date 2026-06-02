@@ -22,7 +22,7 @@ const eventsRepository = {
 		return Event.findByIdAndUpdate(
 			eventId,
 			{ $addToSet: { attendees: userId } },
-			{ new: true }
+			{ returnDocument: 'after' }
 		).lean();
 	},
 
@@ -30,7 +30,7 @@ const eventsRepository = {
 		return Event.findByIdAndUpdate(
 			eventId,
 			{ $pull: { attendees: userId } },
-			{ new: true }
+			{ returnDocument: 'after' }
 		).lean();
 	},
 };
