@@ -241,6 +241,51 @@ export default function EventsCalendarScreen({ navigation }: any) {
     },
   }), [T, insets, isRTL]);
 
+  const ListHeader = React.useMemo(() => (
+    <View style={{ backgroundColor: T.bg }}>
+      <Animated.View style={[styles.searchWrap, { height: searchHeight, opacity: searchOpacity }]}>
+        <View style={styles.searchInner}>
+          <Feather name="search" size={16} color={T.textMuted} />
+          <TextInput
+            ref={inputRef}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={t('Search events...')}
+            placeholderTextColor={T.textMuted}
+            underlineColorAndroid="transparent"
+            style={styles.searchInput}
+          />
+          {!!searchQuery && (
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setSearchQuery("")}>
+              <Ionicons name="close-circle" size={16} color={T.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </Animated.View>
+
+      <ScrollView horizontal contentContainerStyle={styles.filterRow} showsHorizontalScrollIndicator={false}>
+        {FILTER_KEYS.map(({ key, label, icon }) => {
+          const isActive = filter === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              onPress={() => setFilter(key)}
+              activeOpacity={0.8}
+              style={[styles.filterPill, isActive && styles.filterPillActive]}
+            >
+              <Ionicons
+                name={icon}
+                size={14}
+                color={isActive ? '#FFFFFF' : (T.textSub || '#374151')}
+              />
+              <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{t(label)}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  ), [filter, searchHeight, searchOpacity, searchQuery, T, styles, t]);
+
   return (
     <AppScaffold
       title="Events"
@@ -256,50 +301,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
         <FlatList
           data={filtered}
           keyExtractor={(it) => it.id}
-          ListHeaderComponent={() => (
-            <View style={{ backgroundColor: T.bg }}>
-              <Animated.View style={[styles.searchWrap, { height: searchHeight, opacity: searchOpacity }]}>
-                <View style={styles.searchInner}>
-                  <Feather name="search" size={16} color={T.textMuted} />
-                  <TextInput
-                    ref={inputRef}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder={t('Search events...')}
-                    placeholderTextColor={T.textMuted}
-                    underlineColorAndroid="transparent"
-                    style={styles.searchInput}
-                  />
-                  {!!searchQuery && (
-                    <TouchableOpacity activeOpacity={0.8} onPress={() => setSearchQuery("")}>
-                      <Ionicons name="close-circle" size={16} color={T.textMuted} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </Animated.View>
-
-              <ScrollView horizontal contentContainerStyle={styles.filterRow} showsHorizontalScrollIndicator={false}>
-                {FILTER_KEYS.map(({ key, label, icon }) => {
-                  const isActive = filter === key;
-                  return (
-                    <TouchableOpacity
-                      key={key}
-                      onPress={() => setFilter(key)}
-                      activeOpacity={0.8}
-                      style={[styles.filterPill, isActive && styles.filterPillActive]}
-                    >
-                      <Ionicons
-                        name={icon}
-                        size={14}
-                        color={isActive ? '#FFFFFF' : (T.textSub || '#374151')}
-                      />
-                      <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{t(label)}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
+          ListHeaderComponent={ListHeader}
           stickyHeaderIndices={[0]}
           ListEmptyComponent={() => (
             <View style={{ padding: 24, alignItems: 'center' }}>

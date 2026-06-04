@@ -7,6 +7,7 @@ const patientResourcesRepository = {
   // ── Articles ────────────────────────────────────────────────────────────────
   findFeatured() {
     return PatientResource.findOne({ isFeatured: true, isPublished: true })
+      .select('-body')
       .sort({ publishedAt: -1 })
       .lean();
   },
@@ -15,6 +16,7 @@ const patientResourcesRepository = {
     const query = { isPublished: true };
     if (category) query.category = category;
     return PatientResource.find(query)
+      .select('-body')
       .sort({ publishedAt: -1 })
       .limit(limit)
       .skip(skip)

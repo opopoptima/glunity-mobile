@@ -177,6 +177,23 @@ export default function PatientResourcesScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<PatientArticle | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const handleArticlePress = useCallback(async (article: PatientArticle) => {
+    setDetailLoading(true);
+    try {
+      const res = await patientResourcesApi.getById(article.id);
+      if (res.success) {
+        setSelectedArticle(res.data);
+      } else {
+        Alert.alert(t('Error'), t('Failed to load article details'));
+      }
+    } catch {
+      Alert.alert(t('Error'), t('Failed to load article details'));
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [t]);
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
@@ -886,7 +903,7 @@ export default function PatientResourcesScreen({ navigation }: Props) {
               <TouchableOpacity
                 style={s.featuredCard}
                 activeOpacity={0.85}
-                onPress={() => setSelectedArticle(featured)}
+                onPress={() => handleArticlePress(featured)}
               >
                 <Image
                   source={{ uri: CATEGORY_IMAGES[featured.category] }}
@@ -957,7 +974,7 @@ export default function PatientResourcesScreen({ navigation }: Props) {
                 key={article.id}
                 style={s.articleCard}
                 activeOpacity={0.82}
-                onPress={() => setSelectedArticle(article)}
+                onPress={() => handleArticlePress(article)}
               >
                 <Image
                   source={{ uri: CATEGORY_IMAGES[article.category] }}
@@ -1153,6 +1170,23 @@ export default function PatientResourcesScreen({ navigation }: Props) {
             </View>
           </View>
         </Modal>
+
+        {/* Loading detail indicator */}
+        {detailLoading && (
+          <View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                backgroundColor: 'rgba(0,0,0,0.3)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 999,
+              },
+            ]}
+          >
+            <ActivityIndicator size="large" color={T.green} />
+          </View>
+        )}
       </View>
     </AppScaffold>
   );
