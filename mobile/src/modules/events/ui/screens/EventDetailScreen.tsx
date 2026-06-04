@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
@@ -16,6 +17,7 @@ type Props = NativeStackScreenProps<AppStackParamList, 'EventDetail'>;
 
 export default function EventDetailScreen({ navigation, route }: Props) {
   const { theme: T } = useTheme();
+  const insets = useSafeAreaInsets();
   const { isRTL, t } = useLanguage();
   const { eventId } = route.params as any;
   const [event, setEvent] = React.useState<any>(null);
@@ -225,7 +227,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
       onPressProfile={() => navigation.navigate('Profile')}
       contentStyle={{ backgroundColor: T.bg }}
     >
-      <ScrollView contentContainerStyle={{ paddingBottom: 0 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 116 + insets.bottom }}>
         {event ? (
           <View style={[styles.root, { backgroundColor: T.bg }] }>
             <View style={{ position: 'relative' }}>

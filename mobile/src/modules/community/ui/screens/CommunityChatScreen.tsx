@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
@@ -7,6 +8,7 @@ import { useTheme } from '@/shared/context/theme.context';
 export default function CommunityChatScreen({ navigation }: any) {
   const [joined, setJoined] = useState(true);
   const { theme: T } = useTheme();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     (async () => {
@@ -26,7 +28,7 @@ export default function CommunityChatScreen({ navigation }: any) {
 
   return (
     <AppScaffold title="Community" activeTab="events" contentStyle={{ backgroundColor: T.bg }}>
-      <View style={[styles.container, { backgroundColor: 'transparent' }]}> 
+      <View style={[styles.container, { backgroundColor: 'transparent', paddingBottom: 116 + insets.bottom }]}> 
         <Text style={styles.title}>Community Chat</Text>
         <Text style={styles.subtitle}>Welcome to the community chat. Treat this as the group space for tips, questions and discovery.</Text>
 

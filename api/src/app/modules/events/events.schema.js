@@ -14,18 +14,23 @@ const createEventSchema = [
 	body('title').isString().trim().isLength({ min: 2, max: 200 }),
 	body('type').optional().isIn(EVENT_TYPES),
 	body('description').optional().isString().isLength({ max: 2000 }),
-	// imageUrl can be a remote URL or a data URI (base64) coming from mobile client
-	body('imageUrl').optional().isString().isLength({ max: 20000 }).custom((v) => {
-		if (!v) return true;
-		if (typeof v !== 'string') return false;
-		if (v.startsWith('data:')) return true; // allow data URIs (base64)
-		try {
-			new URL(v);
-			return true;
-		} catch (e) {
-			return false;
-		}
-	}).withMessage('imageUrl must be a valid URL or data URI'),
+	// imageUrl can be a remote URL or a data URI (base64) coming from mobile client.
+	// Allow larger payloads to accommodate base64 images from mobile clients.
+	body('imageUrl')
+		.optional()
+		.isString().withMessage('imageUrl must be a string')
+		.isLength({ max: 1000000 }).withMessage('imageUrl is too long')
+		.custom((v) => {
+			if (!v) return true;
+			if (typeof v !== 'string') return false;
+			if (v.startsWith('data:')) return true; // allow data URIs (base64)
+			try {
+				new URL(v);
+				return true;
+			} catch (e) {
+				return false;
+			}
+		}).withMessage('imageUrl must be a valid URL or data URI'),
 	body('startsAt').exists().isISO8601().toDate().custom((val) => {
 		// startsAt must be in the future
 		const dt = new Date(val);

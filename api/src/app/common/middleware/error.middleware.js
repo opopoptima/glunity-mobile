@@ -45,6 +45,7 @@ function errorMiddleware(err, req, res, next) {
     status,
     path:   req.path,
     method: req.method,
+    ...(err.errors && { errors: err.errors }),
     ...(env.isDev && { stack: err.stack }),
   });
 
@@ -52,6 +53,7 @@ function errorMiddleware(err, req, res, next) {
     success: false,
     code,
     message,
+    ...(err.errors && { errors: err.errors }),
     ...(env.isDev && { stack: err.stack }),
   });
 }

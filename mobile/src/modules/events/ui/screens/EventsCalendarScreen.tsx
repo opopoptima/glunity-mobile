@@ -368,6 +368,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
               />
           )}
           contentContainerStyle={styles.list}
+          ListFooterComponent={() => <View style={{ height: 116 + insets.bottom }} />}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         />
         {user?.profileType === 'pro_commerce' && (
