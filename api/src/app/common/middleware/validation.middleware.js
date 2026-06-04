@@ -14,6 +14,7 @@ function validate(req, _res, next) {
       field:   e.path,
       message: e.msg,
     }));
+    console.error('[Validation Error]', JSON.stringify(errors, null, 2));
     const err     = AppError.unprocessable('Validation failed', 'VALIDATION_ERROR');
     err.errors    = errors;
     return next(err);

@@ -79,7 +79,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
         setEvents(list);
         // Prefetch top event images to improve perceived load speed
         try {
-          const top = (list || []).slice(0, 8).map(i => i.imageUrl).filter(Boolean);
+          const top = (list || []).slice(0, 8).map(i => i.imageUrl).filter((url): url is string => !!url);
           // Prefetch with diagnostics (log success/failure and timings)
           function optimizedUrl(url?: string | null, w = 800) {
             if (!url) return url;
@@ -97,7 +97,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
           top.forEach(async (url) => {
             const start = Date.now();
             try {
-              const u = optimizedUrl(url, 800);
+              const u = optimizedUrl(url, 800) || '';
               // wait up to 1500ms for prefetch, then give up
               await Promise.race([
                 Image.prefetch(u),

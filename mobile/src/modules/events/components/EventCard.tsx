@@ -17,7 +17,6 @@ export default function EventCard({ event, onPress }: Props) {
 
 
   const [loaded, setLoaded] = React.useState(false);
-  const imageSource = event.imageUrl ? { uri: event.imageUrl } : null;
   const loadStartRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -46,7 +45,7 @@ export default function EventCard({ event, onPress }: Props) {
     }
   }
 
-  const optimizedSource = imageSource ? { uri: optimizedUrl(imageSource.uri, 800) } : null;
+  const optimizedSource = event.imageUrl ? { uri: optimizedUrl(event.imageUrl, 800) || '' } : undefined;
 
   function formatDate(d?: string | null) {
     try {
@@ -112,7 +111,7 @@ export default function EventCard({ event, onPress }: Props) {
       <View style={{ position: 'relative' }}>
         {/* neutral placeholder rectangle (no logo) */}
         <View style={styles.cardImage} />
-        {imageSource ? (
+        {optimizedSource ? (
           <FastImage
             source={optimizedSource}
             style={[styles.cardImage, { position: 'absolute', left: 0, top: 0, opacity: loaded ? 1 : 0 }]}

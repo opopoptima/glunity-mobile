@@ -33,5 +33,7 @@ export type AppStackParamList = {
   Notifications:   undefined;
   PatientResources: undefined;
   Privacy:         undefined;
+  Community:       undefined;
+  CommunityChat:   undefined;
 };
 

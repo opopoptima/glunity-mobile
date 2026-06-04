@@ -88,9 +88,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const { setOnUnauthorized } = require('../../../core/network/http.client');
     setOnUnauthorized(() => {
-      TokenStore.clearTokens().then(() => {
-        dispatch({ type: 'CLEAR_USER' });
-      });
+      TokenStore.clearTokens()
+        .catch((err) => console.warn('Failed to clear tokens on auto-logout:', err))
+        .finally(() => {
+          dispatch({ type: 'CLEAR_USER' });
+        });
     });
     return () => {
       setOnUnauthorized(null);

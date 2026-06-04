@@ -144,7 +144,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
       }
       // backend will create notifications for attendees; navigate to Events list
       navigation.navigate('Events');
-    } catch (err) {
+    } catch (err: any) {
       // Surface error to the user
       console.warn('Failed to delete event', err && err.message);
       Alert.alert(t('Error'), err?.response?.data?.message || err?.message || t('Failed to delete event'));
@@ -234,7 +234,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
               <View style={[styles.image, { backgroundColor: T.surfaceAlt }]} />
               {event.imageUrl ? (
                 <FastImage
-                  source={{ uri: optimizedUrl(event.imageUrl, 1200) }}
+                  source={{ uri: optimizedUrl(event.imageUrl, 1200) || '' }}
                   style={[styles.image, { position: 'absolute', left: 0, top: 0 }]}
                   contentFit="cover"
                   transition={200}
@@ -262,7 +262,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                     <Text style={[styles.infoSub, { color: T.textSub }]}>{formatTime(event.startsAt)}</Text>
                   </View>
                 </View>
-
+ 
                 {/* Location row */}
                 <View style={styles.infoRow}>
                   <Ionicons name="location-outline" size={18} color={T.red} />
@@ -273,7 +273,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                     </TouchableOpacity>
                   </View>
                 </View>
-
+ 
                 {/* Attendees row */}
                 <View style={[styles.infoRow, { marginTop: 8, alignItems: 'center' }] }>
                   <Ionicons name="people-outline" size={18} color={T.red} />
@@ -284,7 +284,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                       <View style={styles.smallAvatars}>
                         {attendeeAvatars.map((uri, i) => (
                           uri ? (
-                            <FastImage key={i} source={{ uri: optimizedUrl(uri, 200) }} style={styles.smallAvatar} contentFit="cover" cachePolicy="disk" priority="high" onLoad={() => { /* avatar loaded */ }} onError={() => { /* ignore */ }} />
+                            <FastImage key={i} source={{ uri: optimizedUrl(uri, 200) || '' }} style={styles.smallAvatar} contentFit="cover" cachePolicy="disk" priority="high" onLoad={() => { /* avatar loaded */ }} onError={() => { /* ignore */ }} />
                           ) : (
                             <View key={i} style={[styles.smallAvatar, { backgroundColor: '#111827' }]} />
                           )

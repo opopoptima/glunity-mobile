@@ -11,6 +11,8 @@ interface ListResponse {
     date?: string;
     type?: string;
     startsAt?: string;
+    price?: number;
+    currency?: string;
     attendeesCount?: number;
     maxCapacity?: number;
     attendees?: string[];

@@ -48,6 +48,7 @@ export default function LoginScreen({ navigation, route }: Props) {
     flex:  { flex: 1 },
     scroll: {
       flexGrow: 1,
+      paddingHorizontal: 24,
       paddingBottom: 160,
       paddingTop: 12,
     },

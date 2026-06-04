@@ -13,10 +13,9 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import { useTheme } from '../context/theme.context';
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';import { useTheme } from '../context/theme.context';
 import { useAuth } from '@/modules/auth/state/auth.context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import notificationsApi from '@/modules/notifications/api/notifications.api';
 import { useLanguage } from '../context/language.context';
 
@@ -61,6 +60,7 @@ export function AppHeader({
   const { theme: C } = useTheme();
   const { user } = useAuth();
   const navigation = useNavigation<any>();
+  const isFocused = useIsFocused();
   const { isRTL, t } = useLanguage();
   const isPro = user?.profileType?.startsWith('pro_');
   const roleColor = isPro ? C.red : C.green;
@@ -73,10 +73,16 @@ export function AppHeader({
 
   const [unreadCount, setUnreadCount] = React.useState(0);
   const prevUnreadCountRef = React.useRef(0);
+  const navigationRef = React.useRef(navigation);
+
+  // Keep navigation ref updated
+  React.useEffect(() => {
+    navigationRef.current = navigation;
+  }, [navigation]);
 
   // Fetch unread status with polling
   React.useEffect(() => {
-    if (!user) return;
+    if (!user || !isFocused) return;
     let mounted = true;
     let isFirstLoad = true;
 
@@ -97,7 +103,7 @@ export function AppHeader({
                 [
                   {
                     text: t('View'),
-                    onPress: () => navigation.navigate('Notifications'),
+                    onPress: () => navigationRef.current.navigate('Notifications'),
                   },
                   {
                     text: t('CLOSE'),
@@ -124,7 +130,7 @@ export function AppHeader({
       mounted = false;
       clearInterval(interval);
     };
-  }, [user, navigation]);
+  }, [user, isFocused]);
 
   // Extract first name and default fallback avatar
   const firstName = user?.fullName ? user.fullName.split(' ')[0] : 'Yassmine';

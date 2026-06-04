@@ -128,12 +128,32 @@ function buildHtml(greenColor: string, icons: Record<string, string>): string {
 export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(
   function MapWebView({ locations, initialCenter, initialZoom, onSelectLocation, onMapPress, focusedId, userLocation }, ref) {
     const { theme: T } = useTheme();
-    // Resolve local asset URIs for pin images
-    const restaurantUri = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (1).png')).uri;
-    const bakeryUri     = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (2).png')).uri;
-    const otherUri      = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (5).png')).uri;
-    const pharmacyUri   = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (6).png')).uri;
-    const shopUri       = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (7).png')).uri;
+    // Resolve local asset URIs for pin images safely across Web and Native platforms
+    const getAssetUri = (asset: any) => {
+      if (!asset) return '';
+      if (typeof asset === 'string') return asset;
+      if (Platform.OS !== 'web' && Image.resolveAssetSource) {
+        try {
+          return Image.resolveAssetSource(asset)?.uri || '';
+        } catch (e) {
+          console.warn('resolveAssetSource failed:', e);
+        }
+      }
+      if (typeof asset === 'object') {
+        if (asset.uri) return asset.uri;
+        if (asset.default) {
+          if (typeof asset.default === 'string') return asset.default;
+          if (asset.default.uri) return asset.default.uri;
+        }
+      }
+      return '';
+    };
+
+    const restaurantUri = getAssetUri(require('../../../../../assets/Pin/pin (1).png'));
+    const bakeryUri     = getAssetUri(require('../../../../../assets/Pin/pin (2).png'));
+    const otherUri      = getAssetUri(require('../../../../../assets/Pin/pin (5).png'));
+    const pharmacyUri   = getAssetUri(require('../../../../../assets/Pin/pin (6).png'));
+    const shopUri       = getAssetUri(require('../../../../../assets/Pin/pin (7).png'));
 
     const icons = useMemo(() => ({
       restaurant: restaurantUri,

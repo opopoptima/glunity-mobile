@@ -19,7 +19,7 @@ const createEventSchema = [
 	body('imageUrl')
 		.optional()
 		.isString().withMessage('imageUrl must be a string')
-		.isLength({ max: 1000000 }).withMessage('imageUrl is too long')
+		.isLength({ max: 10000000 }).withMessage('imageUrl is too long')
 		.custom((v) => {
 			if (!v) return true;
 			if (typeof v !== 'string') return false;

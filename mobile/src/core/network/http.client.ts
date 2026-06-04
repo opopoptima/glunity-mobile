@@ -60,43 +60,46 @@ http.interceptors.response.use(
 
       return new Promise((resolve, reject) => {
         TokenStore.getRefreshToken()
-          .then((refreshToken) => {
+          .then(async (refreshToken) => {
             if (!refreshToken) {
-              TokenStore.clearTokens().then(() => {
+              try {
+                await TokenStore.clearTokens();
+              } catch (e) {
+                console.warn('Failed to clear tokens:', e);
+              } finally {
                 if (onUnauthorizedCallback) {
                   onUnauthorizedCallback();
                 }
                 reject(new Error('No refresh token'));
-              });
+              }
               return;
             }
-            axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken })
-              .then(({ data }) => {
-                const accessToken = data.data.accessToken;
-                const newRefreshToken = data.data.refreshToken;
-                TokenStore.setTokens(accessToken, newRefreshToken)
-                  .then(() => {
-                    http.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-                    original.headers.Authorization = `Bearer ${accessToken}`;
-                    processQueue(null, accessToken);
-                    resolve(http(original));
-                  })
-                  .catch((err) => {
-                    processQueue(err, null);
-                    reject(err);
-                  });
-              })
-              .catch((err) => {
-                processQueue(err, null);
-                TokenStore.clearTokens()
-                  .then(() => {
-                    if (onUnauthorizedCallback) {
-                      onUnauthorizedCallback();
-                    }
-                    reject(err);
-                  })
-                  .catch(() => reject(err));
-              });
+
+            try {
+              const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, { refreshToken });
+              const accessToken = data.data.accessToken;
+              const newRefreshToken = data.data.refreshToken;
+
+              await TokenStore.setTokens(accessToken, newRefreshToken);
+
+              http.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+              original.headers.Authorization = `Bearer ${accessToken}`;
+
+              processQueue(null, accessToken);
+              resolve(http(original));
+            } catch (err) {
+              processQueue(err, null);
+              try {
+                await TokenStore.clearTokens();
+              } catch (e) {
+                console.warn('Failed to clear tokens during refresh failure:', e);
+              } finally {
+                if (onUnauthorizedCallback) {
+                  onUnauthorizedCallback();
+                }
+                reject(err);
+              }
+            }
           })
           .catch((err) => {
             reject(err);
