@@ -1,11 +1,13 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing } from '@/shared/utils/theme';
 import { AppScaffold } from '@/shared/components/AppScaffold';
 
 export default function CommunityJoinScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const handleJoin = async () => {
     try {
       await AsyncStorage.setItem('@joined_community', 'true');
@@ -24,8 +26,8 @@ export default function CommunityJoinScreen({ navigation }: any) {
   };
 
   return (
-    <AppScaffold title="Community" activeTab="events" onBack={handleMaybeLater} contentStyle={{ paddingBottom: 0 }}>
-      <ScrollView contentContainerStyle={styles.container}>
+    <AppScaffold title="Community" activeTab="events" onBack={handleMaybeLater}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: 116 + insets.bottom }] }>
 
       <Image
         source={require('../../../../../assets/Logo/image 3.png')}
