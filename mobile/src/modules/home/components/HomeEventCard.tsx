@@ -23,11 +23,31 @@ export default function HomeEventCard({ event, onPress }: Props) {
     return `${weekday}, ${month} ${day} · ${time}`;
   }
 
+  function formatDate(iso?: string | null) {
+    try {
+      const d = iso ? new Date(iso) : null;
+      if (!d || isNaN(d.getTime())) return iso || '';
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch {
+      return iso || '';
+    }
+  }
+
+  function formatTime(iso?: string | null) {
+    try {
+      const d = iso ? new Date(iso) : null;
+      if (!d || isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  }
+
   return (
     <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={[styles.card, { backgroundColor: T.surface }]}>
       <Image source={{ uri: event.imageUrl }} style={styles.image} />
       <View style={styles.body}>
-        <Text style={[styles.title, { color: T.text }]} numberOfLines={2}>{event.title}</Text>
+        <Text style={[styles.title, { color: T.text }]} numberOfLines={1} ellipsizeMode="tail">{event.title}</Text>
 
         <View style={styles.metaRow}>
           <Ionicons name="location-outline" size={12} color={'#C8102E'} />
@@ -36,7 +56,9 @@ export default function HomeEventCard({ event, onPress }: Props) {
 
         <View style={styles.metaRow}>
           <Ionicons name="calendar-outline" size={12} color={'#C8102E'} />
-          <Text style={[styles.metaText, { color: T.textSub }]} numberOfLines={1}>{formatEventDate(event.date || event.startsAt)}</Text>
+          <Text style={[styles.metaText, { color: T.textSub }]} numberOfLines={1}>
+            {formatDate(event.startsAt || event.date)}{(event.startsAt || event.date) ? ` • ${formatTime(event.startsAt || event.date)}` : ''}
+          </Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -48,6 +70,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     width: '100%',
+    height: 228,
     ...Platform.select({
       web: {
         boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.06)',
@@ -63,18 +86,21 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: 120,
+    height: 128,
     backgroundColor: '#F3F4F6',
   },
   body: {
     paddingHorizontal: 10,
     paddingVertical: 10,
+    flex: 1,
+    justifyContent: 'space-between',
   },
   title: {
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 6,
   },
+  
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',

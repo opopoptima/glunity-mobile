@@ -1,5 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, Image } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import type { MapLocation } from '../../domain/location.types';
 import { useTheme } from '@/shared/context/theme.context';
@@ -19,7 +19,7 @@ interface MapWebViewProps {
 
 const DEFAULT_CENTER = { lng: 10.181667, lat: 36.806389 };
 
-function buildHtml(greenColor: string): string {
+function buildHtml(greenColor: string, icons: Record<string, string>): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -28,16 +28,16 @@ function buildHtml(greenColor: string): string {
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     html,body,#map{margin:0;padding:0;height:100%;width:100%;background:#f6f5f3;}
-    .gl-pin{width:48px;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;transform:translate(-50%,-100%);background:transparent;cursor:pointer;}
-    .gl-pin .pin-badge{width:40px;height:40px;border-radius:999px;display:flex;align-items:center;justify-content:center;border:3px solid #fff;box-shadow:0 4px 12px rgba(0,0,0,.15),0 1px 4px rgba(0,0,0,.08);background:${greenColor};transition:transform .3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow .3s ease, border-color .3s ease;}
-    .gl-pin:hover .pin-badge{transform:scale(1.12);}
-    .gl-pin.focus .pin-badge{transform:scale(1.24);box-shadow:0 8px 20px rgba(0,0,0,.22);border-color:#F0FDF4;}
-    .gl-pin .pin-tail{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid currentColor;margin-top:-1px;transition:transform .3s cubic-bezier(0.34, 1.56, 0.64, 1);}
-    .gl-pin.focus .pin-tail{transform:translateY(3px) scaleY(1.15);}
-    .gl-pin svg{width:20px;height:20px;}
-    /* Force all category pins to use the app green color */
-    .cat-restaurant .pin-badge, .cat-grocery .pin-badge, .cat-bakery .pin-badge, .cat-cafe .pin-badge, .cat-pharmacy .pin-badge, .cat-other .pin-badge { background: ${greenColor}; }
-    .cat-restaurant .pin-tail, .cat-grocery .pin-tail, .cat-bakery .pin-tail, .cat-cafe .pin-tail, .cat-pharmacy .pin-tail, .cat-other .pin-tail { color: ${greenColor}; }
+    /* Show only the image for pins (no colored badge or tail). */
+    .gl-pin{width:56px;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;transform:translate(-50%,-100%);background:transparent;cursor:pointer;}
+    .gl-pin .pin-badge{width:auto;height:auto;border-radius:0;display:flex;align-items:center;justify-content:center;border:0;background:transparent;padding:0;margin:0;box-shadow:none;}
+    .gl-pin .pin-badge img{width:56px;height:56px;object-fit:contain;display:block;background:transparent;border-radius:0;padding:0;margin:0;}
+    .gl-pin:hover .pin-badge img{transform:scale(1.03);}
+    .gl-pin.focus .pin-badge img{transform:scale(1.08);}    
+    .gl-pin .pin-tail{display:none;}    
+    /* Ensure no colored background behind the pin image */
+    .cat-restaurant .pin-badge, .cat-grocery .pin-badge, .cat-bakery .pin-badge, .cat-cafe .pin-badge, .cat-pharmacy .pin-badge, .cat-other .pin-badge { background: transparent !important; }
+    .cat-restaurant .pin-tail, .cat-grocery .pin-tail, .cat-bakery .pin-tail, .cat-cafe .pin-tail, .cat-pharmacy .pin-tail, .cat-other .pin-tail { display: none !important; }
     .leaflet-popup-content-wrapper{border-radius:16px;box-shadow:0 12px 30px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.03);padding:4px;background:#ffffff;}
     .leaflet-popup-tip{background:#ffffff;box-shadow:none;}
     .leaflet-popup-close-button{color:#9CA3AF !important;font-size:16px !important;padding:8px 10px 0 0 !important;}
@@ -76,25 +76,25 @@ function buildHtml(greenColor: string): string {
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    // Embedded icon map will be injected by RN
+    var icons = ${JSON.stringify(icons)};
+    // diagnostics removed
     var map=L.map('map',{zoomControl:true,attributionControl:false}).setView([${DEFAULT_CENTER.lat},${DEFAULT_CENTER.lng}],14);
     map.on('click',function(ev){
       send('deselect',{});
     });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',{maxZoom:19,subdomains:'abcd'}).addTo(map);
     var layer=L.layerGroup().addTo(map);
-    var S='viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
-    var ICONS={
-      restaurant:'<svg '+S+'><path d="M7 2v4m0 4v12"/><path d="M5 2v3a2 2 0 0 0 4 0V2"/><path d="M17 2c0 0 0 4-2 5v13"/></svg>',
-      grocery:   '<svg '+S+'><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
-      bakery:    '<svg '+S+'><path d="M12 3C8 3 4 6.5 4 10c0 3 2 5.5 4 7v4h8v-4c2-1.5 4-4 4-7 0-3.5-4-7-8-7z"/><line x1="8" y1="21" x2="16" y2="21"/></svg>',
-      cafe:      '<svg '+S+'><path d="M3 8h13v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><path d="M16 10h3a2 2 0 0 1 0 4h-3"/><path d="M7 21h6m-3-3v3"/></svg>',
-      pharmacy:  '<svg '+S+'><path d="M12 2v20M2 12h20" stroke-width="2.4"/></svg>',
-      other:     '<svg '+S+'><path d="M2 22 16 8"/><path d="M16 8c0 0 3-1 4-4-1 0-4 0-4 4z"/><path d="M8 16c0 0 0 4-2 6"/></svg>',
-    };
-    function iconFor(c){return ICONS[c]||ICONS.other;}
+    /* Use provided PNG icons for markers. icons is an object mapping category->url */
+    function iconFor(c){
+      var url = (icons && icons[c]) || (icons && icons['other']) || '';
+      // send back a small diagnostics message when an icon is requested (helps native debugging)
+      try{ if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(JSON.stringify({type:'iconRequest',payload:{category:c,url:url}}));} }catch(e){}
+      return '<img src="'+url+'" style="width:56px;height:56px;object-fit:contain;display:block;background:transparent;border-radius:0;"/>';
+    }
     function send(t,p){var m=JSON.stringify({type:t,payload:p});if(window.ReactNativeWebView&&window.ReactNativeWebView.postMessage){window.ReactNativeWebView.postMessage(m);}else if(window.parent&&window.parent!==window){window.parent.postMessage(m,'*');}}
     function separate(items){var g={};items.forEach(function(it){var k=Math.round(it.lat*100000)+'|'+Math.round(it.lng*100000);(g[k]=g[k]||[]).push(it);});var out=[];Object.keys(g).forEach(function(k){var gr=g[k];if(gr.length===1){out.push(gr[0]);return;}gr.forEach(function(it,i){var a=(i/gr.length)*Math.PI*2,r=0.00014*(1+Math.floor(i/2));out.push(Object.assign({},it,{lat:it.lat+Math.cos(a)*r,lng:it.lng+Math.sin(a)*r}));});});return out;}
-    function render(items){layer.clearLayers();if(!items||!items.length)return;separate(items).forEach(function(loc){var cat=loc.category||'other';var cls='gl-pin cat-'+cat+(loc.isFocus?' focus':'');var html='<div class="'+cls+'"><div class="pin-badge">'+iconFor(cat)+'</div><div class="pin-tail"></div></div>';var icon=L.divIcon({html:html,className:'',iconSize:[48,56],iconAnchor:[24,56]});var tags='';if(loc.glutenFree)tags+='<span class="gl-tag gl-gf">GF Friendly</span>';if(loc.certified)tags+='<span class="gl-tag gl-cert">Certified</span>';var popup='<div class="gl-name">'+(loc.name||'')+'</div>'+(loc.address?'<div class="gl-addr">'+loc.address+'</div>':'')+(tags?'<div class="gl-tags">'+tags+'</div>':'');var m=L.marker([loc.lat,loc.lng],{icon:icon}).bindPopup(popup);m.on('click',function(ev){L.DomEvent.stopPropagation(ev);send('select',{id:loc.id});});layer.addLayer(m);});}
+    function render(items){layer.clearLayers();if(!items||!items.length)return;separate(items).forEach(function(loc){var cat=loc.category||'other';var cls='gl-pin cat-'+cat+(loc.isFocus?' focus':'');var html='<div class="'+cls+'"><div class="pin-badge">'+iconFor(cat)+'</div></div>';var icon=L.divIcon({html:html,className:'',iconSize:[56,56],iconAnchor:[28,56]});var tags='';if(loc.glutenFree)tags+='<span class="gl-tag gl-gf">GF Friendly</span>';if(loc.certified)tags+='<span class="gl-tag gl-cert">Certified</span>';var popup='<div class="gl-name">'+(loc.name||'')+'</div>'+(loc.address?'<div class="gl-addr">'+loc.address+'</div>':'')+(tags?'<div class="gl-tags">'+tags+'</div>':'');var m=L.marker([loc.lat,loc.lng],{icon:icon}).bindPopup(popup);m.on('click',function(ev){L.DomEvent.stopPropagation(ev);try{m.openPopup();}catch(e){}send('select',{id:loc.id});});layer.addLayer(m);});}
     var userMarker=null,userCircle=null;
     function updateUserLocation(lat,lng){
       if(!lat||!lng){
@@ -126,9 +126,26 @@ function buildHtml(greenColor: string): string {
 export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(
   function MapWebView({ locations, initialCenter, initialZoom, onSelectLocation, focusedId, userLocation }, ref) {
     const { theme: T } = useTheme();
-    const html = useMemo(() => buildHtml(T.green), [T.green]);
+    // Resolve local asset URIs for pin images
+    const restaurantUri = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (1).png')).uri;
+    const bakeryUri     = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (2).png')).uri;
+    const otherUri      = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (5).png')).uri;
+    const pharmacyUri   = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (6).png')).uri;
+    const shopUri       = Image.resolveAssetSource(require('../../../../../assets/Pin/pin (7).png')).uri;
+
+    const icons = useMemo(() => ({
+      restaurant: restaurantUri,
+      bakery: bakeryUri,
+      grocery: shopUri,
+      pharmacy: pharmacyUri,
+      other: otherUri,
+      cafe: restaurantUri,
+    }), [restaurantUri, bakeryUri, otherUri, pharmacyUri, shopUri]);
+
+    const html = useMemo(() => buildHtml(T.green, icons), [T.green, icons]);
     const webRef = useRef<WebView | null>(null);
     const iframeRef = useRef<any>(null);
+    const lastPayloadRef = useRef<string | null>(null);
 
     useImperativeHandle(ref, () => ({
       flyTo(lng, lat, zoom = 16) {
@@ -179,7 +196,11 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(
     // Update markers on location/focus state change for Web
     React.useEffect(() => {
       if (Platform.OS !== 'web') return;
-      const payload = (locations || []).map((l) => Object.assign({}, l, { isFocus: !!(focusedId && l.id === focusedId) }));
+      // normalize payload to avoid tiny differences that would retrigger full rerender in the iframe
+      const payload = (locations || []).map((l) => ({ id: l.id, lat: Number(Number(l.lat).toFixed(6)), lng: Number(Number(l.lng).toFixed(6)), name: l.name || '', address: l.address || '', category: l.category || 'other', glutenFree: !!l.glutenFree, certified: !!l.certified, isFocus: !!(focusedId && l.id === focusedId) }));
+      const serialized = JSON.stringify(payload);
+      if (lastPayloadRef.current === serialized) return;
+      lastPayloadRef.current = serialized;
       const msg = { type: 'setLocations', payload };
       iframeRef.current?.contentWindow?.postMessage(JSON.stringify(msg), '*');
     }, [locations, focusedId]);
@@ -187,7 +208,10 @@ export const MapWebView = forwardRef<MapWebViewHandle, MapWebViewProps>(
     // Update markers on location/focus state change for Native
     React.useEffect(() => {
       if (Platform.OS === 'web') return;
-      const payload = (locations || []).map((l) => Object.assign({}, l, { isFocus: !!(focusedId && l.id === focusedId) }));
+      const payload = (locations || []).map((l) => ({ id: l.id, lat: Number(Number(l.lat).toFixed(6)), lng: Number(Number(l.lng).toFixed(6)), name: l.name || '', address: l.address || '', category: l.category || 'other', glutenFree: !!l.glutenFree, certified: !!l.certified, isFocus: !!(focusedId && l.id === focusedId) }));
+      const serialized = JSON.stringify(payload);
+      if (lastPayloadRef.current === serialized) return;
+      lastPayloadRef.current = serialized;
       const msg = JSON.stringify({ type: 'setLocations', payload });
       webRef.current?.injectJavaScript(`window.dispatchEvent(new MessageEvent('message',{data:${JSON.stringify(msg)}}));true;`);
     }, [locations, focusedId]);

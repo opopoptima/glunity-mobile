@@ -3,8 +3,10 @@
 const Event = require('../../../database/models/event.model');
 
 const eventsRepository = {
-	findMany({ search, type, limit = 50, skip = 0 } = {}) {
+	findMany({ search, type, limit = 50, skip = 0, includeUnpublished = false } = {}) {
+		// By default only return published events. Callers can set includeUnpublished=true to override.
 		const query = {};
+		if (!includeUnpublished) query.isPublished = true;
 		if (search && String(search).trim()) query.$text = { $search: String(search).trim() };
 		if (type && String(type).trim()) query.type = String(type).trim().toLowerCase();
 		return Event.find(query).sort({ startsAt: 1 }).limit(limit).skip(skip).lean();
@@ -18,11 +20,15 @@ const eventsRepository = {
 		return Event.create(payload);
 	},
 
+	findByIdAndUpdateRemoved(eventId, update) {
+		return Event.findByIdAndUpdate(eventId, { $set: update }, { returnDocument: 'after' }).lean();
+	},
+
 	join(eventId, userId) {
 		return Event.findByIdAndUpdate(
 			eventId,
 			{ $addToSet: { attendees: userId } },
-			{ new: true }
+			{ returnDocument: 'after' }
 		).lean();
 	},
 
@@ -30,7 +36,15 @@ const eventsRepository = {
 		return Event.findByIdAndUpdate(
 			eventId,
 			{ $pull: { attendees: userId } },
-			{ new: true }
+			{ returnDocument: 'after' }
+		).lean();
+	},
+
+	cancel(eventId) {
+		return Event.findByIdAndUpdate(
+			eventId,
+			{ $set: { isPublished: false } },
+			{ returnDocument: 'after' }
 		).lean();
 	},
 };

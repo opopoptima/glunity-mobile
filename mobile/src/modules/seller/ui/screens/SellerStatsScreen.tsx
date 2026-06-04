@@ -412,7 +412,7 @@ export default function SellerStatsScreen({ navigation }: Props) {
       activeTab="home"
       onBack={() => navigation.goBack()}
       onPressHome={() => navigation.navigate('Home')}
-      onPressEvents={() => navigation.navigate('Map')}
+      onPressEvents={() => navigation.navigate('Events')}
       onPressCenter={() => {}}
       onPressReels={() => {}}
       onPressProfile={() => {

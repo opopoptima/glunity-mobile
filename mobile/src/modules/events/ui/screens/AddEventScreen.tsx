@@ -21,6 +21,7 @@ import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/modules/auth/state/auth.context';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'AddEvent'>;
 
@@ -34,6 +35,7 @@ const EVENT_TYPES = [
 
 export default function AddEventScreen({ navigation }: Props) {
   const { theme: T } = useTheme();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { isRTL } = useLanguage();
   const { width: windowWidth } = useWindowDimensions();
@@ -45,20 +47,56 @@ export default function AddEventScreen({ navigation }: Props) {
   const [type, setType] = useState('meetup');
   const [description, setDescription] = useState('');
   const [startsAt, setStartsAt] = useState('');
+  const [hour, setHour] = useState('11');
+  const [minute, setMinute] = useState('00');
+  const [ampm, setAmpm] = useState('AM');
+  const [hourError, setHourError] = useState(false);
+  const [minuteError, setMinuteError] = useState(false);
+  const [showHourDropdown, setShowHourDropdown] = useState(false);
+  const [showMinuteDropdown, setShowMinuteDropdown] = useState(false);
+  const [showAmPmDropdown, setShowAmPmDropdown] = useState(false);
   const [locName, setLocName] = useState('');
   const [locAddress, setLocAddress] = useState('');
+  const [locNameError, setLocNameError] = useState(false);
+  const [locAddressError, setLocAddressError] = useState(false);
   const [locCity, setLocCity] = useState('');
   const [locCountry, setLocCountry] = useState('Tunisia');
   const [maxCapacity, setMaxCapacity] = useState('20');
+  const [capacityError, setCapacityError] = useState(false);
   const [price, setPrice] = useState('0');
+  const [priceError, setPriceError] = useState(false);
   const [eventImage, setEventImage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
+
+  // Ensure Starts At uses YYYY-MM-DD with hyphens as the user types.
+  function formatDateInput(input: string) {
+    if (!input) return '';
+    // Keep digits only
+    const digits = input.replace(/[^0-9]/g, '');
+    const parts: string[] = [];
+    if (digits.length <= 4) {
+      parts.push(digits);
+    } else if (digits.length <= 6) {
+      parts.push(digits.slice(0, 4));
+      parts.push(digits.slice(4));
+    } else {
+      parts.push(digits.slice(0, 4));
+      parts.push(digits.slice(4, 6));
+      parts.push(digits.slice(6, 8));
+    }
+    return parts.join('-').slice(0, 10);
+  }
+
+  
 
   // Status State
   const [titleError, setTitleError] = useState(false);
   const [dateError, setDateError] = useState(false);
+  const [dateErrorMsg, setDateErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showDateErrorModal, setShowDateErrorModal] = useState(false);
 
   const s = React.useMemo(() => StyleSheet.create({
     safe: { flex: 1, backgroundColor: T.bg },
@@ -198,6 +236,7 @@ export default function AddEventScreen({ navigation }: Props) {
       borderColor: T.border,
       marginTop: 6,
       overflow: 'hidden',
+      maxHeight: 220,
       elevation: 4,
     },
     dropdownItem: {
@@ -240,6 +279,16 @@ export default function AddEventScreen({ navigation }: Props) {
       flexDirection: isRTL ? 'row-reverse' : 'row',
       gap: 12,
       width: '100%',
+    },
+    timeRow: {
+      flexDirection: isRTL ? 'row-reverse' : 'row',
+      gap: 12,
+      width: '100%',
+      alignItems: 'flex-start',
+      marginTop: 8,
+    },
+    timeCol: {
+      flex: 1,
     },
     col: {
       flex: 1,
@@ -317,6 +366,15 @@ export default function AddEventScreen({ navigation }: Props) {
     },
   }), [T, screenWidth, isRTL]);
 
+  const canSubmit = React.useMemo(() => {
+    if (!title.trim()) return false;
+    if (!startsAt.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(startsAt.trim())) return false;
+    if (user?.profileType === 'pro_commerce' && !eventImage) return false;
+    if (maxCapacity && isNaN(Number(maxCapacity))) return false;
+    if (price && isNaN(Number(price))) return false;
+    return true;
+  }, [title, startsAt, eventImage, maxCapacity, price, user]);
+
   // Set default Unsplash image if none picked
   const getPresetImage = (eventCategory: string) => {
     switch (eventCategory) {
@@ -351,30 +409,131 @@ export default function AddEventScreen({ navigation }: Props) {
       } else {
         setEventImage(asset.uri);
       }
+      setImageError(false);
     }
   };
 
-  const handleSubmit = async () => {
-    setTitleError(false);
-    setDateError(false);
-
+  function validateAll() {
+    let ok = true;
+    // title
     if (!title.trim()) {
       setTitleError(true);
-      return;
+      ok = false;
     }
-    if (!startsAt.trim()) {
+    // date
+    if (!startsAt.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(startsAt.trim())) {
       setDateError(true);
-      return;
+      setDateErrorMsg('Date format is required (e.g. YYYY-MM-DD).');
+      setShowDateErrorModal(true);
+      ok = false;
+    }
+    // time ranges
+    const h = parseInt(hour, 10);
+    const m = parseInt(minute, 10);
+    if (isNaN(h) || h < 1 || h > 12) {
+      setHourError(true);
+      ok = false;
+    }
+    if (isNaN(m) || m < 0 || m > 59) {
+      setMinuteError(true);
+      ok = false;
+    }
+    // pro user: require image and location fields
+    if (user?.profileType === 'pro_commerce') {
+      if (!eventImage) {
+        setImageError(true);
+        ok = false;
+      }
+      if (!locName.trim()) {
+        setLocNameError(true);
+        ok = false;
+      }
+      if (!locAddress.trim()) {
+        setLocAddressError(true);
+        ok = false;
+      }
+    }
+    // numeric checks
+    if (maxCapacity && isNaN(Number(maxCapacity))) {
+      setCapacityError(true);
+      ok = false;
+    }
+    if (price && isNaN(Number(price))) {
+      setPriceError(true);
+      ok = false;
     }
 
+    return ok;
+  }
+
+  const handleSubmit = async () => {
+    // validate all fields first
     setIsSubmitting(true);
+    const ok = validateAll();
+    if (!ok) {
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
+      // Parse date (YYYY-MM-DD) and combine with selected time (hour/minute/AM-PM)
+      const dateMatch = startsAt.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!dateMatch) {
+        setDateError(true);
+        setDateErrorMsg('Date format is required (e.g. YYYY-MM-DD).');
+        setShowDateErrorModal(true);
+        setIsSubmitting(false);
+        return;
+      }
+      const y = parseInt(dateMatch[1], 10);
+      const mm = parseInt(dateMatch[2], 10); // 1-based month
+      const d = parseInt(dateMatch[3], 10);
+      // validate month range
+      if (isNaN(mm) || mm < 1 || mm > 12) {
+        setDateError(true);
+        setDateErrorMsg('Month must be between 01 and 12.');
+        setShowDateErrorModal(true);
+        setIsSubmitting(false);
+        return;
+      }
+      // validate day range for the month (handles leap years)
+      const daysInMonth = new Date(y, mm, 0).getDate();
+      if (isNaN(d) || d < 1 || d > daysInMonth) {
+        setDateError(true);
+        setDateErrorMsg(`Day must be between 01 and ${String(daysInMonth).padStart(2, '0')}.`);
+        setShowDateErrorModal(true);
+        setIsSubmitting(false);
+        return;
+      }
+      let h = parseInt(hour, 10);
+      if (ampm === 'PM' && h < 12) h += 12;
+      if (ampm === 'AM' && h === 12) h = 0;
+      const mins = parseInt(minute, 10);
+      const dt = new Date(y, mm - 1, d, h, mins, 0);
+      if (isNaN(dt.getTime())) {
+        setDateError(true);
+        setDateErrorMsg('Invalid date.');
+        setShowDateErrorModal(true);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // startsAt must be in the future
+      if (dt.getTime() <= Date.now()) {
+        setDateError(true);
+        setDateErrorMsg('Event start date/time must be in the future.');
+        setShowDateErrorModal(true);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // image requirement already validated by validateAll
+
       const payload = {
         title: title.trim(),
         type,
         description: description.trim(),
-        startsAt: new Date(startsAt).toISOString(),
+        startsAt: dt.toISOString(),
         location: {
           name: locName.trim() || 'Tunis',
           address: locAddress.trim() || 'Avenue Habib Bourguiba',
@@ -383,6 +542,7 @@ export default function AddEventScreen({ navigation }: Props) {
         },
         maxCapacity: maxCapacity ? parseInt(maxCapacity, 10) : 0,
         price: price ? parseFloat(price) : 0,
+        // For pro users we already ensured eventImage exists; non-pros can use a preset image
         imageUrl: eventImage || getPresetImage(type),
       };
 
@@ -416,7 +576,7 @@ export default function AddEventScreen({ navigation }: Props) {
       );
     });
     return unsubscribe;
-  }, [navigation, title, description, locName, locAddress, startsAt, isSubmitting, showSuccessModal]);
+  }, [navigation, title, description, locName, locAddress, startsAt, hour, minute, ampm, isSubmitting, showSuccessModal]);
 
   const handleSuccessClose = () => {
     setShowSuccessModal(false);
@@ -504,10 +664,87 @@ export default function AddEventScreen({ navigation }: Props) {
             placeholder="YYYY-MM-DD e.g. 2026-06-15"
             placeholderTextColor={T.textMuted}
             value={startsAt}
-            onChangeText={setStartsAt}
+            onChangeText={(v) => { setStartsAt(formatDateInput(v)); setDateError(false); setDateErrorMsg(''); setShowDateErrorModal(false); }}
             style={[s.input, dateError ? s.inputError : null]}
+            maxLength={10}
+            keyboardType="number-pad"
           />
-          {dateError && <Text style={s.errorText}>Date format is required (e.g. YYYY-MM-DD).</Text>}
+          {dateError && <Text style={s.errorText}>{dateErrorMsg || 'Date format is required (e.g. YYYY-MM-DD).'}</Text>}
+
+          {/* Time selectors: Hour / Minute / AM-PM */}
+          <View style={s.timeRow}>
+            <View style={s.timeCol}>
+              <Text style={s.label}>Hour</Text>
+              <TouchableOpacity
+                style={s.selectTrigger}
+                activeOpacity={0.85}
+                onPress={() => { setShowHourDropdown(!showHourDropdown); setShowMinuteDropdown(false); setShowAmPmDropdown(false); }}
+              >
+                <Text style={s.selectText}>{hour}</Text>
+                <Feather name={showHourDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={T.text} />
+              </TouchableOpacity>
+              {showHourDropdown && (
+                <ScrollView style={s.dropdownList} nestedScrollEnabled={true}>
+                  {Array.from({ length: 12 }).map((_, i) => {
+                    const v = String(i + 1);
+                    return (
+                      <TouchableOpacity key={v} style={s.dropdownItem} onPress={() => { setHour(v); setHourError(false); setShowHourDropdown(false); }}>
+                        <Text style={s.dropdownItemText}>{v}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+              {hourError && <Text style={s.errorText}>Please select a valid hour (1-12).</Text>}
+            </View>
+
+            <View style={{ width: 120 }}>
+              <Text style={s.label}>Minute</Text>
+              <TouchableOpacity
+                style={s.selectTrigger}
+                activeOpacity={0.85}
+                onPress={() => { setShowMinuteDropdown(!showMinuteDropdown); setShowHourDropdown(false); setShowAmPmDropdown(false); }}
+              >
+                <Text style={s.selectText}>{minute}</Text>
+                <Feather name={showMinuteDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={T.text} />
+              </TouchableOpacity>
+              {showMinuteDropdown && (
+                <ScrollView style={s.dropdownList} nestedScrollEnabled={true}>
+                  {Array.from({ length: 60 }).map((_, i) => {
+                    const v = i < 10 ? `0${i}` : `${i}`;
+                    return (
+                      <TouchableOpacity key={v} style={s.dropdownItem} onPress={() => { setMinute(v); setMinuteError(false); setShowMinuteDropdown(false); setDateError(false); setDateErrorMsg(''); setShowDateErrorModal(false); }}>
+                        <Text style={s.dropdownItemText}>{v}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+              {minuteError && <Text style={s.errorText}>Please select a valid minute (00-59).</Text>}
+            </View>
+
+            <View style={{ width: 100 }}>
+              <Text style={s.label}>AM/PM</Text>
+              <TouchableOpacity
+                style={s.selectTrigger}
+                activeOpacity={0.85}
+                onPress={() => { setShowAmPmDropdown(!showAmPmDropdown); setShowHourDropdown(false); setShowMinuteDropdown(false); }}
+              >
+                <Text style={s.selectText}>{ampm}</Text>
+                <Feather name={showAmPmDropdown ? 'chevron-up' : 'chevron-down'} size={18} color={T.text} />
+              </TouchableOpacity>
+              {showAmPmDropdown && (
+                <ScrollView style={s.dropdownList} nestedScrollEnabled={true}>
+                  {['AM', 'PM'].map((a) => (
+                    <TouchableOpacity key={a} style={s.dropdownItem} onPress={() => { setAmpm(a); setShowAmPmDropdown(false); setDateError(false); setDateErrorMsg(''); setShowDateErrorModal(false); }}>
+                      <Text style={s.dropdownItemText}>{a}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+              
+            </View>
+          </View>
         </View>
 
         {/* Location Section */}
@@ -523,9 +760,10 @@ export default function AddEventScreen({ navigation }: Props) {
               placeholder="e.g. Green Bakery"
               placeholderTextColor={T.textMuted}
               value={locName}
-              onChangeText={setLocName}
+              onChangeText={(v) => { setLocName(v); setLocNameError(false); }}
               style={s.input}
             />
+            {locNameError && <Text style={s.errorText}>Venue name is required for pro accounts.</Text>}
           </View>
 
           <View style={s.inputGroup}>
@@ -534,9 +772,10 @@ export default function AddEventScreen({ navigation }: Props) {
               placeholder="e.g. 15 Avenue de Paris"
               placeholderTextColor={T.textMuted}
               value={locAddress}
-              onChangeText={setLocAddress}
+              onChangeText={(v) => { setLocAddress(v); setLocAddressError(false); }}
               style={s.input}
             />
+            {locAddressError && <Text style={s.errorText}>Street address is required for pro accounts.</Text>}
           </View>
 
           <View style={s.row}>
@@ -572,9 +811,10 @@ export default function AddEventScreen({ navigation }: Props) {
               placeholder="20"
               placeholderTextColor={T.textMuted}
               value={maxCapacity}
-              onChangeText={setMaxCapacity}
+              onChangeText={(v) => { setMaxCapacity(v); setCapacityError(false); }}
               style={s.input}
             />
+            {capacityError && <Text style={s.errorText}>Enter a valid number for capacity.</Text>}
           </View>
           <View style={[s.inputGroup, s.col]}>
             <Text style={s.label}>Price (TND)</Text>
@@ -583,9 +823,10 @@ export default function AddEventScreen({ navigation }: Props) {
               placeholder="0 (Free)"
               placeholderTextColor={T.textMuted}
               value={price}
-              onChangeText={setPrice}
+              onChangeText={(v) => { setPrice(v); setPriceError(false); }}
               style={s.input}
             />
+            {priceError && <Text style={s.errorText}>Enter a valid price (numbers only).</Text>}
           </View>
         </View>
 
@@ -605,10 +846,10 @@ export default function AddEventScreen({ navigation }: Props) {
 
         {/* Submit */}
         <TouchableOpacity
-          style={s.submitBtn}
+          style={[s.submitBtn, (!canSubmit || isSubmitting) ? { opacity: 0.6 } : null]}
           activeOpacity={0.85}
           onPress={handleSubmit}
-          disabled={isSubmitting}
+          disabled={!canSubmit || isSubmitting}
         >
           {isSubmitting ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
@@ -630,6 +871,19 @@ export default function AddEventScreen({ navigation }: Props) {
             <Text style={s.modalSub}>Your gluten-free event is now published and visible to the community.</Text>
             <TouchableOpacity style={s.okBtn} onPress={handleSuccessClose} activeOpacity={0.85}>
               <Text style={s.okBtnText}>Go to Calendar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Date Error Modal */}
+      <Modal visible={showDateErrorModal} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalContent}>
+            <Text style={s.modalTitle}>Invalid date</Text>
+            <Text style={s.modalSub}>{dateErrorMsg || 'Event start date/time must be in the future.'}</Text>
+            <TouchableOpacity style={s.okBtn} onPress={() => setShowDateErrorModal(false)} activeOpacity={0.85}>
+              <Text style={s.okBtnText}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>

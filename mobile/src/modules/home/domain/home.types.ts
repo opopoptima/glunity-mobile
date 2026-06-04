@@ -32,6 +32,8 @@ export interface GlunityEvent {
   locationLat?: number;
   locationLng?: number;
   maxCapacity?: number;
+  price?: number;
+  currency?: string;
 }
 
 export interface HomeScreenProps {

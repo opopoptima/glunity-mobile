@@ -42,6 +42,21 @@ const eventsController = {
 		const updated = await service.leave(req.params.id, userId);
 		res.status(200).json(mapper.toEventResponse(updated));
 	}),
+
+	// POST /api/events/:id/cancel (auth)
+	cancel: asyncHandler(async (req, res) => {
+		const userId = req.user?._id;
+		const updated = await service.cancel(req.params.id, userId);
+		res.status(200).json(mapper.toEventResponse(updated));
+	}),
+
+	// POST /api/events/:id/remove (auth) — pro_commerce or organizer can soft-remove
+	remove: asyncHandler(async (req, res) => {
+		const userId = req.user?._id;
+		const profileType = req.user?.profileType;
+		const updated = await service.remove(req.params.id, userId, profileType);
+		res.status(200).json(mapper.toEventResponse(updated));
+	}),
 };
 
 module.exports = eventsController;

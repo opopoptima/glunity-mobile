@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import FastImage from '@/shared/components/FastImage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
@@ -13,6 +14,59 @@ type Props = {
 export default function EventCard({ event, onPress }: Props) {
   const { theme: T } = useTheme();
   const { isRTL } = useLanguage();
+
+
+  const [loaded, setLoaded] = React.useState(false);
+  const imageSource = event.imageUrl ? { uri: event.imageUrl } : null;
+  const loadStartRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    if (event.imageUrl) {
+      loadStartRef.current = Date.now();
+    } else {
+      loadStartRef.current = null;
+    }
+  }, [event.imageUrl]);
+
+  // Optimize image URL (request a smaller width when possible) to speed load
+  function optimizedUrl(url?: string | null, w = 800) {
+    if (!url) return url;
+    try {
+      const u = new URL(url);
+      // Unsplash supports width/format params
+      if (u.hostname.includes('images.unsplash.com')) {
+        if (u.search) u.search += '&';
+        u.search += `w=${w}&auto=format&fit=crop&q=80`;
+        return u.toString();
+      }
+      // Fallback: return original
+      return url;
+    } catch (e) {
+      return url;
+    }
+  }
+
+  const optimizedSource = imageSource ? { uri: optimizedUrl(imageSource.uri, 800) } : null;
+
+  function formatDate(d?: string | null) {
+    try {
+      const dt = d ? new Date(d) : null;
+      if (!dt) return event.date || '';
+      return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    } catch {
+      return event.date || '';
+    }
+  }
+
+  function formatTime(d?: string | null) {
+    try {
+      const dt = d ? new Date(d) : null;
+      if (!dt) return '';
+      return dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  }
 
   const styles = React.useMemo(() => StyleSheet.create({
     card: {
@@ -44,8 +98,9 @@ export default function EventCard({ event, onPress }: Props) {
     metaRow: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', marginTop: 6 },
     metaIcon: { marginRight: isRTL ? 0 : 8, marginLeft: isRTL ? 8 : 0 },
     cardFooter: { marginTop: 10, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'center' },
-    badge: { backgroundColor: '#E6FFFA', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center' },
-    badgeText: { color: '#047857', fontWeight: '700', marginLeft: isRTL ? 0 : 6, marginRight: isRTL ? 6 : 0 },
+    badge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center' },
+    badgeText: { fontWeight: '700', marginLeft: isRTL ? 0 : 6, marginRight: isRTL ? 6 : 0 },
+    locationRow: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center' },
   }), [T, isRTL]);
 
   return (
@@ -54,30 +109,44 @@ export default function EventCard({ event, onPress }: Props) {
       onPress={onPress}
       activeOpacity={0.85}
     >
-      <Image source={{ uri: event.imageUrl }} style={styles.cardImage} />
+      <View style={{ position: 'relative' }}>
+        {/* neutral placeholder rectangle (no logo) */}
+        <View style={styles.cardImage} />
+        {imageSource ? (
+          <FastImage
+            source={optimizedSource}
+            style={[styles.cardImage, { position: 'absolute', left: 0, top: 0, opacity: loaded ? 1 : 0 }]}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="disk"
+            priority="high"
+            onLoad={() => { setLoaded(true); }}
+            onError={() => { /* ignore image error */ }}
+          />
+        ) : null}
+      </View>
       {event.type ? (
         <View style={[styles.typePill, { backgroundColor: T.surface }]}>
           <Text style={[styles.typePillText, { color: T.red || '#EF4444' }]}>{event.type}</Text>
         </View>
       ) : null}
       <View style={styles.cardBody}>
-        <Text style={[styles.cardTitle, { color: T.text }]} numberOfLines={2}>{event.title}</Text>
+        <Text style={[styles.cardTitle, { color: T.text }]} numberOfLines={1} ellipsizeMode="tail">{event.title}</Text>
 
         <View style={styles.metaRow}>
-          <Ionicons name="calendar-outline" size={16} color={T.green} style={styles.metaIcon} />
-          <Text style={[styles.cardMeta, { color: T.textSub }]}>{event.date}</Text>
+          <Ionicons name="calendar" size={18} color={T.text} style={styles.metaIcon} />
+          <Text style={[styles.cardMeta, { color: T.textSub }]}>{formatDate(event.startsAt)}{event.startsAt ? ` • ${formatTime(event.startsAt)}` : ''}</Text>
         </View>
-
-        <View style={styles.metaRow}>
-          <Ionicons name="location-outline" size={16} color={T.textSub} style={styles.metaIcon} />
-          <Text style={[styles.cardMeta, { color: T.textSub }]} numberOfLines={1}>{event.location}</Text>
-        </View>
+        {/* location moved to footer to match requested design */}
 
         <View style={styles.cardFooter}>
-          <View />
-          <View style={styles.badge}>
-            <Ionicons name="people" size={14} color={'#047857'} />
-            <Text style={styles.badgeText}>{event.attendeesCount || 0} going</Text>
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={14} color={T.textSub} style={styles.metaIcon} />
+            <Text style={[styles.cardMeta, { color: T.textSub }]} numberOfLines={1}>{event.location}</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: T.greenLight }]}> 
+            <Ionicons name="people" size={14} color={T.green} />
+            <Text style={[styles.badgeText, { color: T.green }]}>{event.attendeesCount || 0} going</Text>
           </View>
         </View>
       </View>

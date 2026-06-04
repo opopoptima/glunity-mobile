@@ -304,7 +304,7 @@ export default function EditProfileScreen({ navigation }: Props) {
       onBack={() => navigation.goBack()}
       rightIcon="bell-outline"
       onPressHome={() => navigation.navigate('Home')}
-      onPressEvents={() => navigation.navigate('Map')}
+      onPressEvents={() => navigation.navigate('Events')}
       onPressCenter={() => {}}
       onPressReels={() => {}}
       onPressProfile={() => {

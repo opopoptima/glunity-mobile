@@ -105,7 +105,11 @@ export default function NotificationsScreen({ navigation }: Props) {
 
   const handleNavigation = (item: Notification) => {
     const meta = item.metadata || {};
-    if (meta.eventId) {
+    if (meta.eventId && meta.kind === 'removed') {
+      // Removed events: send user to the Events list (event no longer exists)
+      navigation.navigate('Events');
+    } else if (meta.eventId) {
+      // Other event notifications (including cancelled) open detail
       navigation.navigate('EventDetail', { eventId: meta.eventId });
     } else if (meta.productId) {
       navigation.navigate('ProductDetail', { productId: meta.productId });
@@ -187,7 +191,7 @@ export default function NotificationsScreen({ navigation }: Props) {
         listContent: {
           paddingHorizontal: 16,
           paddingTop: 12,
-          paddingBottom: 120, // offset BottomNavBar overlay
+          paddingBottom: 0, // offset BottomNavBar overlay
         },
         card: {
           flexDirection: isRTL ? 'row-reverse' : 'row',

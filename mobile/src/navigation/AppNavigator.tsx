@@ -23,6 +23,8 @@ import EventDetailScreen from '../modules/events/ui/screens/EventDetailScreen';
 import AddEventScreen from '../modules/events/ui/screens/AddEventScreen';
 import NotificationsScreen from '../modules/notifications/ui/screens/NotificationsScreen';
 import PatientResourcesScreen from '../modules/patient-resources/ui/screens/PatientResourcesScreen';
+import CommunityJoinScreen from '../modules/community/ui/screens/CommunityJoinScreen';
+import CommunityChatScreen from '../modules/community/ui/screens/CommunityChatScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -50,7 +52,7 @@ export function AppNavigator() {
               return { ...item, onPress: () => navigation.navigate('PatientResources') };
             }
             if (item.id === 'community') {
-              return { ...item, onPress: () => navigation.navigate('Events') };
+              return { ...item, onPress: () => navigation.navigate('Community') };
             }
             return item;
           });
@@ -141,6 +143,8 @@ export function AppNavigator() {
         }}
       </Stack.Screen>
       <Stack.Screen name="Events" component={EventsCalendarScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="Community" component={CommunityJoinScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="CommunityChat" component={CommunityChatScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="AddEvent" component={AddEventScreen} options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />

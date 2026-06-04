@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, FlatList, ScrollView, TextInput, Animated, Easing } from 'react-native';
+import { ActivityIndicator } from 'react-native';
 import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
 import { Radius } from '@/shared/utils/theme';
@@ -19,6 +20,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { isRTL, t } = useLanguage();
   const [events, setEvents] = React.useState<GlunityEvent[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
   const [filter, setFilter] = React.useState('All');
 
   // Search State
@@ -65,12 +67,47 @@ export default function EventsCalendarScreen({ navigation }: any) {
     let mounted = true;
     (async () => {
       try {
+        setIsLoading(true);
         const apiType = TYPE_MAP[filter as keyof typeof TYPE_MAP];
         const list = await eventsApi.list(apiType ? { type: apiType } : undefined);
         if (!mounted) return;
         setEvents(list);
+        // Prefetch top event images to improve perceived load speed
+        try {
+          const top = (list || []).slice(0, 8).map(i => i.imageUrl).filter(Boolean);
+          // Prefetch with diagnostics (log success/failure and timings)
+          function optimizedUrl(url?: string | null, w = 800) {
+            if (!url) return url;
+            try {
+              const u = new URL(url);
+              if (u.hostname.includes('images.unsplash.com')) {
+                if (u.search) u.search += '&';
+                u.search += `w=${w}&auto=format&fit=crop&q=80`;
+                return u.toString();
+              }
+              return url;
+            } catch (e) { return url; }
+          }
+
+          top.forEach(async (url) => {
+            const start = Date.now();
+            try {
+              const u = optimizedUrl(url, 800);
+              // wait up to 1500ms for prefetch, then give up
+              await Promise.race([
+                Image.prefetch(u),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('prefetch-timeout')), 1500)),
+              ]);
+              // diagnostic logs removed
+            } catch (err) {
+              // diagnostic logs removed
+            }
+          });
+        } catch (e) { /* ignore prefetch errors */ }
       } catch (err) {
         // ignore, keep empty
+      } finally {
+        if (mounted) setIsLoading(false);
       }
     })();
     return () => { mounted = false; };
@@ -139,7 +176,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
       color: '#FFFFFF',
       fontWeight: '700',
     },
-    list: { paddingBottom: 120, paddingTop: 6 },
+    list: { paddingBottom: 0, paddingTop: 6 },
 
     // Search input styles
     searchWrap: {
@@ -304,15 +341,30 @@ export default function EventsCalendarScreen({ navigation }: any) {
           stickyHeaderIndices={[0]}
           ListEmptyComponent={() => (
             <View style={{ padding: 24, alignItems: 'center' }}>
-              <Text style={{ color: T.textSub, fontSize: 15 }}>{t('No events to display.')}</Text>
+              {isLoading ? (
+                <ActivityIndicator size="small" color={T.green} />
+              ) : (
+                <Text style={{ color: T.textSub, fontSize: 15 }}>{t('No events to display.')}</Text>
+              )}
             </View>
           )}
           style={{ flex: 1 }}
           renderItem={({ item }) => (
-            <EventCard
-              event={item}
-              onPress={() => navigation.navigate('EventDetail', { eventId: item.id })}
-            />
+              <EventCard
+                event={item}
+                onPress={async () => {
+                  // Try to prefetch the event image quickly before navigating to reduce UI flicker
+                  try {
+                    const url = item.imageUrl;
+                    if (url) {
+                      const p = Image.prefetch(url);
+                      // don't wait more than 600ms for the prefetch – navigate anyway
+                      await Promise.race([p, new Promise((res) => setTimeout(res, 600))]);
+                    }
+                  } catch (e) { /* ignore */ }
+                  navigation.navigate('EventDetail', { eventId: item.id });
+                }}
+              />
           )}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}

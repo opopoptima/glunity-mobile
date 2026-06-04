@@ -604,7 +604,7 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
       onBack={!isOwnProfile ? () => navigation.goBack() : undefined}
       rightIcon="bell-outline"
       onPressHome={() => navigation.navigate('Home')}
-      onPressEvents={() => navigation.navigate('Map')}
+      onPressEvents={() => navigation.navigate('Events')}
       onPressCenter={() => {}}
       onPressReels={() => {}}
       onPressProfile={() => {

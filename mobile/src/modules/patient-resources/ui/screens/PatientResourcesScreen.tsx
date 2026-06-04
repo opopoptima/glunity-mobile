@@ -172,7 +172,7 @@ export default function PatientResourcesScreen({ navigation }: Props) {
       StyleSheet.create({
         page: { flex: 1, backgroundColor: T.bg },
         scroll: { flex: 1 },
-        content: { paddingBottom: 120 },
+        content: { paddingBottom: 0 },
 
         // ── Section label ──
         sectionRow: {

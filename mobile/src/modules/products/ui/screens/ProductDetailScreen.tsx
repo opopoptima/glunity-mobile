@@ -330,7 +330,7 @@ export default function ProductDetailScreen({ route, navigation }: Props) {
       onBack={() => navigation.goBack()}
       rightElement={headerActions}
       onPressHome={() => navigation.navigate('Home')}
-      onPressEvents={() => navigation.navigate('Map')}
+      onPressEvents={() => navigation.navigate('Events')}
       onPressCenter={() => {}}
       onPressReels={() => {}}
       onPressProfile={handleProfileNav}

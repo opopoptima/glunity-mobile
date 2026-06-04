@@ -378,7 +378,7 @@ export default function SettingsScreen({ navigation }: Props) {
       activeTab="profile"
       onBack={() => navigation.goBack()}
       onPressHome={() => navigation.navigate('Home')}
-      onPressEvents={() => navigation.navigate('Map')}
+      onPressEvents={() => navigation.navigate('Events')}
       onPressCenter={() => {}}
       onPressReels={() => {}}
       onPressProfile={() => {
