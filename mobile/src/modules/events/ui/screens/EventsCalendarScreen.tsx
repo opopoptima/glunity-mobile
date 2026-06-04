@@ -221,7 +221,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
     badgeText: { color: '#047857', fontWeight: '700', marginLeft: isRTL ? 0 : 6, marginRight: isRTL ? 6 : 0 },
     fab: {
       position: 'absolute',
-      bottom: 96 + Math.max(insets.bottom, 12) + 20,
+      bottom: 24,
       right: isRTL ? undefined : 20,
       left: isRTL ? 20 : undefined,
       height: 46,
