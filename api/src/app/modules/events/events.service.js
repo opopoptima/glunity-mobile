@@ -9,8 +9,7 @@ const Notification = require('../../../database/models/notification.model');
 
 const eventsService = {
 	async list(query) {
-		const items = await repo.findMany(query);
-		const total = items.length;
+		const { items, total } = await repo.findMany(query);
 		return { items, total };
 	},
 

@@ -3,13 +3,17 @@
 const Event = require('../../../database/models/event.model');
 
 const eventsRepository = {
-	findMany({ search, type, limit = 50, skip = 0, includeUnpublished = false } = {}) {
+	async findMany({ search, type, limit = 50, skip = 0, includeUnpublished = false } = {}) {
 		// By default only return published events. Callers can set includeUnpublished=true to override.
 		const query = {};
 		if (!includeUnpublished) query.isPublished = true;
 		if (search && String(search).trim()) query.$text = { $search: String(search).trim() };
 		if (type && String(type).trim()) query.type = String(type).trim().toLowerCase();
-		return Event.find(query).sort({ startsAt: 1 }).limit(limit).skip(skip).lean();
+		const [items, total] = await Promise.all([
+			Event.find(query).sort({ startsAt: 1 }).skip(skip).limit(limit).lean(),
+			Event.countDocuments(query),
+		]);
+		return { items, total };
 	},
 
 	findById(id) {

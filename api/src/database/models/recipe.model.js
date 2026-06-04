@@ -129,7 +129,9 @@ recipeSchema.pre('validate', function preValidate(next) {
 		const randomSuffix = Math.random().toString(36).slice(2, 7);
 		this.slug = `${slugifyTitle(this.title)}-${randomSuffix}`;
 	}
-	next();
+	if (typeof next === 'function') {
+		next();
+	}
 });
 
 recipeSchema.methods.toPublic = function toPublic(userId = null) {
