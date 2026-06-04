@@ -9,6 +9,7 @@ function toEventDto(doc) {
 		type: doc.type,
 		description: doc.description || '',
 		imageUrl: (doc.images && doc.images[0] && doc.images[0].url) || '',
+		createdBy: doc.createdBy ? (doc.createdBy._id ? String(doc.createdBy._id) : String(doc.createdBy)) : undefined,
 		location: doc.location?.name || doc.location?.address || '',
 		locationLat: doc.location?.lat,
 		locationLng: doc.location?.lng,
@@ -20,7 +21,7 @@ function toEventDto(doc) {
 		attendees: (doc.attendees || []).map(a => (a && a._id) ? String(a._id) : String(a)),
 		maxCapacity: doc.maxCapacity || 0,
 		price: doc.price || 0,
-		currency: doc.currency || 'USD',
+		currency: doc.currency || 'TND',
 		createdAt: doc.createdAt,
 		updatedAt: doc.updatedAt,
 	};

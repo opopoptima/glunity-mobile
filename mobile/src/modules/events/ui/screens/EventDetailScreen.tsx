@@ -7,6 +7,8 @@ import { Radius } from '@/shared/utils/theme';
 import { eventsApi } from '../../../home/api/events.api';
 import { useAuth } from '@/modules/auth/state/auth.context';
 import { Ionicons } from '@expo/vector-icons';
+import FastImage from '@/shared/components/FastImage';
+import { Alert } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -20,11 +22,36 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   const [joining, setJoining] = React.useState(false);
   const { user } = useAuth();
 
+  function optimizedUrl(url?: string | null, w = 1200) {
+    if (!url) return url;
+    try {
+      const u = new URL(url);
+      if (u.hostname.includes('images.unsplash.com')) {
+        if (u.search) u.search += '&';
+        u.search += `w=${w}&auto=format&fit=crop&q=80`;
+        return u.toString();
+      }
+      return url;
+    } catch (e) { return url; }
+  }
+
   const isJoined = React.useMemo(() => {
     if (!event || !user) return false;
     const attendees: string[] = event.attendees || [];
     return attendees.includes(user._id);
   }, [event, user]);
+
+  const isFinished = React.useMemo(() => {
+    if (!event) return false;
+    try {
+      if (event.isFinished) return true;
+      const starts = event.startsAt ? new Date(event.startsAt) : null;
+      if (!starts) return false;
+      return starts.getTime() < Date.now();
+    } catch {
+      return false;
+    }
+  }, [event]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -87,12 +114,39 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   };
 
   const [showCancelConfirm, setShowCancelConfirm] = React.useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false);
 
   const handleCancel = () => setShowCancelConfirm(true);
   const closeCancel = () => setShowCancelConfirm(false);
   const confirmCancel = async () => {
     closeCancel();
     await handleLeaveConfirmed();
+  };
+
+  const isOwner = React.useMemo(() => {
+    if (!event || !user) return false;
+    const ownerId = event.createdBy || (event.organizer && event.organizer.organizerId);
+    return ownerId && String(ownerId) === String(user._id);
+  }, [event, user]);
+
+  const handleDelete = () => setShowDeleteConfirm(true);
+  const closeDelete = () => setShowDeleteConfirm(false);
+  const confirmDelete = async () => {
+    closeDelete();
+    try {
+      // If the current user is a pro/commercial profile or admin, call the remove endpoint.
+      if (user?.profileType === 'pro_commerce' || user?.profileType === 'admin') {
+        await eventsApi.remove(event.id);
+      } else {
+        await eventsApi.cancel(event.id);
+      }
+      // backend will create notifications for attendees; navigate to Events list
+      navigation.navigate('Events');
+    } catch (err) {
+      // Surface error to the user
+      console.warn('Failed to delete event', err && err.message);
+      Alert.alert(t('Error'), err?.response?.data?.message || err?.message || t('Failed to delete event'));
+    }
   };
 
   const styles = React.useMemo(() => StyleSheet.create({
@@ -135,7 +189,30 @@ export default function EventDetailScreen({ navigation, route }: Props) {
     infoSub: { fontSize: 12, marginTop: 2 },
     smallAvatars: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', marginTop: 6 },
     smallAvatar: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#FFFFFF', marginLeft: isRTL ? 0 : -8, marginRight: isRTL ? -8 : 0 },
+    deleteBtnCentered: { alignSelf: 'center', marginTop: 12, paddingVertical: 12, paddingHorizontal: 28, borderRadius: 14, minWidth: 180, alignItems: 'center', backgroundColor: '#EF4444' },
+    deleteBtnText: { color: '#FFFFFF', fontWeight: '700' },
   }), [T, isRTL]);
+
+  const attendeeAvatars = React.useMemo(() => {
+    if (!event) return [];
+    const avatars: Array<string> = (event.attendeesAvatars || []).filter(Boolean);
+    const count = Math.max(event.attendeesCount || 0, avatars.length);
+    const displayCount = Math.min(3, count);
+    // sample pool to use when avatar URLs are missing
+    const sampleAvatars = [
+      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop',
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200&h=200&fit=crop',
+      'https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?w=200&h=200&fit=crop',
+      'https://images.unsplash.com/photo-1552053831-71594a27632d?w=200&h=200&fit=crop',
+      'https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=200&h=200&fit=crop',
+    ];
+    const out: Array<string> = [];
+    for (let i = 0; i < displayCount; i++) {
+      if (avatars[i]) out.push(avatars[i]);
+      else out.push(sampleAvatars[i % sampleAvatars.length]);
+    }
+    return out;
+  }, [event]);
 
   return (
     <AppScaffold
@@ -148,10 +225,25 @@ export default function EventDetailScreen({ navigation, route }: Props) {
       onPressProfile={() => navigation.navigate('Profile')}
       contentStyle={{ backgroundColor: T.bg }}
     >
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 0 }}>
         {event ? (
           <View style={[styles.root, { backgroundColor: T.bg }] }>
-            <Image source={{ uri: event.imageUrl }} style={[styles.image, { backgroundColor: T.surfaceAlt }]} />
+            <View style={{ position: 'relative' }}>
+              <View style={[styles.image, { backgroundColor: T.surfaceAlt }]} />
+              {event.imageUrl ? (
+                <FastImage
+                  source={{ uri: optimizedUrl(event.imageUrl, 1200) }}
+                  style={[styles.image, { position: 'absolute', left: 0, top: 0 }]}
+                  contentFit="cover"
+                  transition={200}
+                  cachePolicy="disk"
+                  priority="high"
+                  onLoad={() => { /* image loaded */ }}
+                  onError={() => { /* ignore */ }}
+                />
+              ) : null}
+              {/* top-right overlay removed to avoid duplicate delete actions */}
+            </View>
             {event.type && (
               <View style={[styles.typePill, { borderColor: T.red, backgroundColor: T.surface }] }>
                 <Text style={[styles.typePillText, { color: T.red }]}>{String(event.type).charAt(0).toUpperCase() + String(event.type).slice(1)}</Text>
@@ -188,9 +280,13 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                       <Text style={[styles.infoTitle, { color: T.text }]}>{(event.attendeesCount || 0)} {t('people going')}</Text>
                       <View style={{ height: 6 }} />
                       <View style={styles.smallAvatars}>
-                        <View style={[styles.smallAvatar, { backgroundColor: '#111827' }]} />
-                        <View style={[styles.smallAvatar, { backgroundColor: '#111827' }]} />
-                        <View style={[styles.smallAvatar, { backgroundColor: '#111827' }]} />
+                        {attendeeAvatars.map((uri, i) => (
+                          uri ? (
+                            <FastImage key={i} source={{ uri: optimizedUrl(uri, 200) }} style={styles.smallAvatar} contentFit="cover" cachePolicy="disk" priority="high" onLoad={() => { /* avatar loaded */ }} onError={() => { /* ignore */ }} />
+                          ) : (
+                            <View key={i} style={[styles.smallAvatar, { backgroundColor: '#111827' }]} />
+                          )
+                        ))}
                       </View>
                     </View>
                   </View>
@@ -203,13 +299,17 @@ export default function EventDetailScreen({ navigation, route }: Props) {
 
               <View style={{ height: 18 }} />
 
-              <View style={styles.actionRow}>
+                <View style={styles.actionRow}>
                 <View style={styles.priceWrap}>
                   <Text style={[styles.priceLabel, { color: T.textSub }]}>{t('Price')}</Text>
-                  <Text style={[styles.priceValue, { color: T.green }]}>{event.price ? `${event.price}${event.currency || ''}` : t('Free')}</Text>
+                  <Text style={[styles.priceValue, { color: T.green }]}>{event.price ? `${event.price} ${event.currency || 'TND'}` : t('Free')}</Text>
                 </View>
 
-                {!isJoined ? (
+                {isFinished ? (
+                  <View style={[styles.joinBtnLargeCancel, { justifyContent: 'center', backgroundColor: '#F3F4F6' }] }>
+                    <Text style={[styles.joinBtnTextLarge, { color: '#6B7280' }]}>{t('Finished')}</Text>
+                  </View>
+                ) : !isJoined ? (
                   <TouchableOpacity
                     onPress={handleJoin}
                     activeOpacity={0.8}
@@ -237,6 +337,12 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                   </TouchableOpacity>
                 )}
               </View>
+
+              {isOwner && (
+                <TouchableOpacity onPress={handleDelete} activeOpacity={0.85} style={styles.deleteBtnCentered}>
+                  <Text style={styles.deleteBtnText}>{t('Delete Event')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         ) : (
@@ -265,6 +371,32 @@ export default function EventDetailScreen({ navigation, route }: Props) {
 
                 <Pressable onPress={confirmCancel} style={({ pressed }) => ({ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: pressed ? '#DC2626' : '#EF4444' })}>
                   <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>{t('Cancel participation')}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+        {/** Delete event confirmation modal */}
+        <Modal
+          visible={showDeleteConfirm}
+          transparent
+          animationType="fade"
+          onRequestClose={closeDelete}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}>
+            <View style={{ backgroundColor: T.surface, borderRadius: 14, padding: 18 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: T.text, marginBottom: 8 }}>{t('Delete event')}</Text>
+              <Text style={{ fontSize: 14, color: T.textSub, lineHeight: 20, marginBottom: 18 }}>
+                {t('Are you sure you want to delete this event? This will notify all attendees that the event was cancelled.')}
+              </Text>
+
+              <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'flex-end', gap: 10 }}>
+                <Pressable onPress={closeDelete} style={({ pressed }) => ({ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: T.border, backgroundColor: pressed ? T.surfaceAlt : 'transparent' })}>
+                  <Text style={{ color: T.text, fontWeight: '600' }}>{t('Keep')}</Text>
+                </Pressable>
+
+                <Pressable onPress={confirmDelete} style={({ pressed }) => ({ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: pressed ? '#DC2626' : '#EF4444' })}>
+                  <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>{t('Delete event')}</Text>
                 </Pressable>
               </View>
             </View>

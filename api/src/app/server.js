@@ -25,6 +25,19 @@ async function boot() {
     });
   });
 
+  // Start background jobs
+  try {
+    require('./jobs/notifications-dispatch.job');
+  } catch (err) {
+    logger.warn('Failed to start notifications-dispatch job', { err: err.message });
+  }
+
+  try {
+    require('./jobs/cleanup-finished-events.job');
+  } catch (err) {
+    logger.warn('Failed to start cleanup-finished-events job', { err: err.message });
+  }
+
   // ── Graceful shutdown ────────────────────────────────────────────────────────
   const shutdown = (signal) => {
     logger.info(`${signal} received. Shutting down gracefully…`);

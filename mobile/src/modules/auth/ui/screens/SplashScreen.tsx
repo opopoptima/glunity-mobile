@@ -63,6 +63,7 @@ export default function SplashScreen({ navigation }: Props) {
       ])
     ).start();
 
+    // Infinite heart floating/pulsing loops
     Animated.loop(
       Animated.sequence([
         Animated.timing(heart2Anim, {
@@ -230,6 +231,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#FAFAFA',
     letterSpacing: 0.2,
+    fontFamily: 'Poppins_500Medium',
     ...Platform.select({
       web: {
         textShadow: '1px 1px 3px rgba(0, 0, 0, 0.1)',

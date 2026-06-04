@@ -8,6 +8,8 @@
     "start": "node src/app/server.js",
     "seed:recipes":   "node scripts/seed-recipes.js",
     "seed:locations": "node scripts/seed-locations.js",
+    "seed:5": "node scripts/insert-5-locations.js",
+    "seed:more": "node scripts/insert-more-locations.js",
     "lint": "echo \"api lint placeholder\"",
     "test": "echo \"api test placeholder\""
   },

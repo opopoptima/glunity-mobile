@@ -28,6 +28,7 @@ import patientResourcesApi, {
   ResourceVideo,
   ResourceCategory,
 } from '../../api/patient-resources.api';
+import FastImage from '@/shared/components/FastImage';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PatientResources'>;
 
@@ -231,7 +232,7 @@ export default function PatientResourcesScreen({ navigation }: Props) {
       StyleSheet.create({
         page: { flex: 1, backgroundColor: T.bg },
         scroll: { flex: 1 },
-        content: { paddingBottom: 120 },
+        content: { paddingBottom: 0 },
 
         // ── Section label ──
         sectionRow: {
@@ -905,10 +906,10 @@ export default function PatientResourcesScreen({ navigation }: Props) {
                 activeOpacity={0.85}
                 onPress={() => handleArticlePress(featured)}
               >
-                <Image
+                <FastImage
                   source={{ uri: CATEGORY_IMAGES[featured.category] }}
                   style={s.featuredCoverImage}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
                 
                 <View
@@ -976,10 +977,10 @@ export default function PatientResourcesScreen({ navigation }: Props) {
                 activeOpacity={0.82}
                 onPress={() => handleArticlePress(article)}
               >
-                <Image
+                <FastImage
                   source={{ uri: CATEGORY_IMAGES[article.category] }}
                   style={s.articleThumbnail}
-                  resizeMode="cover"
+                  contentFit="cover"
                 />
                 <View style={s.articleContent}>
                   <View style={s.articleHeaderRow}>
@@ -1033,10 +1034,10 @@ export default function PatientResourcesScreen({ navigation }: Props) {
                     }
                   >
                     <View>
-                      <Image
+                      <FastImage
                         source={{ uri: video.thumbnailUrl }}
                         style={s.videoThumb}
-                        resizeMode="cover"
+                        contentFit="cover"
                       />
                       <View style={s.videoDurationBadge}>
                         <Text style={s.videoDurationText}>{video.durationMinutes} {t('min')}</Text>
@@ -1072,10 +1073,10 @@ export default function PatientResourcesScreen({ navigation }: Props) {
             <View style={s.modalContent}>
               {selectedArticle && (
                 <View style={s.modalCoverContainer}>
-                  <Image
+                  <FastImage
                     source={{ uri: CATEGORY_IMAGES[selectedArticle.category] }}
                     style={s.modalCoverImage}
-                    resizeMode="cover"
+                    contentFit="cover"
                   />
                   <TouchableOpacity
                     style={s.modalFloatCloseBtn}

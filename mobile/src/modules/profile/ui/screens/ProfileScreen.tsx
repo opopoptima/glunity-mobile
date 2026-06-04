@@ -702,7 +702,7 @@ export default function ProfileScreen({ navigation }: Props) {
       activeTab="profile"
       rightIcon="bell-outline"
       onPressHome={() => navigation.navigate('Home')}
-      onPressEvents={() => navigation.navigate('Map')}
+      onPressEvents={() => navigation.navigate('Events')}
       onPressCenter={() => {}}
       onPressReels={() => {}}
       onPressProfile={() => {

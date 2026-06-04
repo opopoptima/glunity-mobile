@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/shared/context/theme.context';
 import type { GlunityEvent } from '../domain/home.types';
+import FastImage from '@/shared/components/FastImage';
 
 type Props = {
   event: GlunityEvent;
@@ -25,21 +26,23 @@ export default function HomeEventCard({ event, onPress }: Props) {
 
   return (
     <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={[styles.card, { backgroundColor: T.surface }]}>
-      <Image source={{ uri: event.imageUrl }} style={styles.image} />
+      <FastImage source={{ uri: event.imageUrl }} style={styles.image} contentFit="cover" />
       <View style={styles.body}>
-        <Text style={[styles.title, { color: T.text }]} numberOfLines={2}>{event.title}</Text>
+        <Text style={[styles.title, { color: T.text }]} numberOfLines={1} ellipsizeMode="tail">{event.title}</Text>
 
         <View style={styles.metaContainer}>
           <View style={styles.metaRow}>
             <Ionicons name="location-outline" size={12} color={'#C8102E'} />
             <Text style={[styles.metaText, { color: T.textSub }]} numberOfLines={1}>
-              {typeof event.location === 'object' ? (event.location.name || event.location.address || '') : event.location}
+              {typeof event.location === 'object' && event.location ? (event.location.name || event.location.address || '') : event.location}
             </Text>
           </View>
 
           <View style={styles.metaRow}>
             <Ionicons name="calendar-outline" size={12} color={'#C8102E'} />
-            <Text style={[styles.metaText, { color: T.textSub }]} numberOfLines={1}>{formatEventDate(event.date || event.startsAt)}</Text>
+            <Text style={[styles.metaText, { color: T.textSub }]} numberOfLines={1}>
+              {formatEventDate(event.startsAt || event.date)}
+            </Text>
           </View>
         </View>
       </View>
@@ -68,7 +71,7 @@ const styles = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: 120,
+    height: 128,
     backgroundColor: '#F3F4F6',
   },
   body: {
@@ -82,6 +85,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 6,
   },
+  
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',

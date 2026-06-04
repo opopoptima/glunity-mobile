@@ -16,7 +16,7 @@ const SAMPLES = [
     organizer: { name: 'GF Community' },
     maxCapacity: 40,
     price: 20,
-    currency: 'USD',
+    currency: 'TND',
     images: [{ url: 'https://images.unsplash.com/photo-1556911220-bff31c812dba' }],
     isPublished: true,
   },

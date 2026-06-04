@@ -30,7 +30,7 @@ const eventSchema = new Schema(
 		attendees: [{ type: Types.ObjectId, ref: 'User' }],
 		maxCapacity: { type: Number, default: 0 },
 		price: { type: Number, default: 0 },
-		currency: { type: String, trim: true, default: 'USD' },
+		currency: { type: String, trim: true, default: 'TND' },
 		images: [
 			{
 				url: { type: String, trim: true },
@@ -39,6 +39,12 @@ const eventSchema = new Schema(
 		],
 		isPublished: { type: Boolean, default: true, index: true },
 		createdBy: { type: Types.ObjectId, ref: 'User' },
+		// Finished state: event has already happened but kept for a short retention window
+		isFinished: { type: Boolean, default: false, index: true },
+		finishedAt: { type: Date },
+		// Soft-remove metadata (event is never hard-deleted)
+		removedBy: { type: Types.ObjectId, ref: 'User' },
+		removedAt: { type: Date },
 	},
 	{
 		timestamps: true,

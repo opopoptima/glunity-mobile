@@ -326,7 +326,7 @@ export function HomeScreen({
       gap: 12,
     },
     eventCard: {
-      width: 220,
+      width: 180,
       borderRadius: 16,
       backgroundColor: T.surface,
       overflow: "hidden",
@@ -623,7 +623,7 @@ export function HomeScreen({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.eventsList}
           renderItem={({ item }) => (
-            <View style={{ width: 180, marginRight: 12 }}>
+            <View style={[styles.eventCard, { marginRight: 12 }]}> 
               <HomeEventCard event={item} onPress={item.onPress} />
             </View>
           )}

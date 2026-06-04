@@ -27,6 +27,7 @@ const SAMPLES = [
     lng: 10.181667,
     lat: 36.806389,
     rating: { average: 4.8, count: 8200 },
+    images: [{ url: 'https://images.unsplash.com/photo-1556911220-bff31c812dba?w=800&q=80' }],
   },
   {
     name: 'La Maison Sans Gluten',
@@ -41,6 +42,7 @@ const SAMPLES = [
     lng: 10.175,
     lat: 36.798,
     rating: { average: 4.9, count: 412 },
+    images: [{ url: 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&q=80' }],
   },
   {
     name: 'Green Leaf Café',
@@ -55,6 +57,7 @@ const SAMPLES = [
     lng: 10.187,
     lat: 36.811,
     rating: { average: 4.6, count: 215 },
+    images: [{ url: 'https://images.unsplash.com/photo-1528207776546-365bb710ee93?w=800&q=80' }],
   },
   {
     name: 'Pasta Verde',
@@ -69,6 +72,7 @@ const SAMPLES = [
     lng: 10.169,
     lat: 36.802,
     rating: { average: 4.4, count: 188 },
+    images: [{ url: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80' }],
   },
   {
     name: 'Carrefour Marsa',
@@ -85,6 +89,7 @@ const SAMPLES = [
     lng: 10.323,
     lat: 36.878,
     rating: { average: 4.0, count: 1320 },
+    images: [{ url: 'https://images.unsplash.com/photo-1496307042754-b4aa456c4a2d?w=800&q=80' }],
   },
   {
     name: 'Pharmacie Centrale',
@@ -99,6 +104,7 @@ const SAMPLES = [
     lng: 10.179,
     lat: 36.804,
     rating: { average: 4.5, count: 92 },
+    images: [{ url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=800&q=80' }],
   },
 ];
 
