@@ -18,7 +18,7 @@ const messageSchema = new Schema(
     attachments: [
       {
         url:       { type: String, required: true },
-        type:      { type: String, enum: ['image', 'video', 'file'], required: true },
+        type:      { type: String, enum: ['image', 'video', 'file', 'audio'], required: true },
         filename:  String,
         size:      Number,          // bytes
         thumbnail: String,          // pre-generated thumbnail URL
