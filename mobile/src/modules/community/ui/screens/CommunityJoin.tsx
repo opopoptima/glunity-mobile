@@ -33,6 +33,12 @@ const fallbackUsers = [
   { _id: '4', fullName: 'Ines Chaabane', profileType: 'pro_health', points: 620, avatarUrl: 'https://randomuser.me/api/portraits/women/45.jpg', badges: [] },
 ];
 
+const fallbackChannels = [
+  { _id: 'c1', name: 'General Chat', description: 'General discussions for gluten-free lifestyle.', lastMessage: { content: 'Welcome!', createdAt: new Date().toISOString() }, unreadCount: 0, avatarUrl: null },
+  { _id: 'c2', name: 'Recipe Sharing', description: 'Share your gluten-free recipes and tips.', lastMessage: { content: 'Check this recipe', createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString() }, unreadCount: 0, avatarUrl: null },
+  { _id: 'c3', name: 'Support', description: 'Help and support', lastMessage: { content: 'Need help?', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() }, unreadCount: 0, avatarUrl: null },
+];
+
 const badgeImageMap: { [key: string]: any } = {
   bronze: require('../../../../../assets/badges/bronze.png'),
   silver: require('../../../../../assets/badges/silver.png'),
@@ -74,9 +80,10 @@ export default function CommunityJoin({ navigation }: any) {
       try {
         const token = await TokenStore.getAccessToken();
         const res = await axios.get(`${CORE_API_URL}/channels`, { headers: { Authorization: `Bearer ${token}` } });
-        setChannels(res.data?.data || []);
+        setChannels(res.data?.data && res.data.data.length ? res.data.data : fallbackChannels);
       } catch (err) {
-        setChannels([]);
+        console.error('[community] failed to fetch channels', err);
+        setChannels(fallbackChannels);
       } finally {
         setLoadingChannels(false);
       }
@@ -109,7 +116,7 @@ export default function CommunityJoin({ navigation }: any) {
     spaceSubtext: { fontSize: 12.5, color: T.textMuted, marginTop: 3 },
     spaceBadge: { backgroundColor: T.green, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5, position: 'absolute', right: isRTL ? undefined : 16, left: isRTL ? 16 : undefined },
     spaceBadgeText: { fontSize: 11, fontWeight: 'bold', color: '#FFFFFF' },
-    userCardWrap: { width: 220, marginHorizontal: 12 },
+    userCardWrap: { width: 220, marginHorizontal: 8 },
     userCard: { backgroundColor: T.surface, borderRadius: 16, padding: 16, alignItems: 'flex-start', shadowColor: T.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
     avatarWrap: { width: 88, height: 88, borderRadius: 44, overflow: 'hidden', borderWidth: 4, borderColor: T.surface, justifyContent: 'center', alignItems: 'center', backgroundColor: T.surfaceAlt },
     avatarImage: { width: 80, height: 80, borderRadius: 40 },
@@ -157,13 +164,14 @@ export default function CommunityJoin({ navigation }: any) {
       {loadingUsers ? (
         <ActivityIndicator style={{ margin: 20 }} />
       ) : (
-        <FlatList
-          horizontal
-          data={users}
-          keyExtractor={(i) => i._id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8 }}
-          renderItem={({ item }) => (
+          <FlatList
+            horizontal
+            data={users}
+            keyExtractor={(i) => i._id}
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, paddingRight: 32 }}
+            renderItem={({ item }) => (
             <View style={styles.userCardWrap}>
               <View style={styles.userCard}>
                 <View style={{ alignSelf: 'center' }}>
@@ -224,6 +232,7 @@ export default function CommunityJoin({ navigation }: any) {
       ) : (
             <FlatList
               data={channels}
+              contentContainerStyle={{ paddingBottom: 120 }}
           keyExtractor={(c) => c.id || c._id}
           renderItem={({ item }) => {
             const isDM = item.name && item.name.startsWith('DM-');
