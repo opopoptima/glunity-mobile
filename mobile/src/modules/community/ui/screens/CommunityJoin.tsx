@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { TokenStore } from '../../../../core/storage/secure-store';
@@ -105,7 +106,7 @@ export default function CommunityJoin({ navigation }: any) {
     header: { padding: 16, borderBottomWidth: 1, borderBottomColor: T.divider, backgroundColor: T.surface, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     title: { fontSize: 20, fontWeight: '700', color: T.text },
     skipText: { color: T.textMuted, fontSize: 14, paddingHorizontal: 8 },
-    sectionTitle: { fontSize: 12, fontWeight: '700', color: T.textMuted, marginTop: 12, marginBottom: 8, paddingHorizontal: 16, textTransform: 'uppercase' },
+    sectionTitle: { fontSize: 12, fontWeight: '700', color: T.textMuted, marginTop: 18, marginBottom: 8, paddingHorizontal: 16, textTransform: 'uppercase' },
     // Channel explore styles (matching TempCommunityMessaging)
     spaceCard: {
       flexDirection: isRTL ? 'row-reverse' : 'row',
@@ -128,8 +129,8 @@ export default function CommunityJoin({ navigation }: any) {
     spaceBadgeText: { fontSize: 11, fontWeight: 'bold', color: '#FFFFFF' },
     joinBtn: { backgroundColor: T.greenLight, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     joinBtnText: { color: T.green, fontWeight: '700' },
-    userCardWrap: { width: 220, marginHorizontal: 8 },
-    userCard: { backgroundColor: T.surface, borderRadius: 16, padding: 16, alignItems: 'flex-start', shadowColor: T.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+    userCardWrap: { width: 200, marginHorizontal: 6, paddingVertical: 4 },
+    userCard: { backgroundColor: T.surface, borderRadius: 16, padding: 14, alignItems: 'flex-start', shadowColor: T.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, minHeight: 190 },
     avatarWrap: { width: 88, height: 88, borderRadius: 44, overflow: 'hidden', borderWidth: 4, borderColor: T.surface, justifyContent: 'center', alignItems: 'center', backgroundColor: T.surfaceAlt },
     avatarImage: { width: 80, height: 80, borderRadius: 40 },
     statusDot: { position: 'absolute', right: 8, bottom: 8, width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: T.surface, backgroundColor: T.green },
@@ -164,7 +165,7 @@ export default function CommunityJoin({ navigation }: any) {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Community</Text>
         <TouchableOpacity onPress={() => navigation.navigate('MessagingHome') }>
@@ -178,11 +179,12 @@ export default function CommunityJoin({ navigation }: any) {
       ) : (
           <FlatList
             horizontal
+            style={{ height: 230, marginBottom: 8 }}
             data={users}
             keyExtractor={(i) => i._id}
             showsHorizontalScrollIndicator={false}
             decelerationRate="fast"
-            contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 8, paddingRight: 32 }}
+            contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 12, paddingRight: 32 }}
             renderItem={({ item }) => (
             <View style={styles.userCardWrap}>
               <View style={styles.userCard}>
@@ -297,6 +299,6 @@ export default function CommunityJoin({ navigation }: any) {
           }}
         />
       )}
-    </View>
+    </SafeAreaView>
   );
 }

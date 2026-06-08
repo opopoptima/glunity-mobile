@@ -8,6 +8,7 @@ import { API_BASE_URL } from '../../../../core/config/api.config';
 import { useAuth } from '../../../auth/state/auth.context';
 import { useTheme } from '../../../../shared/context/theme.context';
 import { useLanguage } from '../../../../shared/context/language.context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CORE_API_URL = API_BASE_URL;
 const MSG_SERVICE_URL = API_BASE_URL.replace(':5000', ':5001');
@@ -17,6 +18,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   const { user } = useAuth();
   const { theme: T, isDark } = useTheme();
   const { t, isRTL } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   const [channel, setChannel] = useState<any>(initialChannel || null);
   const [loading, setLoading] = useState(false);
@@ -307,7 +309,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   if (!channel) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}><Text>{t('Loading channel...')}</Text></View>;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top","left","right"]}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 6 }}>
@@ -338,7 +340,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           const lastPinned = pinnedMessages[pinnedMessages.length - 1];
           const index = messages.findIndex(m => m.id === lastPinned.id);
           if (index >= 0) try { listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 }); } catch (e) {}
-        }} style={{ position: 'absolute', top: 64, left: 12, right: 12, backgroundColor: T.surface, borderRadius: 12, padding: 10, flexDirection: 'row', alignItems: 'center', zIndex: 20 }}>
+        }} style={{ position: 'absolute', top: (insets?.top || 0) + 64, left: 12, right: 12, backgroundColor: T.surface, borderRadius: 12, padding: 10, flexDirection: 'row', alignItems: 'center', zIndex: 20 }}>
           <Ionicons name="pin" size={14} color={T.green} />
           <Text numberOfLines={1} style={{ marginLeft: 8, color: T.text, fontWeight: '600' }}>{pinnedMessages[pinnedMessages.length - 1].content || t('[Attachment]')}</Text>
         </TouchableOpacity>
@@ -352,7 +354,9 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           data={messages}
           keyExtractor={(i) => i.id || i._id || Math.random().toString()}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 120 + insets.bottom }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
         />
       )}
 
@@ -412,8 +416,8 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         </Animated.View>
       ) : null}
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
-        <View style={styles.inputBar}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90 + insets.bottom}>
+        <View style={[styles.inputBar, { bottom: insets.bottom }] }>
           {replyingTo ? (
             <View style={{ backgroundColor: T.surface, padding: 8, borderRadius: 10, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View style={{ flex: 1 }}>
@@ -444,6 +448,6 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           </View>
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   );
 }

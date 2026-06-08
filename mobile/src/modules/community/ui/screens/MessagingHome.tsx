@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, SafeAreaView, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Animated } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { TokenStore } from '../../../../core/storage/secure-store';
@@ -199,7 +200,7 @@ export default function MessagingHome({ navigation }: any) {
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: T.bg },
-    header: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    header: { paddingHorizontal: 18, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     greetingWrap: { flexDirection: 'column' },
     hello: { color: T.textMuted, fontSize: 12 },
     userName: { color: T.text, fontSize: 22, fontWeight: '900', marginTop: 6 },
