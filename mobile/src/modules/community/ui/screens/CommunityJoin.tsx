@@ -39,6 +39,14 @@ const fallbackChannels = [
   { _id: 'c3', name: 'Support', description: 'Help and support', lastMessage: { content: 'Need help?', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() }, unreadCount: 0, avatarUrl: null },
 ];
 
+function isDMChannel(c: any) {
+  if (!c) return false;
+  if (c.name && typeof c.name === 'string' && c.name.startsWith('DM-')) return true;
+  if (c.type && (c.type === 'direct' || c.type === 'dm')) return true;
+  if (c.participants && Array.isArray(c.participants) && c.participants.length === 2) return true;
+  return false;
+}
+
 const badgeImageMap: { [key: string]: any } = {
   bronze: require('../../../../../assets/badges/bronze.png'),
   silver: require('../../../../../assets/badges/silver.png'),
@@ -80,10 +88,12 @@ export default function CommunityJoin({ navigation }: any) {
       try {
         const token = await TokenStore.getAccessToken();
         const res = await axios.get(`${CORE_API_URL}/channels`, { headers: { Authorization: `Bearer ${token}` } });
-        setChannels(res.data?.data && res.data.data.length ? res.data.data : fallbackChannels);
+        const data = res.data?.data && res.data.data.length ? res.data.data : fallbackChannels;
+        // Only keep non-DM/group channels that the user can join
+        setChannels(data.filter((ch: any) => !isDMChannel(ch)));
       } catch (err) {
         console.error('[community] failed to fetch channels', err);
-        setChannels(fallbackChannels);
+        setChannels(fallbackChannels.filter((ch: any) => !isDMChannel(ch)));
       } finally {
         setLoadingChannels(false);
       }
@@ -116,6 +126,8 @@ export default function CommunityJoin({ navigation }: any) {
     spaceSubtext: { fontSize: 12.5, color: T.textMuted, marginTop: 3 },
     spaceBadge: { backgroundColor: T.green, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5, position: 'absolute', right: isRTL ? undefined : 16, left: isRTL ? 16 : undefined },
     spaceBadgeText: { fontSize: 11, fontWeight: 'bold', color: '#FFFFFF' },
+    joinBtn: { backgroundColor: T.greenLight, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    joinBtnText: { color: T.green, fontWeight: '700' },
     userCardWrap: { width: 220, marginHorizontal: 8 },
     userCard: { backgroundColor: T.surface, borderRadius: 16, padding: 16, alignItems: 'flex-start', shadowColor: T.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
     avatarWrap: { width: 88, height: 88, borderRadius: 44, overflow: 'hidden', borderWidth: 4, borderColor: T.surface, justifyContent: 'center', alignItems: 'center', backgroundColor: T.surfaceAlt },
@@ -243,7 +255,7 @@ export default function CommunityJoin({ navigation }: any) {
             const unreadCount = isDM ? 0 : visual.unread;
 
             return (
-              <TouchableOpacity style={[styles.spaceCard, { paddingVertical: 12 }]} onPress={() => navigation.navigate('CommunityChat', { initialChannel: item })}>
+              <TouchableOpacity activeOpacity={0.95} style={[styles.spaceCard, { paddingVertical: 12 }]}>
                 <View style={[styles.spaceIconContainer, { backgroundColor: T.surfaceAlt }]}> 
                   <Ionicons name={iconName as any} size={20} color={T.text} />
                 </View>
@@ -261,6 +273,25 @@ export default function CommunityJoin({ navigation }: any) {
                     </View>
                   </View>
                 )}
+                {/* Join button for non-DM channels */}
+                <View style={{ marginLeft: 12 }}>
+                  <TouchableOpacity style={styles.joinBtn} onPress={async () => {
+                    try {
+                      const token = await TokenStore.getAccessToken();
+                      // Try to join via API; fallback to navigating directly
+                      try {
+                        await axios.post(`${CORE_API_URL}/channels/${item.id || item._id}/join`, {}, { headers: { Authorization: `Bearer ${token}` } });
+                      } catch (e) {
+                        // ignore API errors, still navigate
+                      }
+                      navigation.navigate('CommunityChat', { initialChannel: item });
+                    } catch (err) {
+                      console.error('Failed to join channel', err);
+                    }
+                  }}>
+                    <Text style={styles.joinBtnText}>{t('Join')}</Text>
+                  </TouchableOpacity>
+                </View>
               </TouchableOpacity>
             );
           }}
