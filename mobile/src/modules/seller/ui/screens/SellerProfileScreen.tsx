@@ -24,9 +24,8 @@ import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
 import productsApi, { Product } from '../../api/products.api';
 import reviewsApi, { Review } from '../../api/reviews.api';
-import axios from 'axios';
+import http from '@/core/network/http.client';
 import { API_BASE_URL } from '@/core/config/api.config';
-import { TokenStore } from '@/core/storage/secure-store';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'SellerProfile'>;
 
@@ -78,13 +77,10 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
     if (messagingLoading || !targetSellerId) return;
     try {
       setMessagingLoading(true);
-      const token = await TokenStore.getAccessToken();
-      if (!token) return;
       
-      const response = await axios.post(
+      const response = await http.post(
         `${API_BASE_URL}/channels/direct`,
-        { userId: targetSellerId },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { userId: targetSellerId }
       );
       
       if (response.data?.success && response.data?.data) {

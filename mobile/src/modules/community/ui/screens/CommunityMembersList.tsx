@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, Alert, ActivityIndicator, StyleSheet } from 'react-native';
-import axios from 'axios';
+import http from '../../../../core/network/http.client';
 import { TokenStore } from '../../../../core/storage/secure-store';
 import { API_BASE_URL } from '../../../../core/config/api.config';
 import { useAuth } from '../../../auth/state/auth.context';
@@ -22,10 +22,9 @@ export default function CommunityMembersList({ route, navigation }: any) {
   const fetchMembers = async () => {
     setLoading(true);
     try {
-      const token = await TokenStore.getAccessToken();
       // Prefer fetching channel details which often include participant objects
       try {
-        const ch = await axios.get(`${CORE_API_URL}/channels/${channelId}`, { headers: { Authorization: `Bearer ${token}` } });
+        const ch = await http.get(`${CORE_API_URL}/channels/${channelId}`);
         const data = ch.data?.data || ch.data;
         const raw = data?.participants || data?.members || data?.userIds || [];
         if (Array.isArray(raw) && raw.length > 0) {
@@ -36,14 +35,14 @@ export default function CommunityMembersList({ route, navigation }: any) {
           }
           // raw are ids -> attempt users?ids= fallback
           try {
-            const ures = await axios.get(`${CORE_API_URL}/users?ids=${encodeURIComponent(raw.join(','))}`, { headers: { Authorization: `Bearer ${token}` } });
+            const ures = await http.get(`${CORE_API_URL}/users?ids=${encodeURIComponent(raw.join(','))}`);
             const users = ures.data?.data || ures.data || [];
             const ms = users.map((u: any) => ({ _id: u._id || u.id, fullName: u.fullName || u.name || u.displayName, avatarUrl: u.avatarUrl || u.avatar, role: u.role || u.profileType }));
             setMembers(ms);
             return;
           } catch (e) {
             // fallback to fetching all users and filter
-            const all = await axios.get(`${CORE_API_URL}/users`, { headers: { Authorization: `Bearer ${token}` } });
+            const all = await http.get(`${CORE_API_URL}/users`);
             const users = all.data?.data || all.data || [];
             const ms = users.filter((u: any) => raw.includes(String(u._id) || String(u.id))).map((u: any) => ({ _id: u._id || u.id, fullName: u.fullName || u.name, avatarUrl: u.avatarUrl || u.avatar, role: u.role }));
             setMembers(ms);
@@ -56,7 +55,7 @@ export default function CommunityMembersList({ route, navigation }: any) {
       } catch (e) {
         // If channel endpoint not available, try users by channel members endpoint
         try {
-          const res = await axios.get(`${CORE_API_URL}/channels/${channelId}/members`, { headers: { Authorization: `Bearer ${token}` } });
+          const res = await http.get(`${CORE_API_URL}/channels/${channelId}/members`);
           const list = res.data?.data || res.data || [];
           setMembers(list.map((u: any) => ({ _id: u._id || u.id, fullName: u.fullName || u.name, avatarUrl: u.avatarUrl || u.avatar, role: u.role })));
           return;
@@ -86,15 +85,14 @@ export default function CommunityMembersList({ route, navigation }: any) {
       { text: t('Cancel'), style: 'cancel' },
       { text: t('Remove'), style: 'destructive', onPress: async () => {
         try {
-          const token = await TokenStore.getAccessToken();
           let ok = false;
           try {
-            await axios.delete(`${CORE_API_URL}/channels/${channelId}/members/${memberId}`, { headers: { Authorization: `Bearer ${token}` } });
+            await http.delete(`${CORE_API_URL}/channels/${channelId}/members/${memberId}`);
             ok = true;
           } catch (e) {}
           if (!ok) {
             try {
-              await axios.post(`${CORE_API_URL}/channels/${channelId}/remove-member`, { memberId }, { headers: { Authorization: `Bearer ${token}` } });
+              await http.post(`${CORE_API_URL}/channels/${channelId}/remove-member`, { memberId });
               ok = true;
             } catch (e) {}
           }
@@ -115,7 +113,6 @@ export default function CommunityMembersList({ route, navigation }: any) {
   const toggleAdmin = async (member: any) => {
     if (!user) return;
     try {
-      const token = await TokenStore.getAccessToken();
       const id = member._id || member.id;
       let ok = false;
       const attempts = [
@@ -130,7 +127,7 @@ export default function CommunityMembersList({ route, navigation }: any) {
         try {
           const shouldCall = (a.url.includes('promote') && !isAdmin(member)) || (a.url.includes('demote') && isAdmin(member));
           if (!shouldCall) continue;
-          await axios.post(a.url, a.body, { headers: { Authorization: `Bearer ${token}` } });
+          await http.post(a.url, a.body);
           ok = true; break;
         } catch (e) {
           // try next

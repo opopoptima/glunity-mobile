@@ -35,8 +35,19 @@ export default function CommunityChatScreen({ navigation, route }: any) {
     );
   }
 
-  const initialChannel = route?.params?.initialChannel;
-  const initialChannelId = route?.params?.channelId;
+  // Guard: on web React Navigation serialises the channel object → "[object Object]".
+  // Only accept it when it is an actual object with an _id / id field.
+  const rawChannel = route?.params?.initialChannel;
+  const initialChannel =
+    rawChannel && typeof rawChannel === 'object' && (rawChannel._id || rawChannel.id)
+      ? rawChannel
+      : null;
+
+  const initialChannelId =
+    route?.params?.channelId ||
+    route?.params?.initialChannelId ||
+    // last resort: if rawChannel was a valid MongoDB id string use it directly
+    (typeof rawChannel === 'string' && /^[a-f\d]{24}$/i.test(rawChannel) ? rawChannel : null);
 
   return (
     <AppScaffold title={t('Community')} activeTab="events" contentStyle={{ backgroundColor: T.bg, paddingBottom: 0 }} showHeader={false} showBottomNav={false}>

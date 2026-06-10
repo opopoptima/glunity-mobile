@@ -30,7 +30,7 @@ const messagesRepository = {
     return Message.findOneAndUpdate(
       { _id: messageId, senderId },
       { $set: { content, editedAt: new Date() } },
-      { new: true }
+      { returnDocument: 'after' }
     ).populate('senderId', 'fullName avatar');
   },
 
@@ -38,7 +38,7 @@ const messagesRepository = {
     return Message.findOneAndUpdate(
       { _id: messageId, senderId },
       { $set: { deletedAt: new Date() } },
-      { new: true }
+      { returnDocument: 'after' }
     );
   },
 
@@ -46,7 +46,7 @@ const messagesRepository = {
     return Message.findOneAndUpdate(
       { _id: messageId, channelId },
       { $set: { pinned: true } },
-      { new: true }
+      { returnDocument: 'after' }
     );
   },
 
@@ -54,7 +54,7 @@ const messagesRepository = {
     return Message.findOneAndUpdate(
       { _id: messageId, channelId },
       { $set: { pinned: false } },
-      { new: true }
+      { returnDocument: 'after' }
     );
   },
 };

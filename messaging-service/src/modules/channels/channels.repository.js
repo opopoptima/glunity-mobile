@@ -12,7 +12,7 @@ const channelsRepository = {
   async findForUser(userId, { limit = 50 } = {}) {
     return Channel.find({
       'participants.userId': userId,
-      deletedAt: null,
+      deletedAt: { $in: [null, undefined] },
     })
       .sort({ 'lastMessage.createdAt': -1, updatedAt: -1 })
       .limit(limit)
@@ -20,7 +20,7 @@ const channelsRepository = {
   },
 
   async findById(channelId) {
-    return Channel.findOne({ _id: channelId, deletedAt: null }).lean();
+    return Channel.findOne({ _id: channelId, deletedAt: { $in: [null, undefined] } }).lean();
   },
 
   /**
@@ -33,7 +33,7 @@ const channelsRepository = {
       type: 'DM',
       'participants.userId': { $all: [userIdA, userIdB] },
       $expr: { $eq: [{ $size: '$participants' }, 2] },
-      deletedAt: null,
+      deletedAt: { $in: [null, undefined] },
     }).lean();
   },
 
@@ -52,7 +52,7 @@ const channelsRepository = {
         'participants.userId': new mongoose.Types.ObjectId(String(targetUserId)),
       },
       { $set: { 'participants.$.role': role } },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
   },
 };

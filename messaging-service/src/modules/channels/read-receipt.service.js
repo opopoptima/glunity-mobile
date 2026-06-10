@@ -56,7 +56,7 @@ const readReceiptService = {
     const msgExists = await Message.exists({
       _id: lastReadMsgId,
       channelId,
-      deletedAt: null,
+      deletedAt: { $in: [null, undefined] },
     });
     if (!msgExists) {
       throw createError('Message not found in this channel', 404, 'NOT_FOUND');
@@ -95,7 +95,7 @@ const readReceiptService = {
           },
         },
       ],
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+      { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
     );
   },
 
@@ -124,7 +124,7 @@ const readReceiptService = {
       {
         $match: {
           'participants.userId': userObjId,
-          deletedAt: null,
+          deletedAt: { $in: [null, undefined] },
         },
       },
       { $project: { _id: 1 } },
@@ -168,7 +168,7 @@ const readReceiptService = {
                 $expr: {
                   $and: [
                     { $eq: ['$channelId', '$$channelId'] },
-                    { $eq: ['$deletedAt', null]          },
+                    { $in: ['$deletedAt', [null, undefined]] },
                     // When no receipt exists (lastRead = undefined/null)
                     // ALL messages are unread → skip the _id filter.
                     {

@@ -39,7 +39,26 @@ const notificationsService = {
 	},
 
 	async create(payload) {
-		return repository.create(payload);
+		const doc = await repository.create(payload);
+		// Dispatch push notification in the background
+		(async () => {
+			try {
+				const User = require('../../../database/models/user.model');
+				const user = await User.findById(payload.userId, 'pushToken pushEnabled').lean();
+				if (user && user.pushToken && user.pushEnabled !== false) {
+					const expoClient = require('../../integrations/push/expo.client');
+					await expoClient.sendPushNotification(
+						user.pushToken,
+						payload.title,
+						payload.body,
+						payload.metadata || {}
+					);
+				}
+			} catch (err) {
+				console.error('Failed to send push notification background event:', err);
+			}
+		})();
+		return doc;
 	},
 };
 

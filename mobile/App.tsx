@@ -42,7 +42,7 @@ const linking = {
       ForgotPassword: 'forgot-password',
       Welcome: 'welcome',
       Community: 'Community',
-      CommunityChat: 'CommunityChat',
+      CommunityChat: 'CommunityChat/:initialChannelId?',
     },
   },
 };

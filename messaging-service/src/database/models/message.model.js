@@ -139,17 +139,20 @@ messageSchema.index({ 'reelRef.reelId': 1 }, { sparse: true });
 /**
  * Validate content requirement.
  * A message must have EITHER content OR at least one attachment OR a reelRef.
+ *
+ * Uses async/throw style (Mongoose 9 recommended) instead of the legacy
+ * callback-style `function(next)` which can leave `next` undefined when
+ * called from an async context, causing "next is not a function" errors.
  */
-messageSchema.pre('validate', function (next) {
+messageSchema.pre('validate', async function () {
   const hasContent     = this.content && this.content.trim().length > 0;
   const hasAttachment  = this.attachments && this.attachments.length > 0;
   const hasReel        = this.reelRef && this.reelRef.reelId;
   const isSystemMsg    = this.type === 'system';
 
   if (!hasContent && !hasAttachment && !hasReel && !isSystemMsg) {
-    return next(new Error('A message must contain content, at least one attachment, or a reel reference'));
+    throw new Error('A message must contain content, at least one attachment, or a reel reference');
   }
-  next();
 });
 
 // ── Virtual: isDeleted ────────────────────────────────────────────────────────
@@ -177,7 +180,7 @@ messageSchema.statics.adjustReactionCount = function (messageId, emoji, delta) {
   return this.findByIdAndUpdate(
     messageId,
     { $inc: { [key]: delta } },
-    { new: true }
+    { returnDocument: 'after' }
   );
 };
 

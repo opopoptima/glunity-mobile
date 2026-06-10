@@ -118,7 +118,7 @@ export function ReactionsOverlayModal({
               </Text>
             </TouchableOpacity>
 
-            {selectedMsg?.senderId === user?._id && !selectedMsg?.deletedAt && (
+            {String(selectedMsg?.senderId?._id || selectedMsg?.senderId || '') === String(user?._id || '') && !selectedMsg?.deletedAt && (
               <>
                 <View style={[s.divider, { backgroundColor: T.divider }]} />
 

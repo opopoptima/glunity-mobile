@@ -220,7 +220,10 @@ export default function MessagingHome({ navigation }: any) {
       const res = await http.post('/channels/direct', { userId: targetId });
       const channel = res.data?.data;
       if (channel) {
-        navigation.navigate('CommunityChat', { initialChannel: channel });
+        navigation.navigate('CommunityChat', {
+          initialChannel: channel,
+          channelId: String(channel._id || channel.id || ''),
+        });
       }
     } catch (err) {
       console.error('Failed to create direct channel', err);
@@ -427,8 +430,8 @@ export default function MessagingHome({ navigation }: any) {
     tabActive: { backgroundColor: '#8BC34A' },
     tabText: { color: T.textMuted, fontSize: 14, fontWeight: '700', textAlign: 'center' },
     tabTextActive: { color: '#fff' },
-    list: { paddingHorizontal: 12, paddingRight: 96 },
-    row: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: T.divider, paddingHorizontal: 6, paddingRight: 96, minHeight: 68 },
+    list: { paddingHorizontal: 12, paddingRight: 12 },
+    row: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: T.divider, paddingHorizontal: 6, paddingRight: 12, minHeight: 68 },
     avatar: { width: 52, height: 52, borderRadius: 26 },
     rowContent: { flex: 1, marginLeft: isRTL ? 0 : 12, marginRight: isRTL ? 12 : 0 },
     rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -572,7 +575,10 @@ export default function MessagingHome({ navigation }: any) {
                   onPress={() => {
                     // clear unread locally immediately, then open chat
                     setChannels(prev => prev.map(c => (String(c._id || c.id) === String(item._id || item.id) ? { ...c, unreadCount: 0 } : c)));
-                    navigation.navigate('CommunityChat', { initialChannel: item });
+                    navigation.navigate('CommunityChat', {
+                      initialChannel: item,
+                      channelId: String(item._id || item.id || ''),
+                    });
                   }}
                   onLongPress={() => handleLongPressChannel(item)}
                 >

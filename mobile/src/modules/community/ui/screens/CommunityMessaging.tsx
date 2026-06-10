@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Pressable, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, useWindowDimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Pressable, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, useWindowDimensions, Alert, Linking, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../auth/state/auth.context';
 import { useTheme } from '../../../../shared/context/theme.context';
@@ -55,6 +55,27 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   const chat = useCommunityChat(initialChannel, initialChannelId, navigation);
   const { isOnline } = usePresence();
 
+  // Pulsing recording indicator animation
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  React.useEffect(() => {
+    if (chat.isRecording) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 0.15, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+  }, [chat.isRecording]);
+
+  const formatRecordingTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   // ── Derive the DM partner's ID for presence lookup ───────────────────────
   const dmPartnerId = useMemo(() => {
     const ch = chat.channel;
@@ -93,8 +114,9 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
 
   const formatDuration = (sec?: number) => {
     if (sec === undefined || isNaN(sec)) return '0:00';
-    const mins = Math.floor(sec / 60);
-    const secs = sec % 60;
+    const roundedSec = Math.round(sec);
+    const mins = Math.floor(roundedSec / 60);
+    const secs = roundedSec % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
@@ -129,7 +151,11 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   };
 
   const styles = useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: T.bg },
+    container: {
+      flex: 1,
+      backgroundColor: T.bg,
+      ...(Platform.OS === 'web' ? { position: 'relative', overflow: 'hidden' } : {}),
+    },
     header: { height: 64, borderBottomWidth: 1, borderBottomColor: T.divider, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', paddingHorizontal: 12, justifyContent: 'space-between' },
     headerLeft: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center' },
     avatar: { width: 34, height: 34, borderRadius: 17, marginRight: 8, marginBottom: 2 },
@@ -185,6 +211,184 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         ? SlideInRight.duration(250).delay(delay)
         : FadeInDown.duration(250).delay(delay));
 
+    // Attachment type helpers
+    const firstAtt = item.attachments && item.attachments.length > 0 ? item.attachments[0] : null;
+    const isAudio = firstAtt?.type === 'audio';
+    const isImage = firstAtt?.type === 'image';
+    const isVideo = firstAtt?.type === 'video';
+
+    const bubbleStyle = isMe
+      ? (item.id === highlightedMsgId
+          ? [styles.bubbleRight, { backgroundColor: isDark ? '#196F3D' : '#27AE60', transform: [{ scale: 1.02 }] }]
+          : styles.bubbleRight)
+      : (item.id === highlightedMsgId
+          ? [styles.bubbleLeft, { backgroundColor: isDark ? '#2E4053' : '#D5F5E3', transform: [{ scale: 1.02 }] }]
+          : styles.bubbleLeft);
+
+    // Reaction pills shared between bubble types
+    const reactionPills = item.reactionCounts && Object.keys(item.reactionCounts).length > 0 ? (
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
+        {Object.entries(item.reactionCounts).map(([emoji, count]: any) => (
+          <TouchableOpacity
+            key={emoji}
+            onPress={() => chat.handleToggleReaction(item.id || item._id, emoji)}
+            style={{ backgroundColor: 'rgba(0,0,0,0.07)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, marginRight: 5, marginBottom: 3, flexDirection: 'row', alignItems: 'center' }}
+          >
+            <Text style={{ fontSize: 13 }}>{emoji}</Text>
+            <Text style={{ fontSize: 11, marginLeft: 3, color: isMe ? 'rgba(255,255,255,0.8)' : T.textMuted, fontWeight: '600' }}>{count}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    ) : null;
+
+    // Reply preview pill
+    const replyPreview = item.replyTo && item.replyTo.messageId ? (
+      <View style={{
+        borderLeftWidth: 3,
+        borderLeftColor: isMe ? 'rgba(255,255,255,0.6)' : (T.green || '#2ECC71'),
+        paddingLeft: 8,
+        marginBottom: 6,
+        backgroundColor: isMe ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.04)',
+        borderRadius: 4,
+        paddingVertical: 4,
+      }}>
+        <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? 'rgba(255,255,255,0.8)' : (T.green || '#2ECC71') }}>
+          {item.replyTo.senderName || 'User'}
+        </Text>
+        <Text numberOfLines={1} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.65)' : T.textMuted }}>
+          {item.replyTo.preview || '...'}
+        </Text>
+      </View>
+    ) : null;
+
+    const renderBubbleContent = () => {
+      if (item.deletedAt) {
+        return (
+          <Text style={[styles.msgText, { fontStyle: 'italic', opacity: 0.55, color: isMe ? '#fff' : T.textMuted }]}>
+            🗑 {t('Message deleted')}
+          </Text>
+        );
+      }
+
+        // Loading indicator for optimistic messages
+        if (item.status === 'sending') {
+          if (isImage || isVideo) {
+            return (
+              <View style={{ width: Math.min(windowWidth * 0.6, 260), height: Math.min(windowWidth * 0.45, 200), borderRadius: 10, backgroundColor: T.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="small" color={isMe ? '#fff' : T.textMuted} />
+              </View>
+            );
+          }
+          return (
+            <View style={{ paddingVertical: 8, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', minWidth: 100 }}>
+              <ActivityIndicator size="small" color={isMe ? '#fff' : T.textMuted} />
+            </View>
+          );
+        }
+
+        if (isAudio) {
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 160 }}>
+            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: isMe ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.04)', justifyContent: 'center', alignItems: 'center' }}>
+              <Ionicons name={chat.playingId === (item.id || item._id) ? 'pause' : 'play'} size={16} color={isMe ? '#fff' : T.text} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 8, marginRight: 6, justifyContent: 'center' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 26 }}>
+                {[6,10,14,20,14,10,8,12].map((h, idx) => {
+                  const isPlayed = chat.playingId === (item.id || item._id) && chat.audioProgress >= (idx / 8);
+                  return (
+                    <Animated.View key={idx} style={{ width: 3.5, marginHorizontal: 1.5, backgroundColor: isMe ? '#fff' : T.text, height: h - 2, borderRadius: 1.5, opacity: isPlayed ? 1 : 0.4 }} />
+                  );
+                })}
+              </View>
+            </View>
+            <Text style={{ color: isMe ? '#fff' : T.text, fontSize: 11 }}>{formatDuration(firstAtt?.duration || item.duration)}</Text>
+          </View>
+        );
+      }
+
+      if (isImage) {
+        const imgUrl = firstAtt?.thumbnail || firstAtt?.url;
+        return (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => { if (firstAtt?.url) Linking.openURL(firstAtt.url).catch(() => {}); }}
+            style={{ borderRadius: 10, overflow: 'hidden' }}
+          >
+            <Image
+              source={{ uri: imgUrl }}
+              style={{
+                width: Math.min(windowWidth * 0.6, 260),
+                height: Math.min(windowWidth * 0.45, 200),
+                borderRadius: 10,
+                backgroundColor: T.surfaceAlt,
+              }}
+              resizeMode="cover"
+            />
+            {!!item.content && (
+              <Text style={[styles.msgText, { marginTop: 6, color: isMe ? '#fff' : T.text }]}>{item.content}</Text>
+            )}
+          </TouchableOpacity>
+        );
+      }
+
+      if (isVideo) {
+        const thumbUrl = firstAtt?.thumbnail;
+        return (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => { if (firstAtt?.url) Linking.openURL(firstAtt.url).catch(() => {}); }}
+            style={{ borderRadius: 10, overflow: 'hidden', position: 'relative' }}
+          >
+            {thumbUrl ? (
+              <Image
+                source={{ uri: thumbUrl }}
+                style={{
+                  width: Math.min(windowWidth * 0.6, 260),
+                  height: Math.min(windowWidth * 0.38, 170),
+                  borderRadius: 10,
+                  backgroundColor: T.surfaceAlt,
+                }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={{ width: Math.min(windowWidth * 0.6, 260), height: Math.min(windowWidth * 0.38, 170), borderRadius: 10, backgroundColor: isDark ? '#1a2a1a' : '#e8f5e9', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="videocam" size={32} color={T.green || '#2ECC71'} />
+              </View>
+            )}
+            {/* Play overlay */}
+            <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="play" size={22} color="#fff" />
+              </View>
+            </View>
+            {!!item.content && (
+              <Text style={[styles.msgText, { marginTop: 6, color: isMe ? '#fff' : T.text }]}>{item.content}</Text>
+            )}
+          </TouchableOpacity>
+        );
+      }
+
+      // Default: text
+      return (
+        <Text style={[styles.msgText, isMe ? { color: '#fff' } : undefined]}>{item.content}</Text>
+      );
+    };
+
+    const longPressHandler = () => {
+      if (isTemp) return;
+      chat.setReactionMsgId(item.id || item._id);
+    };
+
+    const pressHandler = () => {
+      if (isTemp) return;
+      if (isAudio) {
+        chat.playAudio(item);
+      } else {
+        chat.handlePressMessage(item);
+      }
+    };
+
     return (
       <AnimatedReanimated.View
         entering={enteringAnimation}
@@ -220,76 +424,17 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
               {item.senderName || 'User'}
             </Text>
           )}
-          
-          {item.attachments && item.attachments.length > 0 && item.attachments[0].type === 'audio' ? (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => chat.playAudio(item)}
-              onLongPress={() => {
-                if (isTemp) return;
-                chat.setReactionMsgId(item.id);
-              }}
-              style={[
-                isMe ? (item.id === highlightedMsgId ? [styles.bubbleRight, { backgroundColor: isDark ? '#196F3D' : '#27AE60' }] : styles.bubbleRight) : (item.id === highlightedMsgId ? [styles.bubbleLeft, { backgroundColor: isDark ? '#2E4053' : '#D5F5E3' }] : styles.bubbleLeft),
-                isMe && item.id !== highlightedMsgId ? { backgroundColor: '#2ECC71' } : undefined,
-                { paddingVertical: 10, paddingHorizontal: 12, minWidth: 160 }
-              ]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: isMe ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.04)', justifyContent: 'center', alignItems: 'center' }}>
-                  <Ionicons name={chat.playingId === item.id ? 'pause' : 'play'} size={16} color={isMe ? '#fff' : T.text} />
-                </View>
 
-                <View style={{ flex: 1, marginLeft: 8, marginRight: 6, justifyContent: 'center' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 26 }}>
-                    {[6,10,14,20,14,10,8,12].map((h, idx) => {
-                      const isPlayed = chat.playingId === item.id && chat.audioProgress >= (idx / 8);
-                      return (
-                        <Animated.View key={idx} style={{ width: 3.5, marginHorizontal: 1.5, backgroundColor: isMe ? '#fff' : T.text, height: h - 2, borderRadius: 1.5, opacity: isPlayed ? 1 : 0.4 }} />
-                      );
-                    })}
-                  </View>
-                </View>
-
-                <Text style={{ color: isMe ? '#fff' : T.text, fontSize: 11 }}>{formatDuration(item.attachments[0]?.duration || item.duration)}</Text>
-              </View>
-
-              {item.reactionCounts && Object.keys(item.reactionCounts).length > 0 ? (
-                <View style={{ flexDirection: 'row', marginTop: 6 }}>
-                  {Object.entries(item.reactionCounts).map(([emoji, count]: any) => (
-                    <TouchableOpacity key={emoji} onPress={() => chat.handleToggleReaction(item.id, emoji)} style={{ backgroundColor: 'rgba(0,0,0,0.05)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, marginRight: 5 }}>
-                      <Text style={{ fontSize: 12 }}>{emoji} {count}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              activeOpacity={0.95}
-              onLongPress={() => {
-                if (isTemp) return;
-                chat.setReactionMsgId(item.id);
-              }}
-              onPress={() => {
-                if (isTemp) return;
-                chat.handlePressMessage(item);
-              }}
-              style={isMe ? (item.id === highlightedMsgId ? [styles.bubbleRight, { backgroundColor: isDark ? '#196F3D' : '#27AE60', transform: [{ scale: 1.02 }] }] : styles.bubbleRight) : (item.id === highlightedMsgId ? [styles.bubbleLeft, { backgroundColor: isDark ? '#2E4053' : '#D5F5E3', transform: [{ scale: 1.02 }] }] : styles.bubbleLeft)}
-            >
-              <Text style={[styles.msgText, isMe ? { color: '#fff' } : undefined]}>{item.content}</Text>
-
-              {item.reactionCounts && Object.keys(item.reactionCounts).length > 0 ? (
-                <View style={{ flexDirection: 'row', marginTop: 6 }}>
-                  {Object.entries(item.reactionCounts).map(([emoji, count]: any) => (
-                    <TouchableOpacity key={emoji} onPress={() => chat.handleToggleReaction(item.id, emoji)} style={{ backgroundColor: 'rgba(0,0,0,0.05)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, marginRight: 5 }}>
-                      <Text style={{ fontSize: 12 }}>{emoji} {count}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            activeOpacity={0.92}
+            onLongPress={longPressHandler}
+            onPress={pressHandler}
+            style={bubbleStyle}
+          >
+            {replyPreview}
+            {renderBubbleContent()}
+            {reactionPills}
+          </TouchableOpacity>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, marginHorizontal: 6 }}>
             {!!item.pinned && (
@@ -300,6 +445,9 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
             </Text>
             {isMe && !isTemp && (
               <Ionicons name="checkmark-done" size={13} color={T.green || '#2ECC71'} style={{ marginLeft: 3 }} />
+            )}
+            {!!item.editedAt && (
+              <Text style={{ fontSize: 9, color: T.textMuted, marginLeft: 4, fontStyle: 'italic' }}>{t('edited')}</Text>
             )}
           </View>
         </View>
@@ -323,7 +471,16 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 6 }}>
+          <TouchableOpacity
+            onPress={() => {
+              if (navigation.canGoBack && navigation.canGoBack()) {
+                navigation.goBack();
+              } else {
+                navigation.navigate('MessagingHome');
+              }
+            }}
+            style={{ padding: 6 }}
+          >
             <Ionicons name={isRTL ? 'arrow-forward-outline' : 'arrow-back-outline'} size={22} color={T.text} />
           </TouchableOpacity>
           {/* Avatar with live presence dot */}
@@ -505,25 +662,92 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           ) : null}
 
           <View style={styles.inputRow}>
-            <TouchableOpacity onPress={() => {}} style={{ padding: 8 }}>
-              <Ionicons name="add" size={20} color={T.text} />
-            </TouchableOpacity>
-            <TouchableOpacity onPressIn={chat.startRecording} onPressOut={chat.stopRecordingAndSend} style={{ padding: 8, marginLeft: 6 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: chat.isRecording ? '#D9534F' : 'transparent', justifyContent: 'center', alignItems: 'center' }}>
+            {!chat.isRecording && (
+              <TouchableOpacity
+                onPress={() => {
+                  if (Platform.OS === 'web') {
+                    chat.pickMediaAndSend();
+                  } else {
+                    Alert.alert(
+                      t('Attach Media'),
+                      '',
+                      [
+                        { text: t('Photo / Video'), onPress: () => chat.pickMediaAndSend() },
+                        { text: t('Cancel'), style: 'cancel' },
+                      ]
+                    );
+                  }
+                }}
+                style={{ padding: 8 }}
+                accessibilityLabel="Attach media"
+              >
+                <Ionicons name="attach" size={22} color={T.text} />
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPressIn={chat.startRecording}
+              onPressOut={chat.stopRecordingAndSend}
+              style={{ padding: 8 }}
+            >
+              <View style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: chat.isRecording ? '#E74C3C' : 'transparent',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
                 <Ionicons name="mic" size={18} color={chat.isRecording ? '#fff' : T.text} />
               </View>
             </TouchableOpacity>
-            <TextInput
-              value={chat.input}
-              onChangeText={chat.setInput}
-              placeholder={t('Message')}
-              placeholderTextColor={T.textMuted}
-              style={styles.textInput}
-              multiline
-            />
-            <TouchableOpacity onPress={() => { chat.handleSend(); chat.setReplyingTo(null); }} style={styles.sendBtn}>
-              <Ionicons name="send" size={18} color="#fff" />
-            </TouchableOpacity>
+
+            {chat.isRecording ? (
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginLeft: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#E74C3C', opacity: pulseAnim, marginRight: 6 }} />
+                  <Text style={{ color: T.text, fontSize: 14, fontWeight: '600' }}>
+                    {t('Recording')} {formatRecordingTime(chat.recordingDuration)}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <TouchableOpacity
+                    onPress={chat.cancelRecording}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 6, marginRight: 4 }}
+                    accessibilityLabel="Cancel recording"
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#E74C3C" />
+                    <Text style={{ color: '#E74C3C', marginLeft: 3, fontWeight: '600', fontSize: 13 }}>
+                      {t('Cancel')}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={chat.stopRecordingAndSend}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#2ECC71', borderRadius: 16 }}
+                    accessibilityLabel="Send recording"
+                  >
+                    <Ionicons name="send" size={14} color="#fff" />
+                    <Text style={{ color: '#fff', marginLeft: 4, fontWeight: '700', fontSize: 13 }}>
+                      {t('Send')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <>
+                <TextInput
+                  value={chat.input}
+                  onChangeText={chat.setInput}
+                  placeholder={t('Message')}
+                  placeholderTextColor={T.textMuted}
+                  style={styles.textInput}
+                  multiline
+                />
+                <TouchableOpacity onPress={() => { chat.handleSend(); chat.setReplyingTo(null); }} style={styles.sendBtn}>
+                  <Ionicons name="send" size={18} color="#fff" />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </KeyboardAvoidingView>

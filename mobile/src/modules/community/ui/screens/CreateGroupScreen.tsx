@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, FlatList, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
+import http from '../../../../core/network/http.client';
 import * as ImagePicker from 'expo-image-picker';
 import { TokenStore } from '../../../../core/storage/secure-store';
 import { API_BASE_URL } from '../../../../core/config/api.config';
@@ -33,8 +33,7 @@ export default function CreateGroupScreen({ navigation }: any) {
     let mounted = true;
     (async () => {
       try {
-        const token = await TokenStore.getAccessToken();
-        const res = await axios.get(`${CORE_API_URL}/users`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await http.get(`${CORE_API_URL}/users`);
         if (!mounted) return;
         // Exclude self
         const list = (res.data?.data || []).filter((u: any) => String(u._id) !== String(user?._id));
@@ -87,7 +86,6 @@ export default function CreateGroupScreen({ navigation }: any) {
   const uploadImage = async (uri: string) => {
     setUploading(true);
     try {
-      const token = await TokenStore.getAccessToken();
       const filename = uri.split('/').pop() || 'group.jpg';
       const form = new FormData();
 
@@ -104,12 +102,12 @@ export default function CreateGroupScreen({ navigation }: any) {
         form.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
       }
 
-      const res = await fetch(`${CORE_API_URL}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`Upload failed: ${res.status} ${txt}`);
-      }
-      const body = await res.json();
+      const uploadRes = await http.post(`${CORE_API_URL}/uploads`, form, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      const body = uploadRes.data;
       const data = body?.data;
       if (!data || !data.url) throw new Error('Invalid upload response');
       setUploadedPhotoUrl(data.url);
@@ -131,11 +129,10 @@ export default function CreateGroupScreen({ navigation }: any) {
     const name = (groupName || selected.map(s => s.fullName || s.name).slice(0, 4).join(', ')).trim();
     const participantIds = selected.map(s => s._id || s.id);
     try {
-      const token = await TokenStore.getAccessToken();
       // Try to call existing server endpoint (may not be available on all deployments)
       const payload: any = { name, description: `Group created by ${user?.fullName || 'user'}`, participants: participantIds };
       if (uploadedPhotoUrl) payload.icon = uploadedPhotoUrl;
-      const res = await axios.post(`${CORE_API_URL}/channels`, payload, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await http.post(`${CORE_API_URL}/channels`, payload);
       const ch = res.data?.data || res.data;
       setCreating(false);
       navigation.navigate('CommunityChat', { initialChannel: ch });

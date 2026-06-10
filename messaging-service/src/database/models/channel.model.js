@@ -129,7 +129,7 @@ channelSchema.statics.updateLastMessage = function (channelId, message) {
       },
       $inc: { messageCount: 1 },
     },
-    { new: true, timestamps: false }  // don't bump updatedAt just for lastMessage
+    { returnDocument: 'after', timestamps: false }  // don't bump updatedAt just for lastMessage
   );
 };
 

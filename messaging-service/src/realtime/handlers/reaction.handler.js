@@ -52,7 +52,7 @@ function reactionHandler(io, socket) {
         const updatedMsg = await Message.findByIdAndUpdate(
           messageId,
           { $inc: { [field]: -1 } },
-          { new: true }
+          { returnDocument: 'after' }
         );
         count = updatedMsg?.reactionCounts?.get(emoji) || 0;
 
@@ -70,7 +70,7 @@ function reactionHandler(io, socket) {
         const updatedMsg = await Message.findByIdAndUpdate(
           messageId,
           { $inc: { [field]: 1 } },
-          { new: true }
+          { returnDocument: 'after' }
         );
         count = updatedMsg?.reactionCounts?.get(emoji) || 1;
       }

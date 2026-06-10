@@ -102,12 +102,12 @@ readReceiptSchema.statics.getUnreadCount = async function (channelId, userId) {
   const receipt = await this.findOne({ channelId, userId }).lean();
   if (!receipt) {
     // User has never opened this channel — count all non-deleted messages.
-    return Message.countDocuments({ channelId, deletedAt: null });
+    return Message.countDocuments({ channelId, deletedAt: { $in: [null, undefined] } });
   }
 
   return Message.countDocuments({
     channelId,
-    deletedAt: null,
+    deletedAt: { $in: [null, undefined] },
     _id: { $gt: receipt.lastReadMsgId },
   });
 };

@@ -43,13 +43,25 @@ async function uploadBuffer(buffer, opts = {}) {
       const mimeMap = {
         'audio/m4a': '.m4a', 'audio/x-m4a': '.m4a', 'audio/mp4': '.m4a',
         'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/wav': '.wav', 'audio/x-wav': '.wav',
-        'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/png': '.png', 'image/gif': '.gif',
-        'video/mp4': '.mp4'
+        'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/aac': '.aac',
+        'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp',
+        'video/mp4': '.mp4', 'video/webm': '.webm'
       };
       ext = mimeMap[opts.mimetype] || '';
+      if (!ext && opts.mimetype.includes('/')) {
+        const parts = opts.mimetype.split('/');
+        const subtype = parts[1].split(';')[0]; // handle parameters like audio/webm;codecs=opus
+        if (subtype && /^[a-zA-Z0-9]+$/.test(subtype)) {
+          ext = '.' + subtype;
+        }
+      }
     }
     if (!ext) {
-      ext = (opts.resource_type === 'image') ? '.jpg' : (opts.resource_type === 'video' ? '.mp4' : '.bin');
+      if (opts.mimetype && opts.mimetype.startsWith('audio/')) {
+        ext = '.m4a';
+      } else {
+        ext = (opts.resource_type === 'image') ? '.jpg' : (opts.resource_type === 'video' ? '.mp4' : '.bin');
+      }
     }
     if (!ext.startsWith('.')) ext = '.' + ext;
     const filename = `${safeFolder}-${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;

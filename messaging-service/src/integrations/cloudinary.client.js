@@ -72,13 +72,35 @@ async function uploadBuffer(buffer, opts = {}) {
   }
 
   // ── Local fallback ─────────────────────────────────────────────────────────
-  const uploadDir = path.join(__dirname, '..', '..', '..', '..', 'messaging-service', 'uploads');
+  const uploadDir = path.join(__dirname, '..', '..', 'uploads');
   fs.mkdirSync(uploadDir, { recursive: true });
 
   let ext = '';
   if (opts.filename) ext = path.extname(opts.filename);
-  if (!ext && opts.mimetype) ext = MIME_EXT[opts.mimetype] || '';
-  if (!ext) ext = opts.resource_type === 'image' ? '.jpg' : '.mp4';
+  if (!ext && opts.mimetype) {
+    const mimeMap = {
+      'audio/m4a': '.m4a', 'audio/x-m4a': '.m4a', 'audio/mp4': '.m4a',
+      'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/wav': '.wav', 'audio/x-wav': '.wav',
+      'audio/webm': '.webm', 'audio/ogg': '.ogg', 'audio/aac': '.aac',
+      'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp',
+      'video/mp4': '.mp4', 'video/webm': '.webm'
+    };
+    ext = mimeMap[opts.mimetype] || '';
+    if (!ext && opts.mimetype.includes('/')) {
+      const parts = opts.mimetype.split('/');
+      const subtype = parts[1].split(';')[0];
+      if (subtype && /^[a-zA-Z0-9]+$/.test(subtype)) {
+        ext = '.' + subtype;
+      }
+    }
+  }
+  if (!ext) {
+    if (opts.mimetype && opts.mimetype.startsWith('audio/')) {
+      ext = '.m4a';
+    } else {
+      ext = opts.resource_type === 'image' ? '.jpg' : '.mp4';
+    }
+  }
   if (!ext.startsWith('.')) ext = '.' + ext;
 
   const safeFolder = (opts.folder || 'files').replace(/[/\\]+/g, '_');

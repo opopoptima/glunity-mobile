@@ -85,6 +85,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  // ── Register push notifications when user is authenticated ──────────────────
+  useEffect(() => {
+    if (state.user) {
+      const { registerForPushNotificationsAsync } = require('../../../shared/utils/notifications');
+      registerForPushNotificationsAsync().catch((err: any) => {
+        console.warn('Failed to register push notifications:', err);
+      });
+    }
+  }, [state.user]);
+
   // ── Handle global token expiration and auto-logout ────────────────────────
   useEffect(() => {
     const { setOnUnauthorized } = require('../../../core/network/http.client');

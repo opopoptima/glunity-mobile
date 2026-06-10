@@ -25,10 +25,16 @@ const env              = require('../../config/env');
 
 const IMAGE_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']);
 const VIDEO_MIMES = new Set(['video/mp4', 'video/webm']);
-const ALL_ALLOWED  = new Set([...IMAGE_MIMES, ...VIDEO_MIMES]);
+const AUDIO_MIMES = new Set([
+  'audio/m4a', 'audio/x-m4a', 'audio/mp4', 'audio/aac',
+  'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav',
+  'audio/webm', 'audio/ogg', 'audio/3gpp', 'audio/amr'
+]);
+const ALL_ALLOWED  = new Set([...IMAGE_MIMES, ...VIDEO_MIMES, ...AUDIO_MIMES]);
 
 const MAX_IMAGE = env.media?.maxImageSize ?? 10 * 1024 * 1024;  // 10 MB
 const MAX_VIDEO = env.media?.maxVideoSize ?? 50 * 1024 * 1024;  // 50 MB
+const MAX_AUDIO = 20 * 1024 * 1024;  // 20 MB
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -51,7 +57,7 @@ function mediaFileFilter(_req, file, cb) {
   } else {
     cb(
       createError(
-        `File type "${file.mimetype}" is not allowed. Accepted: jpg, png, gif, webp, mp4, webm`,
+        `File type "${file.mimetype}" is not allowed. Accepted: jpg, png, gif, webp, mp4, webm, audio files`,
         415,
         'UNSUPPORTED_MEDIA_TYPE'
       )
@@ -115,6 +121,7 @@ const uploadService = {
     const { buffer, mimetype, originalname, size } = file;
     const isImage = IMAGE_MIMES.has(mimetype);
     const isVideo = VIDEO_MIMES.has(mimetype);
+    const isAudio = AUDIO_MIMES.has(mimetype);
 
     // ── Per-type size enforcement ─────────────────────────────────────────
     if (isImage && size > MAX_IMAGE) {
@@ -123,19 +130,27 @@ const uploadService = {
     if (isVideo && size > MAX_VIDEO) {
       throw createError(`Video exceeds ${MAX_VIDEO / 1024 / 1024} MB limit`, 413, 'FILE_TOO_LARGE');
     }
+    if (isAudio && size > MAX_AUDIO) {
+      throw createError(`Audio exceeds ${MAX_AUDIO / 1024 / 1024} MB limit`, 413, 'FILE_TOO_LARGE');
+    }
 
     // ── Build Cloudinary opts ─────────────────────────────────────────────
-    const resourceType = isImage ? 'image' : 'video';
+    const resourceType = isImage ? 'image' : ((isVideo || isAudio) ? 'video' : 'auto');
+    let folderSuffix = 'files';
+    if (isImage) folderSuffix = 'images';
+    else if (isVideo) folderSuffix = 'videos';
+    else if (isAudio) folderSuffix = 'audio';
+
     const opts = {
       resource_type: resourceType,
-      folder:        `glunity/messaging/${channelId}/${isImage ? 'images' : 'videos'}`,
+      folder:        `glunity/messaging/${channelId}/${folderSuffix}`,
       filename:      originalname,
       mimetype,
       use_filename:  true,
       unique_filename: true,
       overwrite:     false,
-      // Request eager thumbnail generation when Cloudinary is configured
-      eager: isImage ? imageThumbnailEager() : videoThumbnailEager(),
+      // Request eager thumbnail generation only for images/videos
+      eager: isImage ? imageThumbnailEager() : (isVideo ? videoThumbnailEager() : []),
       eager_async: false, // wait for eager transforms before returning
     };
 
@@ -152,12 +167,12 @@ const uploadService = {
     return {
       url:       result.secure_url || result.url,
       publicId:  result.public_id,
-      type:      isImage ? 'image' : 'video',
+      type:      isImage ? 'image' : (isVideo ? 'video' : (isAudio ? 'audio' : 'file')),
       filename:  originalname,
       size:      size ?? buffer.length,
       mimeType:  mimetype,
       thumbnail: thumbnailUrl,
-      duration:  result.duration ?? null, // populated by Cloudinary for video
+      duration:  result.duration ?? null, // populated by Cloudinary for video/audio
     };
   },
 };

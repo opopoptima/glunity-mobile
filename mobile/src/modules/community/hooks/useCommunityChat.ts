@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Platform, Alert, Animated, Dimensions, Clipboard, LayoutAnimation, UIManager } from 'react-native';
-import axios from 'axios';
+import http from '../../../core/network/http.client';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../auth/state/auth.context';
 import { useSocket } from '../../../shared/context/socket.context';
@@ -8,7 +8,6 @@ import { useTheme } from '../../../shared/context/theme.context';
 import { useLanguage } from '../../../shared/context/language.context';
 import { TokenStore } from '../../../core/storage/secure-store';
 import { API_BASE_URL } from '../../../core/config/api.config';
-import http from '../../../core/network/http.client';
 import messagingHttp from '../../../core/network/messaging-http.client';
 import messagingEvents from '../../../shared/utils/messagingEvents';
 import { ChatCacheService } from '../services/chat-cache.service';
@@ -40,8 +39,26 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const [input, setInput] = useState('');
 
   // Audio recording
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingInstance, setRecordingInstance] = useState<any>(null);
+  const [isRecording, setIsRecordingState] = useState(false);
+  const isRecordingRef = useRef(false);
+  const setIsRecording = (val: boolean) => {
+    isRecordingRef.current = val;
+    setIsRecordingState(val);
+  };
+
+  const [recordingInstance, setRecordingInstanceState] = useState<any>(null);
+  const recordingInstanceRef = useRef<any>(null);
+  const setRecordingInstance = (val: any) => {
+    recordingInstanceRef.current = val;
+    setRecordingInstanceState(val);
+  };
+
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingTimerRef = useRef<any>(null);
+  const isPreparingRecordingRef = useRef(false);
+  const shouldStopRecordingRef = useRef(false);
+  const pressStartRef = useRef(0);
+
   const [playingId, setPlayingId] = useState<string | null>(null);
 
   // Group Details & Modals states
@@ -150,12 +167,17 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
     async function loadHistory() {
       const targetId = channel.id || channel._id;
+      if (typeof targetId === 'string' && targetId.startsWith('local-')) {
+        setLoading(false);
+        return;
+      }
 
       // 1. Try to load from cache first for instant UI response
       try {
         const cached = await ChatCacheService.getMessages(targetId);
         if (mounted && cached && cached.length > 0) {
-          setMessages(cached);
+          const filtered = cached.filter((m: any) => !m.status || m.status === 'sent');
+          setMessages(filtered);
           setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 60);
         }
       } catch (err) {
@@ -214,6 +236,11 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   useEffect(() => {
     if (!channel || !socket) return;
 
+    const targetId = channel.id || channel._id;
+    if (typeof targetId === 'string' && !targetId.startsWith('local-')) {
+      socket.emit('channel:join', { channelId: targetId });
+    }
+
     const handleNewMessage = ({ message }: any) => {
       const msgChannelId = message.channelId?.toString?.() || message.channelId;
       const thisChannelId = (channel.id || channel._id)?.toString?.() || (channel.id || channel._id);
@@ -248,7 +275,8 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       }
       setMessages((prev) => prev.map((m) => {
-        if (m.id !== messageId) return m;
+        // Match by either id or _id — server emits `id`, local messages may have `_id`
+        if (String(m.id || m._id || '') !== String(messageId)) return m;
         const updated = { ...m };
         updated.reactionCounts = { ...(updated.reactionCounts || {}) };
         if (count > 0) updated.reactionCounts[emoji] = count;
@@ -261,14 +289,20 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       if (Platform.OS !== 'web') {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       }
-      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, content, editedAt } : m));
+      setMessages((prev) => prev.map((m) =>
+        String(m.id || m._id || '') === String(messageId) ? { ...m, content, editedAt } : m
+      ));
     };
 
     const handleMessageDeleted = ({ messageId }: any) => {
       if (Platform.OS !== 'web') {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       }
-      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, deletedAt: new Date().toISOString(), content: null } : m));
+      setMessages((prev) => prev.map((m) =>
+        String(m.id || m._id || '') === String(messageId)
+          ? { ...m, deletedAt: new Date().toISOString(), content: null }
+          : m
+      ));
     };
 
     const handleMessagePinned = ({ messageId, pinned, pinnedMessages }: any) => {
@@ -299,6 +333,9 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     socket.on('message:unpinned', handleMessageUnpinned);
 
     return () => {
+      if (typeof targetId === 'string' && !targetId.startsWith('local-')) {
+        socket.emit('channel:leave', { channelId: targetId });
+      }
       socket.off('message:new', handleNewMessage);
       socket.off('reaction:updated', handleReactionUpdated);
       socket.off('message:edited', handleMessageEdited);
@@ -308,12 +345,15 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     };
   }, [channel, socket]);
 
-  // Clean up any playing audio when the hook unmounts
+  // Clean up any playing audio and recording timers when the hook unmounts
   useEffect(() => {
     return () => {
       if (activeSoundRef.current) {
         activeSoundRef.current.stopAsync().catch(() => { });
         activeSoundRef.current.unloadAsync().catch(() => { });
+      }
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
       }
     };
   }, []);
@@ -322,6 +362,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   useEffect(() => {
     if (!input.trim() || !socket || !channel) return;
     const targetId = channel.id || channel._id;
+    if (typeof targetId === 'string' && targetId.startsWith('local-')) return;
 
     const throttle = setTimeout(() => {
       socket.emit('message:typing', { channelId: targetId });
@@ -356,6 +397,12 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const handleSend = useCallback((customContent?: string, retryTempId?: string) => {
     const textToSend = customContent !== undefined ? customContent : input.trim();
     if (!textToSend || !socket || !channel) return;
+
+    const targetId = channel.id || channel._id;
+    if (typeof targetId === 'string' && targetId.startsWith('local-')) {
+      Alert.alert(t('Please wait'), t('The channel is still initializing.'));
+      return;
+    }
 
     if (editingMsgId) {
       socket.emit('message:edit', { messageId: editingMsgId, content: textToSend }, (res: any) => {
@@ -400,7 +447,15 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     });
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
 
-    const payload = { channelId: channel.id || channel._id, content: textToSend, type: 'text' };
+    const payload: any = {
+      channelId: channel.id || channel._id,
+      content: textToSend,
+      type: 'text',
+    };
+    // Include reply context when set
+    if (replyingTo) {
+      payload.replyTo = { messageId: replyingTo.id, senderName: replyingTo.senderName };
+    }
 
     // Safety timeout: if server doesn't respond in 8 seconds, mark as failed
     let resolved = false;
@@ -423,6 +478,8 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       }
       if (res?.ok) {
+        // Clear reply context now that the message was sent successfully
+        setReplyingTo(null);
         setMessages((prev) => {
           const realId = res.data?.id || res.data?._id;
           // handleNewMessage already swapped temp- with the real message — just remove the ghost temp
@@ -446,6 +503,8 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
   const handleToggleReaction = useCallback((messageId: string, emoji: string) => {
     if (!socket) return;
+
+    // Pop animation — visual feedback only, no local count change
     setPopEmoji(emoji);
     popAnim.setValue(0);
     Animated.sequence([
@@ -453,35 +512,25 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       Animated.timing(popAnim, { toValue: 0, duration: 360, useNativeDriver: Platform.OS !== 'web' }),
     ]).start(() => setPopEmoji(null));
 
-    // Capture original state for potential error rollbacks
+    // Capture snapshot for rollback if server rejects
     let previousReactions: any = null;
     setMessages((prev) => prev.map((m) => {
-      if (m.id !== messageId) return m;
+      if (String(m.id || m._id || '') !== String(messageId)) return m;
       previousReactions = m.reactionCounts ? { ...m.reactionCounts } : {};
-
-      const updated = { ...m };
-      updated.reactionCounts = { ...(updated.reactionCounts || {}) };
-      const cur = updated.reactionCounts[emoji] || 0;
-      if (cur > 0) {
-        const next = cur - 1;
-        if (next > 0) updated.reactionCounts[emoji] = next;
-        else delete updated.reactionCounts[emoji];
-      } else {
-        updated.reactionCounts[emoji] = 1;
-      }
-      return updated;
+      return m; // Do NOT mutate locally — server will broadcast the true count
     }));
 
     socket.emit('reaction:toggle', { messageId, emoji }, (res: any) => {
       if (!res?.ok) {
         console.warn('Reaction toggle failed', res?.error);
-        // Rollback optimistic reaction changes
+        // Rollback to captured state
         setMessages((prev) => prev.map((m) => {
-          if (m.id !== messageId) return m;
+          if (String(m.id || m._id || '') !== String(messageId)) return m;
           return { ...m, reactionCounts: previousReactions };
         }));
         Alert.alert(t('Error'), res?.error || t('Failed to update reaction'));
       }
+      // On success: reaction:updated socket event will set the true count
     });
   }, [socket, popAnim, t]);
 
@@ -532,28 +581,194 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       Alert.alert('Audio not available', 'Audio module is not installed in this runtime.');
       return;
     }
+    // If we are already recording or in preparation, a pressIn is interpreted as a tap-to-stop toggle
+    if (isRecordingRef.current || recordingInstanceRef.current || isPreparingRecordingRef.current) {
+      await stopRecordingAndSend();
+      return;
+    }
     try {
-      if (recordingInstance) return;
+      pressStartRef.current = Date.now();
+      isPreparingRecordingRef.current = true;
+      shouldStopRecordingRef.current = false;
+      setRecordingDuration(0);
+
       const { status } = await ExpoAV.Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(t('Permission Denied ❌'), t('You must allow microphone access to record audio.'));
+        isPreparingRecordingRef.current = false;
         return;
       }
+
       await ExpoAV.Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const recording = new ExpoAV.Audio.Recording();
       await recording.prepareToRecordAsync(ExpoAV.Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY);
+
+      // Check if user released while preparing
+      if (shouldStopRecordingRef.current) {
+        await recording.stopAndUnloadAsync().catch(() => {});
+        isPreparingRecordingRef.current = false;
+        return;
+      }
+
       await recording.startAsync();
       setRecordingInstance(recording);
       setIsRecording(true);
+      isPreparingRecordingRef.current = false;
+
+      // Start timer
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
     } catch (err) {
       console.warn('startRecording failed', err);
+      isPreparingRecordingRef.current = false;
+      setIsRecording(false);
     }
-  }, [recordingInstance, t]);
+  }, [t]);
+
+  const cancelRecording = useCallback(async () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    isPreparingRecordingRef.current = false;
+    shouldStopRecordingRef.current = false;
+
+    const instance = recordingInstanceRef.current;
+    if (instance) {
+      await instance.stopAndUnloadAsync().catch(() => {});
+    }
+
+    setIsRecording(false);
+    setRecordingInstance(null);
+    setRecordingDuration(0);
+  }, []);
+
+  // ── Pick image / video from library and send as media message ──────────────
+  const pickMediaAndSend = useCallback(async () => {
+    if (!socket || !channel) return;
+    try {
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (perm.status !== 'granted') {
+          Alert.alert(t('Permission Denied ❌'), t('Media library access is required.'));
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All, // images + videos
+        allowsMultipleSelection: false,
+        quality: 0.85,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const asset = result.assets[0];
+      const uri = asset.uri;
+      if (!uri) return;
+
+      const token = await TokenStore.getAccessToken();
+      const targetId = channel.id || channel._id;
+      const filename = uri.split('/').pop() || 'media';
+      const isVideo = asset.type === 'video' || /\.(mp4|webm|mov)$/i.test(filename);
+      const mimeType = isVideo ? (filename.endsWith('.webm') ? 'video/webm' : 'video/mp4') : (filename.endsWith('.png') ? 'image/png' : 'image/jpeg');
+
+      // Optimistic placeholder
+      const tempId = `temp-${Date.now()}`;
+      const optimistic = {
+        id: tempId,
+        senderId: user?._id,
+        senderName: user?.fullName,
+        senderAvatarUrl: user?.avatarUrl,
+        createdAt: new Date().toISOString(),
+        type: 'media',
+        status: 'sending',
+        attachments: [{ url: uri, type: isVideo ? 'video' : 'image', filename }],
+      };
+      if (Platform.OS !== 'web') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setMessages((prev) => [...prev, optimistic]);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+
+      // Build multipart form
+      const form = new FormData();
+      if (Platform.OS === 'web' || uri.startsWith('blob:')) {
+        const blobResp = await fetch(uri);
+        const blob = await blobResp.blob();
+        const fileObj: any = typeof File !== 'undefined'
+          ? new File([blob], filename, { type: mimeType })
+          : blob;
+        form.append('file', fileObj);
+      } else {
+        form.append('file', { uri, name: filename, type: mimeType } as any);
+      }
+
+      // Upload to messaging-service channel upload endpoint
+      const uploadRes = await http.post(`${MSG_SERVICE_URL}/channels/${targetId}/upload`, form, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const body = uploadRes.data;
+      // The upload endpoint creates the message automatically and returns it
+      const serverMsg = body?.data?.message || body?.data;
+      if (serverMsg) {
+        if (Platform.OS !== 'web') {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        }
+        setMessages((prev) => {
+          const realId = serverMsg.id || serverMsg._id;
+          if (realId && prev.some((m) => String(m.id || m._id) === String(realId))) {
+            return prev.filter((m) => m.id !== tempId);
+          }
+          return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent' } : m));
+        });
+        try { messagingEvents.emit('message:new', serverMsg); } catch (e) { }
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      } else {
+        // Mark as sent even without full payload
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m)));
+      }
+    } catch (err: any) {
+      console.warn('[pickMediaAndSend] failed', err);
+      Alert.alert(t('Error'), err?.message || t('Failed to send media'));
+      // Mark optimistic message as failed
+      setMessages((prev) => prev.map((m) =>
+        typeof m.id === 'string' && m.id.startsWith('temp-') && m.status === 'sending'
+          ? { ...m, status: 'failed' }
+          : m
+      ));
+    }
+  }, [socket, channel, user, t, listRef]);
 
   const uploadAudioAndSend = useCallback(async (uri: string, durationSec?: number) => {
+    if (!socket || !channel) return;
+    const targetId = channel.id || channel._id;
+    const tempId = `temp-${Date.now()}`;
     try {
-      const token = await TokenStore.getAccessToken();
       const filename = uri.split('/').pop() || 'voice.m4a';
+
+      // 1. Optimistic placeholder
+      const optimistic = {
+        id: tempId,
+        senderId: user?._id,
+        senderName: user?.fullName,
+        senderAvatarUrl: user?.avatarUrl,
+        createdAt: new Date().toISOString(),
+        type: 'media',
+        status: 'sending',
+        attachments: [{ url: uri, type: 'audio', filename, duration: durationSec }],
+      };
+      if (Platform.OS !== 'web') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setMessages((prev) => [...prev, optimistic]);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+
+      // 2. Build multipart form
       const form = new FormData();
       if (Platform.OS === 'web' || (typeof uri === 'string' && uri.startsWith('blob:'))) {
         const blobResp = await fetch(uri);
@@ -564,47 +779,93 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         form.append('file', { uri, name: filename, type: 'audio/m4a' } as any);
       }
 
-      const res = await fetch(`${CORE_API_URL}/uploads`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
+      // 3. Post to the messaging service channel upload endpoint (which uses Cloudinary)
+      const uploadRes = await http.post(`${MSG_SERVICE_URL}/channels/${targetId}/upload`, form, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
-      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-      const body = await res.json();
-      const data = body?.data;
-      if (!data || !data.url) throw new Error('Invalid upload response');
 
-      if (!socket || !channel) return;
-      const attachments = [{ url: data.url, type: 'audio', filename: data.filename || filename, size: data.size, duration: durationSec }];
-      socket.emit('message:send', { channelId: channel.id || channel._id, content: '', type: 'media', attachments }, (res2: any) => {
-        if (res2?.ok) setMessages(prev => (prev.some(m => m.id === res2.data.id) ? prev : [...prev, res2.data]));
-      });
-    } catch (err) {
-      Alert.alert('Error', t('Failed to upload audio'));
+      const body = uploadRes.data;
+      const serverMsg = body?.data?.message || body?.data;
+      if (serverMsg) {
+        if (Platform.OS !== 'web') {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        }
+        setMessages((prev) => {
+          const realId = serverMsg.id || serverMsg._id;
+          if (realId && prev.some((m) => String(m.id || m._id) === String(realId))) {
+            return prev.filter((m) => m.id !== tempId);
+          }
+          return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent' } : m));
+        });
+        try { messagingEvents.emit('message:new', serverMsg); } catch (e) { }
+        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      } else {
+        // Mark as sent even without full payload
+        setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m)));
+      }
+    } catch (err: any) {
+      console.warn('[uploadAudioAndSend] failed', err);
+      Alert.alert(t('Error'), err?.message || t('Failed to upload audio'));
+      // Mark optimistic message as failed
+      setMessages((prev) => prev.map((m) =>
+        typeof m.id === 'string' && m.id.startsWith('temp-') && m.status === 'sending'
+          ? { ...m, status: 'failed' }
+          : m
+      ));
     }
-  }, [socket, channel, t]);
+  }, [socket, channel, user, t, listRef]);
 
   const stopRecordingAndSend = useCallback(async () => {
-    if (!ExpoAV || !recordingInstance) return;
+    // If we are still preparing, mark that we should stop as soon as it's prepared
+    if (isPreparingRecordingRef.current) {
+      shouldStopRecordingRef.current = true;
+      return;
+    }
+
+    const instance = recordingInstanceRef.current;
+    if (!instance) return;
+
+    // Distinguish between hold and quick tap
+    const duration = Date.now() - pressStartRef.current;
+    // If it's a quick tap (< 500ms) and we just started, treat it as "tap to toggle" mode.
+    // So we don't stop yet on release.
+    if (duration < 500 && isRecordingRef.current && recordingDuration === 0) {
+      return;
+    }
+
     try {
-      let durationSec: number | undefined = undefined;
+      // Clear timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+
+      let durationSec = recordingDuration;
       try {
-        const status = await recordingInstance.getStatusAsync();
+        const status = await instance.getStatusAsync();
         if (status && typeof status.durationMillis === 'number') {
           durationSec = Math.max(0, Math.round(status.durationMillis / 1000));
         }
       } catch (e) { }
 
-      await recordingInstance.stopAndUnloadAsync();
-      const uri = recordingInstance.getURI();
+      await instance.stopAndUnloadAsync().catch(() => {});
+      const uri = instance.getURI();
+
       setIsRecording(false);
       setRecordingInstance(null);
-      if (uri) await uploadAudioAndSend(uri, durationSec);
+      setRecordingDuration(0);
+
+      if (uri) {
+        await uploadAudioAndSend(uri, durationSec);
+      }
     } catch (err) {
       setIsRecording(false);
       setRecordingInstance(null);
+      setRecordingDuration(0);
     }
-  }, [recordingInstance, uploadAudioAndSend]);
+  }, [recordingDuration, uploadAudioAndSend]);
 
   const playAudio = useCallback(async (message: any) => {
     if (!ExpoAV) { Alert.alert('Audio not available'); return; }
@@ -776,7 +1037,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const uploadImageForEdit = useCallback(async (uri: string) => {
     setUploadingPhoto(true);
     try {
-      const token = await TokenStore.getAccessToken();
       const filename = uri.split('/').pop() || 'group.jpg';
       const form = new FormData();
       if (Platform.OS === 'web' || (typeof uri === 'string' && uri.startsWith('blob:'))) {
@@ -788,9 +1048,12 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         form.append('file', { uri, name: filename, type: 'image/jpeg' } as any);
       }
 
-      const res = await fetch(`${CORE_API_URL}/uploads`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
-      if (!res.ok) throw new Error('Upload failed');
-      const body = await res.json();
+      const uploadRes = await http.post(`${CORE_API_URL}/uploads`, form, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      const body = uploadRes.data;
       const data = body?.data;
       if (!data || !data.url) throw new Error('Invalid upload response');
       setEditPhotoUri(data.url);
@@ -978,6 +1241,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     typingUser,
     audioProgress,
     isRecording,
+    recordingDuration,
     playingId,
     reactionMsgId,
     setReactionMsgId,
@@ -1022,10 +1286,12 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     handleSend,
     handleRetrySend,
     handleToggleReaction,
+    pickMediaAndSend,
     handleTogglePin,
     handleDeleteMessage,
     startRecording,
     stopRecordingAndSend,
+    cancelRecording,
     playAudio,
     handlePressMessage,
     handleStartEdit,

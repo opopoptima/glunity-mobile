@@ -64,15 +64,22 @@ const uploadController = {
       const senderId          = req.user._id;
 
       // ── Access check ────────────────────────────────────────────────────
+      // Use $or so we accept: (a) public channels, (b) explicit participant entry,
+      // (c) participant stored as plain ObjectId (older schema variant).
+      // deletedAt may be undefined (field not set) or null — both mean "not deleted".
       const channel = await Channel.findOne({
-        _id:                   channelId,
-        'participants.userId': senderId,
-        deletedAt:             null,
+        _id: channelId,
+        deletedAt: { $in: [null, undefined] },
+        $or: [
+          { isPrivate: { $ne: true } },          // public / group channel
+          { 'participants.userId': senderId },    // participant sub-doc format
+          { participants: senderId },             // plain ObjectId array format
+        ],
       }).lean();
 
       if (!channel) {
         const err = new Error('Channel not found or access denied');
-        err.status = channel === null ? 404 : 403;
+        err.status = 404;
         throw err;
       }
 
@@ -92,6 +99,30 @@ const uploadController = {
 
       // ── Update channel last message ──────────────────────────────────────
       await Channel.updateLastMessage(channelId, message);
+
+      // ── Socket Broadcast ──────────────────────────────────────────────────
+      const io = req.app.get('io');
+      if (io) {
+        const populated = {
+          id:              message._id.toString(),
+          channelId:       message.channelId.toString(),
+          senderId:        message.senderId.toString(),
+          senderName:      req.user.fullName,
+          senderAvatarUrl: req.user.avatar?.url || null,
+          content:         message.content,
+          type:            message.type,
+          attachments:     message.attachments,
+          reelRef:         message.reelRef || null,
+          replyTo:         message.replyTo && message.replyTo.messageId ? {
+            messageId:  message.replyTo.messageId.toString(),
+            senderName: message.replyTo.senderName,
+            preview:    message.replyTo.preview,
+          } : null,
+          reactionCounts:  {},
+          createdAt:       message.createdAt,
+        };
+        io.to(`channel:${channelId}`).emit('message:new', { message: populated });
+      }
 
       res.status(201).json({
         success:    true,

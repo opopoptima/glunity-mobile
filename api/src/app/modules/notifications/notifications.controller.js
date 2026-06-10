@@ -83,6 +83,26 @@ const notificationsController = {
 		const deleted = await service.delete(req.params.id, userId);
 		res.status(200).json({ success: true, data: mapper.toNotificationDto(deleted), message: 'Notification deleted successfully' });
 	}),
+
+	// POST /api/notifications/test-push
+	testPush: asyncHandler(async (req, res) => {
+		const user = req.user;
+		if (!user.pushToken) {
+			const err = new Error('No push token registered for this user');
+			err.status = 400;
+			throw err;
+		}
+
+		const expoClient = require('../../integrations/push/expo.client');
+		const result = await expoClient.sendPushNotification(
+			user.pushToken,
+			'GlUnity Test Push 🚀',
+			'Hello! This is a test push notification from GlUnity backend.',
+			{ test: true }
+		);
+
+		res.status(200).json({ success: !!result, result });
+	}),
 };
 
 module.exports = notificationsController;

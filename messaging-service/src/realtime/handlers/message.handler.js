@@ -74,7 +74,7 @@ function messageHandler(io, socket) {
             createdAt: msg.createdAt,
           },
         },
-      }, { new: true }).lean();
+      }, { returnDocument: 'after' }).lean();
 
       // Populate sender info for clients
       const populated = {
@@ -158,7 +158,7 @@ function messageHandler(io, socket) {
 
       if (callback) callback({ ok: true, data: populated });
     } catch (err) {
-      logger.error('[socket:message] Send failed', { err: err.message });
+      logger.error('[socket:message] Send failed', { err: err.message, stack: err.stack });
       if (callback) callback({ ok: false, error: err.message });
     }
   });
