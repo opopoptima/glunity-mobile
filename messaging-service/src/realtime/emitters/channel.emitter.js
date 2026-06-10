@@ -22,12 +22,20 @@ const emitter = {
     io.to(`channel:${channelId}`).emit('message:typing', { channelId, userId, fullName });
   },
 
-  presenceOnline(io, userId) {
-    io.emit('presence:online', { userId });
+  presenceOnline(io, userId, peerIds = []) {
+    // Always emit to the user's own room (for multi-device sync)
+    io.to(userId).emit('presence:online', { userId });
+    // Emit to each peer so their UI updates without refresh
+    for (const peerId of peerIds) {
+      io.to(peerId).emit('presence:online', { userId });
+    }
   },
 
-  presenceOffline(io, userId, lastSeen) {
-    io.emit('presence:offline', { userId, lastSeen });
+  presenceOffline(io, userId, lastSeen, peerIds = []) {
+    io.to(userId).emit('presence:offline', { userId, lastSeen });
+    for (const peerId of peerIds) {
+      io.to(peerId).emit('presence:offline', { userId, lastSeen });
+    }
   },
 };
 

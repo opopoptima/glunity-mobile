@@ -27,4 +27,10 @@ router.post('/check-in', usersController.checkIn);
 /** GET /api/users/:id — get user profile by ID */
 router.get('/:id', usersController.getById);
 
+/** POST /api/users/me/groups/:groupId/pin — pin a group */
+router.post('/me/groups/:groupId/pin', usersController.pinGroup);
+
+/** DELETE /api/users/me/groups/:groupId/pin — unpin a group */
+router.delete('/me/groups/:groupId/pin', usersController.unpinGroup);
+
 module.exports = router;

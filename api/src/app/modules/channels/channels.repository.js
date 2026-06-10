@@ -5,17 +5,28 @@ const Message = require('../../../database/models/message.model');
 
 const channelsRepository = {
 	findMany({ userId, limit = 50, skip = 0 } = {}) {
-		const query = userId 
+		const query = userId
 			? { $or: [{ isPrivate: { $ne: true } }, { participants: userId }] }
 			: { isPrivate: { $ne: true } };
 		return Channel.find(query)
+			.populate({
+				path: 'pinnedMessages.messageId',
+				select: 'content senderId createdAt',
+				populate: { path: 'senderId', select: 'fullName avatar' }
+			})
 			.limit(limit)
 			.skip(skip)
 			.lean();
 	},
 
 	findById(id) {
-		return Channel.findById(id).lean();
+		return Channel.findById(id)
+			.populate({
+				path: 'pinnedMessages.messageId',
+				select: 'content senderId createdAt',
+				populate: { path: 'senderId', select: 'fullName avatar' }
+			})
+			.lean();
 	},
 
 	findDirectChannel(user1Id, user2Id) {

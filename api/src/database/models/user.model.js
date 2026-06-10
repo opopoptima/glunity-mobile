@@ -75,6 +75,7 @@ const userSchema = new Schema(
     },
 
     avatar: imageSchema,
+    pinnedGroups: [{ type: Schema.Types.ObjectId, ref: 'Channel' }],
 
     // ── Gamification ─────────────────────────────────────────────────────────
     streakDays: {
@@ -168,6 +169,19 @@ const userSchema = new Schema(
     passwordResetToken: { type: String, select: false },
     passwordResetExpires: { type: Date, select: false },
 
+    // ── Presence ──────────────────────────────────────────────────────────────
+    onlineStatus: {
+      type: String,
+      enum: ['online', 'offline'],
+      default: 'offline',
+      index: true,
+    },
+
+    lastSeenAt: {
+      type: Date,
+      default: null,
+    },
+
     // ── Soft delete ───────────────────────────────────────────────────────────
     isActive: {
       type: Boolean,
@@ -228,6 +242,8 @@ userSchema.methods.toPublic = function () {
     dataSharingEnabled: this.dataSharingEnabled,
     publicProfileEnabled: this.publicProfileEnabled,
     emailVerified: this.emailVerified,
+    onlineStatus: this.onlineStatus,
+    lastSeenAt: this.lastSeenAt,
     isActive: this.isActive,
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,

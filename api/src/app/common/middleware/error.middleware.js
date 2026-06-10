@@ -52,6 +52,7 @@ function errorMiddleware(err, req, res, next) {
   res.status(status).json({
     success: false,
     code,
+    error: message,
     message,
     ...(err.errors && { errors: err.errors }),
     ...(env.isDev && { stack: err.stack }),

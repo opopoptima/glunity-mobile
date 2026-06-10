@@ -3,10 +3,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View, Platform } from 'react-native';
 import './src/shared/utils/text-scaling';
 import { AuthProvider } from './src/modules/auth/state/auth.context';
+import { SocketProvider } from './src/shared/context/socket.context';
 import { LanguageProvider } from './src/shared/context/language.context';
 import { ThemeProvider } from './src/shared/context/theme.context';
 import { ThemedNavigationContainer } from './src/shared/components/ThemedNavigationContainer';
 import { RootNavigator } from './src/navigation/RootNavigator';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { eventsApi } from './src/modules/home/api/events.api';
 import { locationsApi } from './src/modules/map/api/locations.api';
@@ -92,14 +94,16 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <AuthProvider>
-        <LanguageProvider>
-          <ThemeProvider>
-            <ThemedNavigationContainer linking={linking as any}>
-              <RootNavigator />
-              <StartupPrefetch />
-            </ThemedNavigationContainer>
-          </ThemeProvider>
-        </LanguageProvider>
+        <SocketProvider>
+          <LanguageProvider>
+            <ThemeProvider>
+              <ThemedNavigationContainer linking={linking as any}>
+                <RootNavigator />
+                <StartupPrefetch />
+              </ThemedNavigationContainer>
+            </ThemeProvider>
+          </LanguageProvider>
+        </SocketProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

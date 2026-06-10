@@ -11,6 +11,7 @@ import authApi, { LoginDto, RegisterDto, UpdateProfileDto } from '../api/auth.ap
 import { TokenStore } from '../../../core/storage/secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setTextMultiplier, loadTextMultiplier } from '@/shared/utils/text-scaling';
+import { ChatCacheService } from '../../community/services/chat-cache.service';
 
 function getAuthErrorMessage(err: any, fallback: string): string {
   if (err?.response?.data?.message) {
@@ -161,6 +162,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await authApi.logout();
     } finally {
+      // Clear offline messages cache upon user logout
+      await ChatCacheService.clearCache().catch((err) =>
+        console.warn('Failed to clear chat cache during logout:', err)
+      );
       dispatch({ type: 'CLEAR_USER' });
     }
   }, []);

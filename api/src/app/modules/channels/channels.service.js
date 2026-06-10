@@ -38,7 +38,11 @@ const channelsService = {
 				name,
 				description,
 				isPrivate: true,
-				participants: [user1Id, user2Id]
+				type: 'direct',
+				participants: [
+					{ userId: user1Id, role: 'member' },
+					{ userId: user2Id, role: 'member' }
+				]
 			});
 		}
 		return channel;
@@ -63,6 +67,192 @@ const channelsService = {
 	async postMessage(payload) {
 		const msg = await repository.createMessage(payload);
 		return msg.populate('senderId', 'fullName avatar');
+	},
+
+	async seedChannelsIfNeeded() {
+		const Channel = require('../../../database/models/channel.model');
+		try {
+			await Channel.collection.dropIndex('name_1');
+		} catch (e) {
+			// ignore if it doesn't exist
+		}
+		const count = await Channel.countDocuments({ isPrivate: { $ne: true } });
+		if (count === 0) {
+			const defaults = [
+				{ name: 'General Chat', description: 'Talk about anything gluten-free.', icon: 'chatbubbles-outline' },
+				{ name: 'Beginner Guide', description: 'New to gluten-free? Start here.', icon: 'leaf-outline' },
+				{ name: 'Healthy Lifestyle', description: 'Balance your diet and wellness.', icon: 'fitness-outline' },
+				{ name: 'Gluten-Free Desserts', description: 'Sweet treats without gluten.', icon: 'heart-outline' },
+			];
+			await Channel.insertMany(defaults);
+		}
+	},
+
+	async listMembers(channelId) {
+		const Channel = require('../../../database/models/channel.model');
+		const channel = await Channel.findById(channelId).populate('participants');
+		if (!channel) {
+			const error = new Error('Channel not found');
+			error.status = 404;
+			throw error;
+		}
+		
+		const User = require('../../../database/models/user.model');
+		const members = [];
+		for (const p of channel.participants || []) {
+			if (!p) continue;
+			if (p.userId) {
+				const userObj = await User.findById(p.userId).lean();
+				if (userObj) {
+					members.push({
+						_id: userObj._id,
+						fullName: userObj.fullName || userObj.name,
+						avatarUrl: userObj.avatar?.url || userObj.profilePicture || null,
+						role: p.role || 'member'
+					});
+				}
+			} else {
+				const userObj = p.fullName ? p : await User.findById(p).lean();
+				if (userObj) {
+					members.push({
+						_id: userObj._id,
+						fullName: userObj.fullName || userObj.name,
+						avatarUrl: userObj.avatar?.url || userObj.profilePicture || null,
+						role: 'member'
+					});
+				}
+			}
+		}
+		return members;
+	},
+
+	async addMembers(channelId, memberIds) {
+		const Channel = require('../../../database/models/channel.model');
+		const channel = await Channel.findById(channelId);
+		if (!channel) {
+			const error = new Error('Channel not found');
+			error.status = 404;
+			throw error;
+		}
+
+		if (!channel.participants) {
+			channel.participants = [];
+		}
+
+		for (const id of memberIds) {
+			const exists = channel.participants.some(p => {
+				const pId = p.userId ? p.userId.toString() : p.toString();
+				return pId === id.toString();
+			});
+			if (!exists) {
+				channel.participants.push({ userId: id, role: 'member' });
+			}
+		}
+
+		await channel.save();
+		return channel;
+	},
+
+	async removeMember(channelId, memberId) {
+		const Channel = require('../../../database/models/channel.model');
+		const channel = await Channel.findById(channelId);
+		if (!channel) {
+			const error = new Error('Channel not found');
+			error.status = 404;
+			throw error;
+		}
+
+		if (channel.participants) {
+			channel.participants = channel.participants.filter(p => {
+				const pId = p.userId ? p.userId.toString() : p.toString();
+				return pId !== memberId.toString();
+			});
+		}
+
+		await channel.save();
+		return channel;
+	},
+
+	async promoteMember(channelId, memberId) {
+		const Channel = require('../../../database/models/channel.model');
+		const channel = await Channel.findById(channelId);
+		if (!channel) {
+			const error = new Error('Channel not found');
+			error.status = 404;
+			throw error;
+		}
+
+		if (channel.participants) {
+			channel.participants = channel.participants.map(p => {
+				const pId = p.userId ? p.userId.toString() : p.toString();
+				if (pId === memberId.toString()) {
+					if (p.userId) {
+						p.role = 'admin';
+					} else {
+						return { userId: pId, role: 'admin' };
+					}
+				}
+				return p;
+			});
+		}
+
+		await channel.save();
+		return channel;
+	},
+
+	async demoteMember(channelId, memberId) {
+		const Channel = require('../../../database/models/channel.model');
+		const channel = await Channel.findById(channelId);
+		if (!channel) {
+			const error = new Error('Channel not found');
+			error.status = 404;
+			throw error;
+		}
+
+		if (channel.participants) {
+			channel.participants = channel.participants.map(p => {
+				const pId = p.userId ? p.userId.toString() : p.toString();
+				if (pId === memberId.toString()) {
+					if (p.userId) {
+						p.role = 'member';
+					} else {
+						return { userId: pId, role: 'member' };
+					}
+				}
+				return p;
+			});
+		}
+
+		await channel.save();
+		return channel;
+	},
+
+	async joinChannel(channelId, userId) {
+		const Channel = require('../../../database/models/channel.model');
+		const channel = await Channel.findById(channelId);
+		if (!channel) {
+			const error = new Error('Channel not found');
+			error.status = 404;
+			throw error;
+		}
+
+		// Check if already a participant (supports both plain ObjectId and subdocument formats)
+		const alreadyMember = (channel.participants || []).some(p => {
+			const pId = p.userId ? p.userId.toString() : p.toString();
+			return pId === userId.toString();
+		});
+
+		if (!alreadyMember) {
+			// Use atomic update to avoid Mongoose validation issues on legacy docs
+			await Channel.findByIdAndUpdate(channelId, {
+				$push: {
+					participants: { userId, role: 'member' }
+				}
+			});
+		}
+
+		// Return the freshly-updated document
+		return Channel.findById(channelId);
 	},
 };
 

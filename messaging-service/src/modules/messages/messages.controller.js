@@ -31,13 +31,25 @@ const messagesController = {
   }),
 
   pin: asyncHandler(async (req, res) => {
-    await service.pin(req.params.channelId, req.params.messageId, req.user._id);
-    res.status(200).json({ success: true });
+    const { channelId, messageId } = req.params;
+    await service.pin(channelId, messageId, req.user._id);
+    const pinnedMessages = await service.getPinnedMessages(channelId);
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`channel:${channelId}`).emit('message:pinned', { channelId, messageId, pinned: true, pinnedMessages });
+    }
+    res.status(200).json({ success: true, pinnedMessages });
   }),
 
   unpin: asyncHandler(async (req, res) => {
-    await service.unpin(req.params.channelId, req.params.messageId, req.user._id);
-    res.status(200).json({ success: true });
+    const { channelId, messageId } = req.params;
+    await service.unpin(channelId, messageId, req.user._id);
+    const pinnedMessages = await service.getPinnedMessages(channelId);
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`channel:${channelId}`).emit('message:unpinned', { channelId, messageId, pinned: false, pinnedMessages });
+    }
+    res.status(200).json({ success: true, pinnedMessages });
   }),
 };
 

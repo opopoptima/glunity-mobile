@@ -11,7 +11,7 @@ try {
   ExpoImage = null;
 }
 
-type FastImageProps = {
+export type FastImageProps = {
   source: any;
   style?: any;
   contentFit?: 'contain' | 'cover' | 'stretch' | 'center' | 'fill' | 'none';

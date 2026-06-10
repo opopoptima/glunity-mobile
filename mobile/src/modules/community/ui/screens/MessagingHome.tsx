@@ -1,26 +1,21 @@
 import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, Animated, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
-import { io } from 'socket.io-client';
 import messagingEvents from '../../../../shared/utils/messagingEvents';
 import { TokenStore } from '../../../../core/storage/secure-store';
 import { API_BASE_URL } from '../../../../core/config/api.config';
 import { useTheme } from '../../../../shared/context/theme.context';
 import { useLanguage } from '../../../../shared/context/language.context';
 import { useAuth } from '../../../../modules/auth/state/auth.context';
+import { useSocket } from '../../../../shared/context/socket.context';
+import { ChatCacheService } from '../../services/chat-cache.service';
+import { usePresence } from '../../../../shared/hooks/usePresence';
+import AnimatedReanimated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 
 const CORE_API_URL = API_BASE_URL;
-const MSG_SERVICE_URL = CORE_API_URL.replace(':5000', ':5001');
-const MSG_SERVICE_SOCKET_URL = MSG_SERVICE_URL.replace('/api', '');
-
-const fallbackChannels = [
-  { _id: 'c1', name: 'General', description: 'Ok. Let me check', lastMessage: { content: 'Ok. Let me check', createdAt: new Date().toISOString() }, unreadCount: 0, avatarUrl: null },
-  { _id: 'c2', name: 'Designers', description: 'Natalie is typing...', lastMessage: { content: 'Natalie is typing...', createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString() }, unreadCount: 2, avatarUrl: 'https://randomuser.me/api/portraits/women/65.jpg' },
-  { _id: 'c3', name: 'Support', description: 'Voice message', lastMessage: { content: 'Voice message', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() }, unreadCount: 0, avatarUrl: 'https://randomuser.me/api/portraits/men/76.jpg' },
-];
 
 function formatTime(iso?: string) {
   if (!iso) return '';
@@ -35,6 +30,13 @@ export default function MessagingHome({ navigation }: any) {
   const { theme: T, isDark } = useTheme();
   const { t, isRTL } = useLanguage();
   const { user } = useAuth();
+  const { socket } = useSocket();
+  const { isOnline } = usePresence();
+
+  const seenIds = useRef<Set<string>>(new Set());
+  const hasPopulatedChannels = useRef(false);
+  const hasPopulatedContacts = useRef(false);
+  const reducedMotion = useReducedMotion();
 
   const [channels, setChannels] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -45,21 +47,42 @@ export default function MessagingHome({ navigation }: any) {
   const anim = useRef(new Animated.Value(0)).current; // 0,1,2
 
   const fetchChannels = useCallback(async () => {
-    setLoading(true);
+    // 1. Try to load cached channel list for instant rendering
+    try {
+      const cached = await ChatCacheService.getChannels();
+      if (cached && cached.length > 0) {
+        setChannels(cached);
+        setLoading(false); // remove primary loading state immediately
+      }
+    } catch (err) {
+      console.warn('Failed to load cached channels list', err);
+    }
+
     try {
       const token = await TokenStore.getAccessToken();
       const res = await axios.get(`${CORE_API_URL}/channels`, { headers: { Authorization: `Bearer ${token}` } });
-      setChannels(res.data?.data || fallbackChannels);
+      const fresh = res.data?.data || [];
+      setChannels(fresh);
+      // 2. Save fresh channel list to cache
+      await ChatCacheService.saveChannels(fresh);
     } catch (err) {
-      setChannels(fallbackChannels);
+      // only clear if we don't have cached data to avoid wipe-out
+      if (channels.length === 0) setChannels([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [channels.length]);
 
   useEffect(() => {
     fetchChannels();
-  }, [fetchChannels]);
+  }, []);
+
+  // Synchronize channel mutations (unread counts, snippets) to local database cache
+  useEffect(() => {
+    if (channels.length > 0) {
+      ChatCacheService.saveChannels(channels);
+    }
+  }, [channels]);
 
   useEffect(() => {
     (async () => {
@@ -186,6 +209,20 @@ export default function MessagingHome({ navigation }: any) {
     });
   }, [users, channels, user]);
 
+  if (!hasPopulatedChannels.current && sortedChannels && sortedChannels.length > 0) {
+    sortedChannels.forEach((c: any) => {
+      seenIds.current.add(String(c._id || c.id));
+    });
+    hasPopulatedChannels.current = true;
+  }
+
+  if (!hasPopulatedContacts.current && contactsList && contactsList.length > 0) {
+    contactsList.forEach((u: any) => {
+      seenIds.current.add(String(u._id || u.id || u.fullName));
+    });
+    hasPopulatedContacts.current = true;
+  }
+
   async function contactUser(targetId: string) {
     setCreatingContactFor(targetId);
     try {
@@ -202,68 +239,155 @@ export default function MessagingHome({ navigation }: any) {
     }
   }
 
-  const socketRef = useRef<any>(null);
+  const pinnedChannels = useMemo(() => {
+    return sortedChannels.filter((c) => c.isPinned);
+  }, [sortedChannels]);
 
-  // Connect a lightweight socket in the list screen to receive real-time updates
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const token = await TokenStore.getAccessToken();
-        if (!token) return;
-        if (socketRef.current) socketRef.current.disconnect();
-        const s = io(MSG_SERVICE_SOCKET_URL, { auth: { token } });
-        s.on('connect_error', (err: any) => console.warn('[messaging list] socket connect_error', err));
-        s.on('disconnect', (reason: any) => console.warn('[messaging list] socket disconnected', reason));
+  const unpinnedChannels = useMemo(() => {
+    return sortedChannels.filter((c) => !c.isPinned);
+  }, [sortedChannels]);
 
-        s.on('message:new', ({ message }: any) => {
-          if (!active) return;
-          setChannels((prev) => {
-            const cid = String(message.channelId || message.channel || '');
-            let found = false;
-            const next = prev.map((c) => {
-              const cId = String(c._id || c.id || c.channelId || '');
-              if (cId === cid) {
-                found = true;
-                const isSenderMe = String(message.senderId) === String(user?._id);
-                const unread = isSenderMe ? 0 : ((c.unreadCount || 0) + 1);
-                return { ...c, lastMessage: { content: message.content, createdAt: message.createdAt, messageId: message.id || message._id }, unreadCount: unread };
-              }
-              return c;
-            });
-            if (!found) return prev;
-            return next;
-          });
-        });
-
-        s.on('message:edited', ({ messageId, content }: any) => {
-          if (!active) return;
-          setChannels((prev) => prev.map((c) => {
-            const lm = c.lastMessage || {};
-            if (lm.messageId && String(lm.messageId) === String(messageId)) return { ...c, lastMessage: { ...lm, content } };
-            return c;
-          }));
-        });
-
-        s.on('message:deleted', ({ messageId, channelId }: any) => {
-          if (!active) return;
-          setChannels((prev) => prev.map((c) => {
-            const lm = c.lastMessage || {};
-            if ((lm.messageId && String(lm.messageId) === String(messageId)) || String(c._id || c.id) === String(channelId)) {
-              return { ...c, lastMessage: { ...lm, content: null } };
-            }
-            return c;
-          }));
-        });
-
-        socketRef.current = s;
-      } catch (err) {
-        console.warn('Messaging list socket error', err);
+  const flattenedList = useMemo(() => {
+    const list: any[] = [];
+    if (pinnedChannels.length > 0) {
+      list.push({ isHeader: true, title: t('Pinned') });
+      list.push(...pinnedChannels);
+    }
+    if (unpinnedChannels.length > 0) {
+      if (pinnedChannels.length > 0) {
+        list.push({ isHeader: true, title: t('Recent Chats') });
       }
-    })();
+      list.push(...unpinnedChannels);
+    }
+    return list;
+  }, [pinnedChannels, unpinnedChannels, t]);
 
-    return () => { active = false; if (socketRef.current) socketRef.current.disconnect(); };
-  }, [user]);
+  const togglePinChannel = async (channel: any) => {
+    const channelId = channel._id || channel.id;
+    const originalPinned = !!channel.isPinned;
+    const nextPinned = !originalPinned;
+
+    setChannels((prev) => 
+      prev.map((c) => 
+        (String(c._id || c.id) === String(channelId)) 
+          ? { ...c, isPinned: nextPinned } 
+          : c
+      )
+    );
+
+    try {
+      const token = await TokenStore.getAccessToken();
+      if (originalPinned) {
+        await axios.delete(`${CORE_API_URL}/channels/${channelId}/pin`, { headers: { Authorization: `Bearer ${token}` } });
+      } else {
+        await axios.post(`${CORE_API_URL}/channels/${channelId}/pin`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      }
+    } catch (err) {
+      setChannels((prev) => 
+        prev.map((c) => 
+          (String(c._id || c.id) === String(channelId)) 
+            ? { ...c, isPinned: originalPinned } 
+            : c
+        )
+      );
+      Alert.alert(t('Error'), t('Failed to update pin status'));
+    }
+  };
+
+  const handleLongPressChannel = (channel: any) => {
+    const isPinned = !!channel.isPinned;
+    const title = getChannelDisplay(channel).name;
+    
+    Alert.alert(
+      title,
+      isPinned ? t('Unpin this conversation?') : t('Pin this conversation to top?'),
+      [
+        {
+          text: t('Cancel'),
+          style: 'cancel',
+        },
+        {
+          text: isPinned ? t('Unpin') : t('Pin'),
+          onPress: () => togglePinChannel(channel),
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // Attach event listeners to the global socket for real-time updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = ({ message }: any) => {
+      setChannels((prev) => {
+        const cid = String(message.channelId || message.channel || '');
+        let found = false;
+        const next = prev.map((c) => {
+          const cId = String(c._id || c.id || c.channelId || '');
+          if (cId === cid) {
+            found = true;
+            const isSenderMe = String(message.senderId) === String(user?._id);
+            const unread = isSenderMe ? 0 : ((c.unreadCount || 0) + 1);
+            return { ...c, lastMessage: { content: message.content, createdAt: message.createdAt, messageId: message.id || message._id }, unreadCount: unread };
+          }
+          return c;
+        });
+        if (!found) return prev;
+        return next;
+      });
+    };
+
+    const handleMessageEdited = ({ messageId, content }: any) => {
+      setChannels((prev) => prev.map((c) => {
+        const lm = c.lastMessage || {};
+        if (lm.messageId && String(lm.messageId) === String(messageId)) return { ...c, lastMessage: { ...lm, content } };
+        return c;
+      }));
+    };
+
+    const handleMessageDeleted = ({ messageId, channelId }: any) => {
+      setChannels((prev) => prev.map((c) => {
+        const lm = c.lastMessage || {};
+        if ((lm.messageId && String(lm.messageId) === String(messageId)) || String(c._id || c.id) === String(channelId)) {
+          return { ...c, lastMessage: { ...lm, content: null } };
+        }
+        return c;
+      }));
+    };
+
+    const handleConversationUpdated = ({ channelId, lastMessage, unreadCount }: any) => {
+      if (!channelId) return;
+      setChannels((prev) => {
+        const cid = String(channelId);
+        const idx = prev.findIndex(c => String(c._id || c.id) === cid);
+        if (idx === -1) return prev;
+        const updated = {
+          ...prev[idx],
+          ...(lastMessage ? { lastMessage } : {}),
+          // only update unread for others (sender already has 0)
+          ...(unreadCount !== undefined ? { unreadCount } : {}),
+        };
+        // Bubble to top by moving updated item to front
+        const next = [...prev];
+        next.splice(idx, 1);
+        next.unshift(updated);
+        return next;
+      });
+    };
+
+    socket.on('message:new', handleNewMessage);
+    socket.on('message:edited', handleMessageEdited);
+    socket.on('message:deleted', handleMessageDeleted);
+    socket.on('conversation:updated', handleConversationUpdated);
+
+    return () => {
+      socket.off('message:new', handleNewMessage);
+      socket.off('message:edited', handleMessageEdited);
+      socket.off('message:deleted', handleMessageDeleted);
+      socket.off('conversation:updated', handleConversationUpdated);
+    };
+  }, [socket, user]);
 
   // When the chat screen marks a channel as opened/read, clear the badge here
   useEffect(() => {
@@ -365,13 +489,13 @@ export default function MessagingHome({ navigation }: any) {
             />
           )}
 
-            <TouchableOpacity style={[styles.tab, { flex: 1 }]} onPress={() => { setActiveTab('all'); Animated.timing(anim, { toValue: 0, useNativeDriver: true, duration: 220 }).start(); }}>
+            <TouchableOpacity style={[styles.tab, { flex: 1 }]} onPress={() => { setActiveTab('all'); Animated.timing(anim, { toValue: 0, useNativeDriver: Platform.OS !== 'web', duration: 220 }).start(); }}>
             <Text style={[styles.tabText, activeTab === 'all' ? styles.tabTextActive : undefined]}>All Chats</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.tab, { flex: 1 }]} onPress={() => { setActiveTab('groups'); Animated.timing(anim, { toValue: 1, useNativeDriver: true, duration: 220 }).start(); }}>
+          <TouchableOpacity style={[styles.tab, { flex: 1 }]} onPress={() => { setActiveTab('groups'); Animated.timing(anim, { toValue: 1, useNativeDriver: Platform.OS !== 'web', duration: 220 }).start(); }}>
             <Text style={[styles.tabText, activeTab === 'groups' ? styles.tabTextActive : undefined]}>Groups</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.tab, { flex: 1 }]} onPress={() => { setActiveTab('contacts'); Animated.timing(anim, { toValue: 2, useNativeDriver: true, duration: 220 }).start(); }}>
+          <TouchableOpacity style={[styles.tab, { flex: 1 }]} onPress={() => { setActiveTab('contacts'); Animated.timing(anim, { toValue: 2, useNativeDriver: Platform.OS !== 'web', duration: 220 }).start(); }}>
             <Text style={[styles.tabText, activeTab === 'contacts' ? styles.tabTextActive : undefined]}>Contacts</Text>
           </TouchableOpacity>
         </View>
@@ -387,54 +511,117 @@ export default function MessagingHome({ navigation }: any) {
             data={contactsList}
             contentContainerStyle={{ paddingBottom: 120 }}
             keyExtractor={(i, idx) => String(i._id || i.id || i.fullName || idx)}
-            renderItem={({ item }) => (
-              <View style={[styles.row, { justifyContent: 'space-between' }] }>
-                <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center' }}>
-                  <Image source={{ uri: item.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.fullName || 'U')}&background=8BC34A&color=fff` }} style={styles.avatar} />
-                  <View style={styles.rowContent}>
-                    <Text style={styles.rowName}>{item.fullName}</Text>
-                    <Text style={styles.rowSnippet}>{item.profileType || ''}</Text>
+            renderItem={({ item, index }) => {
+              const itemId = String(item._id || item.id || item.fullName);
+              const shouldAnimate = !seenIds.current.has(itemId);
+              if (shouldAnimate) {
+                seenIds.current.add(itemId);
+              }
+              const enteringAnimation = !shouldAnimate || reducedMotion
+                ? undefined
+                : FadeInDown.duration(250).delay(index * 40);
+              return (
+                <AnimatedReanimated.View
+                  entering={enteringAnimation}
+                  style={[styles.row, { justifyContent: 'space-between' }]}
+                >
+                  <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center' }}>
+                    <Image source={{ uri: item.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.fullName || 'U')}&background=8BC34A&color=fff` }} style={styles.avatar} />
+                    <View style={styles.rowContent}>
+                      <Text style={styles.rowName}>{item.fullName}</Text>
+                      <Text style={styles.rowSnippet}>{item.profileType || ''}</Text>
+                    </View>
                   </View>
-                </View>
-                <TouchableOpacity onPress={() => contactUser(item._id)} style={styles.contactBtn} disabled={creatingContactFor === item._id}>
-                  {creatingContactFor === item._id ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Contact</Text>}
-                </TouchableOpacity>
-              </View>
-            )}
+                  <TouchableOpacity onPress={() => contactUser(item._id)} style={styles.contactBtn} disabled={creatingContactFor === item._id}>
+                    {creatingContactFor === item._id ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Contact</Text>}
+                  </TouchableOpacity>
+                </AnimatedReanimated.View>
+              );
+            }}
           />
         )
       ) : (
         <FlatList
-          data={sortedChannels}
+          data={flattenedList}
           contentContainerStyle={{ paddingBottom: 120 }}
-          keyExtractor={(i, idx) => String(i._id || i.id || i.name || idx)}
-          renderItem={({ item }) => {
-            const disp = getChannelDisplay(item);
-                const avatarUri = disp.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(disp.name || 'C')}&background=8BC34A&color=fff`;
-            const subtitle = disp.isDM ? `Direct message with ${disp.name}` : (item.lastMessage?.content || item.description);
-            return (
-              <TouchableOpacity
-                style={styles.row}
-                onPress={() => {
-                  // clear unread locally immediately, then open chat
-                  setChannels(prev => prev.map(c => (String(c._id || c.id) === String(item._id || item.id) ? { ...c, unreadCount: 0 } : c)));
-                  navigation.navigate('CommunityChat', { initialChannel: item });
-                }}
-              >
-                <Image source={{ uri: avatarUri }} style={styles.avatar} />
-                <View style={styles.rowContent}>
-                  <View style={styles.rowTop}>
-                    <Text style={styles.rowName}>{disp.name}</Text>
-                    <Text style={styles.rowTime}>{formatTime(item.lastMessage?.createdAt)}</Text>
-                  </View>
-                  <Text style={styles.rowSnippet} numberOfLines={1}>{subtitle}</Text>
+          keyExtractor={(i, idx) => i.isHeader ? `header-${i.title}-${idx}` : String(i._id || i.id || i.name || idx)}
+          renderItem={({ item, index }) => {
+            if (item.isHeader) {
+              return (
+                <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: T.green || '#8BC34A', letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                    {item.title}
+                  </Text>
                 </View>
-                {item.unreadCount > 0 ? (
-                  <View style={styles.unreadWrap}>
-                    <View style={styles.unreadBadge}><Text style={styles.unreadText}>{item.unreadCount}</Text></View>
+              );
+            }
+
+            const disp = getChannelDisplay(item);
+            const avatarUri = disp.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(disp.name || 'C')}&background=8BC34A&color=fff`;
+            const subtitle = disp.isDM ? `Direct message with ${disp.name}` : (item.lastMessage?.content || item.description);
+
+            // ── Online dot ────────────────────────────────────────────────────
+            let showOnlineDot = false;
+            if (disp.isDM) {
+              const other = findOtherParticipant(item);
+              if (other) showOnlineDot = isOnline(other._id || other.id);
+            }
+            
+            const itemId = String(item._id || item.id);
+            const shouldAnimate = !seenIds.current.has(itemId);
+            if (shouldAnimate) {
+              seenIds.current.add(itemId);
+            }
+            const enteringAnimation = !shouldAnimate || reducedMotion
+              ? undefined
+              : FadeInDown.duration(250).delay(index * 40);
+
+            return (
+              <AnimatedReanimated.View entering={enteringAnimation}>
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={() => {
+                    // clear unread locally immediately, then open chat
+                    setChannels(prev => prev.map(c => (String(c._id || c.id) === String(item._id || item.id) ? { ...c, unreadCount: 0 } : c)));
+                    navigation.navigate('CommunityChat', { initialChannel: item });
+                  }}
+                  onLongPress={() => handleLongPressChannel(item)}
+                >
+                  <View style={{ position: 'relative' }}>
+                    <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                    {showOnlineDot && (
+                      <View style={{
+                        position: 'absolute',
+                        right: 1,
+                        bottom: 1,
+                        width: 13,
+                        height: 13,
+                        borderRadius: 7,
+                        backgroundColor: '#4CAF50',
+                        borderWidth: 2,
+                        borderColor: T.bg,
+                      }} />
+                    )}
                   </View>
-                ) : null}
-              </TouchableOpacity>
+                  <View style={styles.rowContent}>
+                    <View style={styles.rowTop}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.rowName}>{disp.name}</Text>
+                        {!!item.isPinned && (
+                          <Ionicons name="pin" size={13} color={T.green || '#8BC34A'} style={{ marginLeft: 6 }} />
+                        )}
+                      </View>
+                      <Text style={styles.rowTime}>{formatTime(item.lastMessage?.createdAt)}</Text>
+                    </View>
+                    <Text style={styles.rowSnippet} numberOfLines={1}>{subtitle}</Text>
+                  </View>
+                  {item.unreadCount > 0 ? (
+                    <View style={styles.unreadWrap}>
+                      <View style={styles.unreadBadge}><Text style={styles.unreadText}>{item.unreadCount}</Text></View>
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              </AnimatedReanimated.View>
             );
           }}
         />

@@ -13,7 +13,20 @@ const channelsController = {
 
 		let { items } = await service.list({ userId, limit, skip });
 
-		res.status(200).json(mapper.toChannelListResponse(items));
+		// Fetch user's pinnedGroups
+		const User = require('../../../database/models/user.model');
+		const userObj = await User.findById(userId).select('pinnedGroups').lean();
+		const pinnedIds = (userObj && userObj.pinnedGroups) ? userObj.pinnedGroups.map(id => id.toString()) : [];
+
+		const itemsWithPin = items.map(channel => {
+			const channelIdStr = (channel._id || channel.id).toString();
+			return {
+				...channel,
+				isPinned: pinnedIds.includes(channelIdStr)
+			};
+		});
+
+		res.status(200).json(mapper.toChannelListResponse(itemsWithPin));
 	}),
 
 	// POST /api/channels/direct
@@ -108,6 +121,98 @@ const channelsController = {
 
 		const updated = await service.update(channelId, payload);
 		res.status(200).json({ success: true, data: mapper.toChannelResponse(updated) });
+	}),
+
+	pinChannel: asyncHandler(async (req, res) => {
+		const userId = req.user?._id;
+		const channelId = req.params.id;
+
+		await service.getById(channelId);
+
+		const User = require('../../../database/models/user.model');
+		await User.findByIdAndUpdate(userId, {
+			$addToSet: { pinnedGroups: channelId }
+		});
+
+		res.status(200).json({ success: true, message: 'Channel pinned successfully' });
+	}),
+
+	unpinChannel: asyncHandler(async (req, res) => {
+		const userId = req.user?._id;
+		const channelId = req.params.id;
+
+		const User = require('../../../database/models/user.model');
+		await User.findByIdAndUpdate(userId, {
+			$pull: { pinnedGroups: channelId }
+		});
+
+		res.status(200).json({ success: true, message: 'Channel unpinned successfully' });
+	}),
+
+	listMembers: asyncHandler(async (req, res) => {
+		const channelId = req.params.id;
+		const members = await service.listMembers(channelId);
+		res.status(200).json({ success: true, data: members });
+	}),
+
+	addMembers: asyncHandler(async (req, res) => {
+		const channelId = req.params.id;
+		const { members } = req.body;
+		if (!Array.isArray(members) || members.length === 0) {
+			const error = new Error('Members list must be a non-empty array');
+			error.status = 400;
+			throw error;
+		}
+		const channel = await service.addMembers(channelId, members);
+		res.status(200).json({ success: true, data: mapper.toChannelResponse(channel) });
+	}),
+
+	removeMember: asyncHandler(async (req, res) => {
+		const channelId = req.params.id;
+		const memberId = req.params.memberId || req.body.memberId;
+		if (!memberId) {
+			const error = new Error('Member ID is required');
+			error.status = 400;
+			throw error;
+		}
+		const channel = await service.removeMember(channelId, memberId);
+		res.status(200).json({ success: true, data: mapper.toChannelResponse(channel) });
+	}),
+
+	promoteMember: asyncHandler(async (req, res) => {
+		const channelId = req.params.id;
+		const memberId = req.body.memberId;
+		if (!memberId) {
+			const error = new Error('Member ID is required');
+			error.status = 400;
+			throw error;
+		}
+		const channel = await service.promoteMember(channelId, memberId);
+		res.status(200).json({ success: true, data: mapper.toChannelResponse(channel) });
+	}),
+
+	demoteMember: asyncHandler(async (req, res) => {
+		const channelId = req.params.id;
+		const memberId = req.body.memberId;
+		if (!memberId) {
+			const error = new Error('Member ID is required');
+			error.status = 400;
+			throw error;
+		}
+		const channel = await service.demoteMember(channelId, memberId);
+		res.status(200).json({ success: true, data: mapper.toChannelResponse(channel) });
+	}),
+
+	joinChannel: asyncHandler(async (req, res) => {
+		const channelId = req.params.id;
+		const userId = req.user?._id;
+		if (!userId) {
+			const error = new Error('Unauthorized');
+			error.status = 401;
+			throw error;
+		}
+		const channel = await service.joinChannel(channelId, userId);
+		res.status(200).json({ success: true, data: mapper.toChannelResponse(channel) });
 	}),
 };
 

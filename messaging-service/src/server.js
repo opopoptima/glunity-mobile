@@ -13,6 +13,7 @@ const server = http.createServer(app);
 
 // Bootstrap Socket.IO
 const io = socketBootstrap(server);
+app.set('io', io);
 
 async function start() {
   // Connect to DB

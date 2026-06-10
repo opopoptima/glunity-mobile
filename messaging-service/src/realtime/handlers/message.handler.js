@@ -64,7 +64,7 @@ function messageHandler(io, socket) {
       await msg.save();
 
       // Denormalize on Channel: atomics
-      await Channel.findByIdAndUpdate(channelId, {
+      const updatedChannel = await Channel.findByIdAndUpdate(channelId, {
         $set: {
           lastMessage: {
             messageId: msg._id,
@@ -74,7 +74,7 @@ function messageHandler(io, socket) {
             createdAt: msg.createdAt,
           },
         },
-      });
+      }, { new: true }).lean();
 
       // Populate sender info for clients
       const populated = {
@@ -82,6 +82,7 @@ function messageHandler(io, socket) {
         channelId: msg.channelId.toString(),
         senderId: userId,
         senderName: user.fullName,
+        senderAvatarUrl: user.avatar?.url || null,
         content: msg.content,
         type: msg.type,
         attachments: msg.attachments,
@@ -96,6 +97,65 @@ function messageHandler(io, socket) {
       };
 
       emitter.messageNew(io, channelId, populated);
+
+      // Broadcast conversation updates and new message notifications to participants
+      if (updatedChannel && updatedChannel.participants) {
+        for (const p of updatedChannel.participants) {
+          const pId = (p.userId || p).toString();
+          
+          // Count unread messages for this participant
+          const unreadCount = await Message.countDocuments({
+            channelId,
+            createdAt: { $gt: p.lastReadAt || new Date(0) }
+          });
+
+          // Emit conversation:updated to the participant's room
+          io.to(pId).emit('conversation:updated', {
+            channelId,
+            lastMessage: {
+              messageId: msg._id.toString(),
+              senderId: userId,
+              senderName: user.fullName,
+              content: msg.type === 'text' ? msg.content : `[${msg.type}]`,
+              createdAt: msg.createdAt,
+            },
+            unreadCount
+          });
+
+          // If participant is not the sender, check if they are viewing the channel
+          if (pId !== userId) {
+            const userSockets = await io.in(pId).fetchSockets();
+            let isViewing = false;
+            for (const s of userSockets) {
+              if (s.rooms.has(`channel:${channelId}`)) {
+                isViewing = true;
+                break;
+              }
+            }
+
+            if (!isViewing) {
+              let conversationName = updatedChannel.name;
+              if (updatedChannel.type === 'direct') {
+                conversationName = user.fullName;
+              }
+              
+              const messagePreview = msg.type === 'text' 
+                ? (msg.content ? (msg.content.slice(0, 60) + (msg.content.length > 60 ? '...' : '')) : '') 
+                : `[${msg.type}]`;
+
+              io.to(pId).emit('notification:new', {
+                conversationId: channelId,
+                conversationName: conversationName || 'Chat',
+                senderName: user.fullName,
+                senderAvatar: user.avatar?.url || null,
+                messagePreview,
+                timestamp: msg.createdAt
+              });
+            }
+          }
+        }
+      }
+
       if (callback) callback({ ok: true, data: populated });
     } catch (err) {
       logger.error('[socket:message] Send failed', { err: err.message });

@@ -18,6 +18,7 @@ import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useLanguage } from '@/shared/context/language.context';
 import { useAuth } from '@/modules/auth/state/auth.context';
 import notificationsApi, { Notification } from '../../api/notifications.api';
+import AnimatedReanimated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Notifications'>;
 
@@ -72,6 +73,17 @@ export default function NotificationsScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedNotif, setSelectedNotif] = useState<Notification | null>(null);
+
+  const seenIds = React.useRef<Set<string>>(new Set());
+  const hasPopulated = React.useRef(false);
+  const reducedMotion = useReducedMotion();
+
+  if (!hasPopulated.current && notifications && notifications.length > 0) {
+    notifications.forEach((n: any) => {
+      seenIds.current.add(String(n.id || n._id));
+    });
+    hasPopulated.current = true;
+  }
 
   const hasRedirect = (item: Notification) => {
     const meta = item.metadata || {};
@@ -585,10 +597,23 @@ export default function NotificationsScreen({ navigation }: Props) {
               <Text style={s.emptySub}>{t('No new notifications at the moment.')}</Text>
             </View>
           }
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const iconConfig = getIconConfig(item.type);
+            
+            const itemId = String(item.id || item._id);
+            const shouldAnimate = !seenIds.current.has(itemId);
+            if (shouldAnimate) {
+              seenIds.current.add(itemId);
+            }
+            const enteringAnimation = !shouldAnimate || reducedMotion
+              ? undefined
+              : FadeInDown.duration(250).delay(index * 40);
+
             return (
-              <View style={[s.card, !item.isRead && s.cardUnread]}>
+              <AnimatedReanimated.View
+                entering={enteringAnimation}
+                style={[s.card, !item.isRead && s.cardUnread]}
+              >
                 <TouchableOpacity
                   style={s.cardClickable}
                   onPress={() => handleMarkAsRead(item)}
@@ -622,7 +647,7 @@ export default function NotificationsScreen({ navigation }: Props) {
                 >
                   <Feather name="trash-2" size={16} color={T.textMuted} />
                 </TouchableOpacity>
-              </View>
+              </AnimatedReanimated.View>
             );
           }}
         />

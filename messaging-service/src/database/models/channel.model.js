@@ -24,6 +24,13 @@ const channelSchema = new Schema(
       createdAt: Date,
     },
     createdById: { type: Schema.Types.ObjectId, ref: 'User' },
+    pinnedMessages: [
+      {
+        messageId: { type: Schema.Types.ObjectId, ref: 'Message' },
+        pinnedAt: { type: Date, default: Date.now },
+        pinnedBy: { type: Schema.Types.ObjectId, ref: 'User' }
+      }
+    ],
   },
   { timestamps: true }
 );

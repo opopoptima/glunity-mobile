@@ -32,3 +32,8 @@ tatus
 db-check-result.txt
 *.log
 *.txt.resolved
+
+# Runtime Uploads
+api/uploads/
+
+

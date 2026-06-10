@@ -23,7 +23,11 @@ async function connectDB() {
     // Centralized startup seeding
     try {
       const patientResourcesService = require('../modules/patient-resources/patient-resources.service');
-      await patientResourcesService.seedResourcesIfNeeded();
+      const channelsService = require('../modules/channels/channels.service');
+      await Promise.all([
+        patientResourcesService.seedResourcesIfNeeded(),
+        channelsService.seedChannelsIfNeeded(),
+      ]);
       logger.info('Database seeding checks completed successfully.');
     } catch (seedErr) {
       logger.error('Startup seeding failed', { err: seedErr.message });

@@ -17,6 +17,7 @@ const userSchema = new Schema(
     email:       { type: String, required: true, unique: true },
     profileType: { type: String, default: 'celiac' },
     avatar:      imageSchema,
+    pinnedGroups: [{ type: Schema.Types.ObjectId, ref: 'Channel' }],
     isActive:    { type: Boolean, default: true, index: true },
     emailVerified: { type: Boolean, default: false },
   },

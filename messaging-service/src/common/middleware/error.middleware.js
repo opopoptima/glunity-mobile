@@ -12,9 +12,9 @@ function errorHandler(err, req, res, next) {
   });
 
   res.status(status).json({
-    success: false,
-    code: err.code || 'INTERNAL_ERROR',
+    error: message,
     message,
+    code: err.code || 'INTERNAL_ERROR',
   });
 }
 

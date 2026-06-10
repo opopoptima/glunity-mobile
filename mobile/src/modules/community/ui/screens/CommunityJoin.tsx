@@ -7,6 +7,7 @@ import { TokenStore } from '../../../../core/storage/secure-store';
 import { API_BASE_URL } from '../../../../core/config/api.config';
 import { useTheme } from '../../../../shared/context/theme.context';
 import { useLanguage } from '../../../../shared/context/language.context';
+import { usePresence } from '../../../../shared/hooks/usePresence';
 
 const CORE_API_URL = API_BASE_URL;
 
@@ -33,19 +34,6 @@ function formatTime(iso?: string) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-const fallbackUsers = [
-  { _id: '1', fullName: 'Yasmine Ben Salah', profileType: 'celiac', points: 1240, avatarUrl: 'https://randomuser.me/api/portraits/women/12.jpg', badges: [{ id: 'b1', name: 'Community Contributor' }] },
-  { _id: '2', fullName: 'Rania Khelifi', profileType: 'proche', points: 980, avatarUrl: 'https://randomuser.me/api/portraits/women/23.jpg', badges: [{ id: 'b2', name: 'Gluten-Free Novice' }] },
-  { _id: '3', fullName: 'Sami Trabelsi', profileType: 'pro_commerce', points: 750, avatarUrl: 'https://randomuser.me/api/portraits/men/34.jpg', badges: [{ id: 'b3', name: 'Master Baker' }] },
-  { _id: '4', fullName: 'Ines Chaabane', profileType: 'pro_health', points: 620, avatarUrl: 'https://randomuser.me/api/portraits/women/45.jpg', badges: [] },
-];
-
-const fallbackChannels = [
-  { _id: 'c1', name: 'General Chat', description: 'General discussions for gluten-free lifestyle.', lastMessage: { content: 'Welcome!', createdAt: new Date().toISOString() }, unreadCount: 0, avatarUrl: null },
-  { _id: 'c2', name: 'Recipe Sharing', description: 'Share your gluten-free recipes and tips.', lastMessage: { content: 'Check this recipe', createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString() }, unreadCount: 0, avatarUrl: null },
-  { _id: 'c3', name: 'Support', description: 'Help and support', lastMessage: { content: 'Need help?', createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() }, unreadCount: 0, avatarUrl: null },
-];
-
 function isDMChannel(c: any) {
   if (!c) return false;
   if (c.name && typeof c.name === 'string' && c.name.startsWith('DM-')) return true;
@@ -68,6 +56,7 @@ export default function CommunityJoin({ navigation }: any) {
   const { t, isRTL } = useLanguage();
   const insets = useSafeAreaInsets();
   const screenW = Dimensions.get('window').width;
+  const { isOnline } = usePresence();
 
   const [users, setUsers] = useState<any[]>([]);
   const [channels, setChannels] = useState<any[]>([]);
@@ -79,15 +68,15 @@ export default function CommunityJoin({ navigation }: any) {
     (async () => {
       try {
         const token = await TokenStore.getAccessToken();
-        // Try to fetch users list — if API doesn't support it, fallback to seeded data
+        // Try to fetch users list — if API doesn't support it, fallback to empty array
         try {
           const res = await axios.get(`${CORE_API_URL}/users`, { headers: { Authorization: `Bearer ${token}` } });
-          setUsers(res.data?.data || fallbackUsers);
+          setUsers(res.data?.data || []);
         } catch (e) {
-          setUsers(fallbackUsers);
+          setUsers([]);
         }
       } catch (err) {
-        setUsers(fallbackUsers);
+        setUsers([]);
       } finally {
         setLoadingUsers(false);
       }
@@ -97,12 +86,12 @@ export default function CommunityJoin({ navigation }: any) {
       try {
         const token = await TokenStore.getAccessToken();
         const res = await axios.get(`${CORE_API_URL}/channels`, { headers: { Authorization: `Bearer ${token}` } });
-        const data = res.data?.data && res.data.data.length ? res.data.data : fallbackChannels;
+        const data = res.data?.data && res.data.data.length ? res.data.data : [];
         // Only keep non-DM/group channels that the user can join
         setChannels(data.filter((ch: any) => !isDMChannel(ch)));
       } catch (err) {
         console.error('[community] failed to fetch channels', err);
-        setChannels(fallbackChannels.filter((ch: any) => !isDMChannel(ch)));
+        setChannels([]);
       } finally {
         setLoadingChannels(false);
       }
@@ -205,7 +194,11 @@ export default function CommunityJoin({ navigation }: any) {
                             <View style={styles.avatarImage} />
                           )}
                         </View>
-                        <View style={styles.statusDot} />
+                        {/* Live presence dot — green if online, grey if offline */}
+                        <View style={[
+                          styles.statusDot,
+                          { backgroundColor: isOnline(item._id) ? T.green : '#9E9E9E' }
+                        ]} />
                       </View>
 
                       <Text style={styles.userName} numberOfLines={1}>{item.fullName}</Text>

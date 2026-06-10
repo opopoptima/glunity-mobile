@@ -14,6 +14,7 @@ import {
   Alert,
 } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';import { useTheme } from '../context/theme.context';
+import AnimatedReanimated, { SlideInUp, SlideOutUp, useReducedMotion } from 'react-native-reanimated';
 import { useAuth } from '@/modules/auth/state/auth.context';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import notificationsApi from '@/modules/notifications/api/notifications.api';
@@ -75,6 +76,18 @@ export function AppHeader({
   const prevUnreadCountRef = React.useRef(0);
   const navigationRef = React.useRef(navigation);
 
+  const [activeToast, setActiveToast] = React.useState<{ title: string; body: string } | null>(null);
+  const reducedMotion = useReducedMotion();
+
+  React.useEffect(() => {
+    if (activeToast) {
+      const timer = setTimeout(() => {
+        setActiveToast(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeToast]);
+
   // Keep navigation ref updated
   React.useEffect(() => {
     navigationRef.current = navigation;
@@ -97,20 +110,7 @@ export function AppHeader({
             const newNotifications = res.data.filter((n: any) => !n.isRead);
             if (newNotifications.length > 0) {
               const latestNotif = newNotifications[0];
-              Alert.alert(
-                t(latestNotif.title),
-                t(latestNotif.body),
-                [
-                  {
-                    text: t('View'),
-                    onPress: () => navigationRef.current.navigate('Notifications'),
-                  },
-                  {
-                    text: t('CLOSE'),
-                    style: 'cancel',
-                  },
-                ]
-              );
+              setActiveToast({ title: latestNotif.title, body: latestNotif.body });
             }
           }
 
@@ -301,12 +301,82 @@ export function AppHeader({
           shadowRadius: 2,
           elevation: 1,
         },
+        toastContainer: {
+          position: 'absolute',
+          top: Platform.OS === 'ios' ? 50 : 20,
+          left: 16,
+          right: 16,
+          zIndex: 9999,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.15,
+          shadowRadius: 10,
+          elevation: 8,
+        },
+        toastContent: {
+          flexDirection: isRTL ? 'row-reverse' : 'row',
+          alignItems: 'center',
+          backgroundColor: C.surface || C.bg || '#FFFFFF',
+          borderRadius: 16,
+          padding: 12,
+          borderWidth: 1,
+          borderColor: C.border || C.divider || '#E0E0E0',
+        },
+        toastIconBox: {
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: '#8BC34A',
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        toastTitle: {
+          fontSize: 14,
+          fontFamily: F.bold,
+          fontWeight: '700',
+          color: C.text,
+          textAlign: isRTL ? 'right' : 'left',
+        },
+        toastBody: {
+          fontSize: 12,
+          fontFamily: F.regular,
+          color: C.textMuted,
+          marginTop: 2,
+          textAlign: isRTL ? 'right' : 'left',
+        },
       }),
     [C, isRTL, roleColor]
   );
 
   return (
     <View style={s.wrap}>
+      {activeToast && (
+        <AnimatedReanimated.View
+          entering={reducedMotion ? undefined : SlideInUp.duration(300)}
+          exiting={reducedMotion ? undefined : SlideOutUp.duration(250)}
+          style={s.toastContainer}
+        >
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => {
+              setActiveToast(null);
+              navigationRef.current.navigate('Notifications');
+            }}
+            style={s.toastContent}
+          >
+            <View style={s.toastIconBox}>
+              <Feather name="bell" size={18} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={s.toastTitle} numberOfLines={1}>{t(activeToast.title)}</Text>
+              <Text style={s.toastBody} numberOfLines={2}>{t(activeToast.body)}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setActiveToast(null)} style={{ padding: 4 }}>
+              <Feather name="x" size={16} color={C.textMuted} />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </AnimatedReanimated.View>
+      )}
       <View style={s.row}>
         {onBack ? (
           // Detail screen header flow

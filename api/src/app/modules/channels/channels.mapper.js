@@ -10,6 +10,19 @@ const toChannelResponse = (channel) => {
 		// Provide a normalized avatarUrl for clients that expect an image URL
 		avatarUrl: (channel.icon && typeof channel.icon === 'string' && (channel.icon.startsWith('http') || channel.icon.startsWith('/'))) ? channel.icon : null,
 		isPrivate: channel.isPrivate,
+		pinnedMessages: channel.pinnedMessages ? channel.pinnedMessages.map(pm => {
+			const msgObj = pm.messageId || {};
+			return {
+				messageId: msgObj._id || msgObj.id || pm.messageId,
+				pinnedAt: pm.pinnedAt,
+				pinnedBy: pm.pinnedBy,
+				content: msgObj.content || '',
+				senderName: msgObj.senderId?.fullName || 'Anonymous',
+				senderAvatarUrl: msgObj.senderId?.avatar?.url || null,
+				createdAt: msgObj.createdAt
+			};
+		}) : [],
+		isPinned: channel.isPinned || false,
 	};
 };
 

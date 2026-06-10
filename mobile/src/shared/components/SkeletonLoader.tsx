@@ -36,8 +36,8 @@ export function SkeletonLoader({ style, width, height, borderRadius = 8 }: Skele
     <Animated.View
       style={[
         {
-          width,
-          height,
+          width: width as any,
+          height: height as any,
           borderRadius,
           backgroundColor: T.surfaceAlt,
           opacity: pulseAnim,

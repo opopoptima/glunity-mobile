@@ -37,6 +37,9 @@ function bootstrap(httpServer) {
     logger.info('[socket.io] Client connected', { userId, socketId: socket.id });
 
     socket.data.io = io;
+    if (userId !== 'unknown') {
+      socket.join(userId);
+    }
 
     channelHandler (io, socket);
     messageHandler (io, socket);

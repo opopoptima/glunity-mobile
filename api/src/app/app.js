@@ -63,6 +63,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/badges', badgesRoutes);
 app.use('/api/reviews', reviewsRoutes);
 app.use('/api/channels',          channelsRoutes);
+app.use('/api/conversations',     channelsRoutes);
 app.use('/api/patient-resources', patientResourcesRoutes);
 app.use('/api/uploads', uploadsRoutes);
 

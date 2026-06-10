@@ -391,6 +391,43 @@ const usersController = {
       data: user.toPublic(),
     });
   }),
+
+  /** POST /api/users/me/groups/:groupId/pin — pin a group */
+  pinGroup: asyncHandler(async (req, res) => {
+    const { groupId } = req.params;
+    const user = await User.findById(req.user._id);
+    if (!user) throw AppError.notFound('User');
+
+    if (!user.pinnedGroups) {
+      user.pinnedGroups = [];
+    }
+    if (!user.pinnedGroups.some(g => g.toString() === groupId.toString())) {
+      user.pinnedGroups.push(groupId);
+      await user.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { pinnedGroups: user.pinnedGroups }
+    });
+  }),
+
+  /** DELETE /api/users/me/groups/:groupId/pin — unpin a group */
+  unpinGroup: asyncHandler(async (req, res) => {
+    const { groupId } = req.params;
+    const user = await User.findById(req.user._id);
+    if (!user) throw AppError.notFound('User');
+
+    if (user.pinnedGroups) {
+      user.pinnedGroups = user.pinnedGroups.filter(g => g.toString() !== groupId.toString());
+      await user.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      data: { pinnedGroups: user.pinnedGroups }
+    });
+  }),
 };
 
 module.exports = usersController;
