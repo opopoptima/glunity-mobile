@@ -807,6 +807,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     });
     setReactionMsgId(null);
   }, [socket]);
+
   // Audio Recording Operations
   const startRecording = useCallback(async () => {
     // If we are already recording or in preparation, a pressIn is interpreted as a tap-to-stop toggle
@@ -820,6 +821,12 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       shouldStopRecordingRef.current = false;
       setRecordingDuration(0);
 
+      if (typeof requestRecordingPermissionsAsync !== 'function') {
+        Alert.alert(t('Recording Error ❌'), t('Audio recording permissions function is not available on this platform.'));
+        isPreparingRecordingRef.current = false;
+        return;
+      }
+
       const { status } = await requestRecordingPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(t('Permission Denied ❌'), t('You must allow microphone access to record audio.'));
@@ -827,8 +834,13 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         return;
       }
 
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
-      await recorder.prepareToRecordAsync();
+      try {
+        await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      } catch (modeErr) {
+        console.warn('Failed to set audio mode:', modeErr);
+      }
+
+      await recorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
 
       // Check if user released while preparing
       if (shouldStopRecordingRef.current) {
@@ -845,10 +857,11 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
-    } catch (err) {
+    } catch (err: any) {
       console.warn('startRecording failed', err);
       isPreparingRecordingRef.current = false;
       setIsRecording(false);
+      Alert.alert(t('Recording Failed ❌'), err?.message || t('Could not start audio recording. Please verify microphone permissions.'));
     }
   }, [t, recorder]);
 
