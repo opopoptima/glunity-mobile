@@ -1,5 +1,20 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Pressable, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, useWindowDimensions, Alert, Linking, Modal } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Animated,
+  useWindowDimensions,
+  Alert,
+  Linking,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../auth/state/auth.context';
 import { useTheme } from '../../../../shared/context/theme.context';
@@ -20,6 +35,14 @@ import { ReactionsOverlayModal } from '../components/ReactionsOverlayModal';
 let BlurView: any = null;
 try { BlurView = require('expo-blur').BlurView; } catch (e) { BlurView = null; }
 
+// Deterministic avatar color from string
+function avatarColor(str: string) {
+  const colors = ['#6C63FF','#FF6584','#43B89C','#F7B731','#E17055','#0984E3','#A29BFE','#00B894','#FDCB6E','#D63031'];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+
 export default function CommunityMessaging({ initialChannel, initialChannelId, navigation }: any) {
   const { user } = useAuth();
   const { theme: T, isDark } = useTheme();
@@ -31,31 +54,18 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   const [currentPinIndex, setCurrentPinIndex] = React.useState(0);
   const touchStartX = React.useRef(0);
 
-  const handleTouchStart = (e: any) => {
-    touchStartX.current = e.nativeEvent.pageX;
-  };
-
+  const handleTouchStart = (e: any) => { touchStartX.current = e.nativeEvent.pageX; };
   const handleTouchEnd = (e: any) => {
-    const touchEndX = e.nativeEvent.pageX;
-    const diff = touchStartX.current - touchEndX;
+    const diff = touchStartX.current - e.nativeEvent.pageX;
     if (Math.abs(diff) > 40) {
-      if (diff > 0) {
-        if (currentPinIndex < (chat.channel?.pinnedMessages?.length || 0) - 1) {
-          setCurrentPinIndex(currentPinIndex + 1);
-        }
-      } else {
-        if (currentPinIndex > 0) {
-          setCurrentPinIndex(currentPinIndex - 1);
-        }
-      }
+      if (diff > 0) { if (currentPinIndex < (chat.channel?.pinnedMessages?.length || 0) - 1) setCurrentPinIndex(currentPinIndex + 1); }
+      else { if (currentPinIndex > 0) setCurrentPinIndex(currentPinIndex - 1); }
     }
   };
 
-  // Extract all states and operations from our state controller
   const chat = useCommunityChat(initialChannel, initialChannelId, navigation);
   const { isOnline } = usePresence();
 
-  // Pulsing recording indicator animation
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
   React.useEffect(() => {
     if (chat.isRecording) {
@@ -65,9 +75,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
         ])
       ).start();
-    } else {
-      pulseAnim.setValue(1);
-    }
+    } else { pulseAnim.setValue(1); }
   }, [chat.isRecording]);
 
   const formatRecordingTime = (secs: number) => {
@@ -76,11 +84,11 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // ── Derive the DM partner's ID for presence lookup ───────────────────────
+  // DM partner presence
   const dmPartnerId = useMemo(() => {
     const ch = chat.channel;
     if (!ch) return null;
-    const isDM = ch.name?.startsWith('DM-') || ch.type === 'direct' || ch.type === 'dm';
+    const isDM = ch.name ? ch.name.startsWith('DM-') : (ch.type === 'direct' || ch.type === 'dm' || ch.type === 'DM');
     if (!isDM) return null;
     const parts = ch.participants || ch.members || [];
     for (const p of parts) {
@@ -96,37 +104,37 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   const reducedMotion = useReducedMotion();
 
   if (seenIds.current.size === 0 && chat.messages && chat.messages.length > 0) {
-    chat.messages.forEach((m: any) => {
-      seenIds.current.add(String(m.id || m._id));
-    });
+    chat.messages.forEach((m: any) => seenIds.current.add(String(m.id || m._id)));
   }
 
-  const overlayFallback = isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.35)';
-  const modalBg = isDark ? 'rgba(10,10,10,0.6)' : 'rgba(255,255,255,0.88)';
+  const overlayFallback = isDark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.38)';
+  const modalBg = isDark ? 'rgba(18,18,22,0.96)' : 'rgba(255,255,255,0.95)';
 
-  const pinnedMessages = useMemo(() => {
-    return chat.channel?.pinnedMessages || [];
-  }, [chat.channel?.pinnedMessages]);
-
-  const selectedMsg = useMemo(() => {
-    return chat.messages.find((m) => m.id === chat.reactionMsgId);
-  }, [chat.messages, chat.reactionMsgId]);
+  const pinnedMessages = useMemo(() => chat.channel?.pinnedMessages || [], [chat.channel?.pinnedMessages]);
+  const selectedMsg = useMemo(() => chat.messages.find((m) => m.id === chat.reactionMsgId), [chat.messages, chat.reactionMsgId]);
 
   const formatDuration = (sec?: number) => {
     if (sec === undefined || isNaN(sec)) return '0:00';
-    const roundedSec = Math.round(sec);
-    const mins = Math.floor(roundedSec / 60);
-    const secs = roundedSec % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    const r = Math.round(sec);
+    return `${Math.floor(r / 60)}:${r % 60 < 10 ? '0' : ''}${r % 60}`;
   };
 
-  const getChatDisplay = (ch: any) => {
-    if (!ch) return { name: ch?.name || t('Chat'), avatar: ch?.avatarUrl || null };
+  // ─── getChatDisplay: safe, never returns [object Object] ───────────────────
+  const getChatDisplay = (ch: any): { name: string; avatar: string | null } => {
+    if (!ch) return { name: t('Chat'), avatar: null };
 
+    // Group channels — just use name directly
+    const isGroup = ch.type === 'group' ||
+      (Array.isArray(ch.participants) && ch.participants.length > 2) ||
+      (ch.name && typeof ch.name === 'string' && !ch.name.startsWith('DM-'));
+    if (isGroup) {
+      return { name: (typeof ch.name === 'string' ? ch.name : null) || ch.displayName || t('Group'), avatar: ch.avatarUrl || null };
+    }
+
+    // DM — resolve other participant
     const desc: string | undefined = ch.description || ch.desc;
-    const dmPrefix = 'Direct Message between ';
-    if (desc && desc.startsWith(dmPrefix)) {
-      const namesStr = desc.substring(dmPrefix.length);
+    if (desc && typeof desc === 'string' && desc.startsWith('Direct Message between ')) {
+      const namesStr = desc.substring('Direct Message between '.length);
       const parts = namesStr.split(' and ');
       if (parts.length === 2) {
         const otherName = parts[0] === user?.fullName ? parts[1] : parts[0];
@@ -136,243 +144,269 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
 
     const parts = ch.participants || ch.members || ch.userIds || ch.participantIds;
     if (Array.isArray(parts) && parts.length > 0) {
-      const obj = parts.find((p: any) => p && (p._id || p.id) && String(p._id || p.id) !== String(user?._id));
-      if (obj) return { name: obj.fullName || obj.name || obj.displayName || String(obj._id || obj.id), avatar: obj.avatarUrl || obj.avatar || ch.avatarUrl || null };
-
-      const otherId = parts.find((p: any) => String(p) !== String(user?._id));
-      if (otherId) return { name: String(otherId), avatar: ch.avatarUrl || null };
+      const obj = parts.find((p: any) => p && typeof p === 'object' && (p._id || p.id) && String(p._id || p.id) !== String(user?._id));
+      if (obj) return { name: String(obj.fullName || obj.name || obj.displayName || obj._id || obj.id), avatar: obj.avatarUrl || obj.avatar || ch.avatarUrl || null };
+      const rawId = parts.find((p: any) => typeof p === 'string' && p !== String(user?._id));
+      if (rawId) return { name: String(rawId), avatar: ch.avatarUrl || null };
     }
 
-    if (ch.name && typeof ch.name === 'string' && ch.name.startsWith('DM-')) {
-      return { name: desc || ch.name, avatar: ch.avatarUrl || null };
-    }
-
-    return { name: ch.name || ch.displayName || desc || t('Chat'), avatar: ch.avatarUrl || null };
+    const safeChName = typeof ch.name === 'string' ? ch.name : null;
+    return { name: safeChName || ch.displayName || t('Chat'), avatar: ch.avatarUrl || null };
   };
-
-  const styles = useMemo(() => StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: T.bg,
-      ...(Platform.OS === 'web' ? { position: 'relative', overflow: 'hidden' } as any : {}),
-    },
-    // ── Header ──────────────────────────────────────────────────────────────
-    header: {
-      height: 64,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: T.divider,
-      flexDirection: isRTL ? 'row-reverse' : 'row',
-      alignItems: 'center',
-      paddingHorizontal: 8,
-      justifyContent: 'space-between',
-      backgroundColor: T.surface,
-    },
-    headerLeft: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', flex: 1, minWidth: 0 },
-    headerRight: { flexDirection: 'row', alignItems: 'center', paddingLeft: 4 },
-    backBtn: { padding: 6, marginRight: 2 },
-    // DM avatar: slightly larger, circular with ring
-    dmAvatar: {
-      width: 40, height: 40, borderRadius: 20,
-      borderWidth: 2, borderColor: isDark ? '#2ECC7130' : '#2ECC7140',
-    },
-    // Group avatar: rounded square, icon-based
-    groupAvatar: {
-      width: 40, height: 40, borderRadius: 12,
-      backgroundColor: isDark ? '#1E4A3A' : '#D5F5E3',
-      alignItems: 'center', justifyContent: 'center',
-    },
-    presenceDot: {
-      position: 'absolute', right: 0, bottom: 0,
-      width: 12, height: 12, borderRadius: 6,
-      borderWidth: 2, borderColor: T.surface,
-    },
-    headerMeta: { flex: 1, marginLeft: 10, minWidth: 0 },
-    headerName: {
-      fontSize: 15, fontWeight: '700',
-      color: T.text,
-      fontFamily: 'Poppins_700Bold',
-    },
-    headerSub: { fontSize: 11.5, color: T.textMuted, marginTop: 1 },
-    headerSubOnline: { fontSize: 11.5, color: '#27AE60', marginTop: 1, fontWeight: '600' },
-    // ── Bubbles ─────────────────────────────────────────────────────────────
-    avatar: { width: 34, height: 34, borderRadius: 17, marginRight: 6 },
-    title: { fontSize: 16, fontWeight: '700', color: T.text },
-    subtitle: { fontSize: 12, color: T.textMuted },
-    listContent: { padding: 16, paddingBottom: 24 },
-    row: { marginVertical: 3, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'flex-end' },
-    bubbleLeft: {
-      backgroundColor: T.surfaceAlt,
-      paddingVertical: 8, paddingHorizontal: 12,
-      borderRadius: 18, borderBottomLeftRadius: 4,
-      maxWidth: windowWidth * 0.72, minWidth: 60,
-      alignSelf: 'flex-start', flexShrink: 1, marginHorizontal: 6,
-      overflow: 'hidden',
-      ...(Platform.OS === 'web' ? { wordBreak: 'break-word', overflowWrap: 'break-word' } as any : {}),
-    },
-    bubbleRight: {
-      backgroundColor: isDark ? '#1E7A4D' : '#2ECC71',
-      paddingVertical: 8, paddingHorizontal: 12,
-      borderRadius: 18, borderBottomRightRadius: 4,
-      maxWidth: windowWidth * 0.72, minWidth: 60,
-      alignSelf: 'flex-end', flexShrink: 1, marginHorizontal: 6,
-      overflow: 'hidden', alignItems: 'flex-start',
-      ...(Platform.OS === 'web' ? { wordBreak: 'break-word', overflowWrap: 'break-word' } as any : {}),
-    },
-    msgText: {
-      color: T.text, fontSize: 14.5, lineHeight: 20,
-      flexWrap: 'wrap', flexShrink: 1, minWidth: 0,
-      ...(Platform.OS === 'web' ? { wordBreak: 'break-word', overflowWrap: 'break-word' } as any : {}),
-    },
-    timeText: { fontSize: 10, color: T.textMuted, marginTop: 2 },
-    messageBlock: { flexDirection: 'column', alignItems: 'flex-start' },
-    inputBar: {
-      position: 'absolute', left: 0, right: 0, bottom: 0,
-      padding: 12, backgroundColor: T.surface,
-      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: T.divider,
-    },
-    inputRow: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center' },
-    textInput: {
-      flex: 1, marginHorizontal: 8,
-      backgroundColor: T.surfaceAlt,
-      paddingVertical: Platform.OS === 'ios' ? 12 : 8, paddingHorizontal: 14,
-      borderRadius: 24, color: T.text,
-    },
-    sendBtn: {
-      width: 44, height: 44, borderRadius: 22,
-      backgroundColor: isDark ? '#1E7A4D' : '#2ECC71',
-      justifyContent: 'center', alignItems: 'center',
-    },
-  }), [T, isDark, isRTL, windowWidth]);
 
   const formatMessageTime = (dateString: string) => {
     const date = new Date(dateString || Date.now());
     const now = new Date();
-    
-    const isToday = date.getDate() === now.getDate() &&
-                    date.getMonth() === now.getMonth() &&
-                    date.getFullYear() === now.getFullYear();
-                    
+    const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
     const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    if (isToday) {
-      return timeStr;
-    } else {
-      const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-      return `${dateStr}, ${timeStr}`;
-    }
+    if (isToday) return timeStr;
+    const dateStr = date.toLocaleDateString([], { day: 'numeric', month: 'short' });
+    return `${dateStr}, ${timeStr}`;
   };
 
+  // ─── Color scheme ───────────────────────────────────────────────────────────
+  const GREEN = isDark ? '#27AE60' : '#2ECC71';
+  const GREEN_DARK = isDark ? '#1A6B3A' : '#1E9E55';
+  const BUBBLE_ME_BG = isDark ? '#1E6B3D' : '#25A55A';
+  const BUBBLE_THEM_BG = isDark ? '#1E2028' : '#F0F2F5';
+  const BUBBLE_ME_TEXT = '#FFFFFF';
+  const BUBBLE_THEM_TEXT = isDark ? '#E8EAED' : '#1A1A2E';
+  const TIME_COLOR = isDark ? 'rgba(200,210,220,0.55)' : 'rgba(100,110,130,0.7)';
+  const TICK_COLOR = '#5EE87B';
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: { flex: 1, backgroundColor: isDark ? '#0D0F13' : '#F5F7FA' },
+    // Header
+    header: {
+      height: 62,
+      flexDirection: isRTL ? 'row-reverse' : 'row',
+      alignItems: 'center',
+      paddingHorizontal: 6,
+      paddingTop: 2,
+      justifyContent: 'space-between',
+      backgroundColor: isDark ? '#121418' : '#FFFFFF',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: isDark ? 0.3 : 0.06,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    headerLeft: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', flex: 1, minWidth: 0 },
+    headerRight: { flexDirection: 'row', alignItems: 'center', paddingLeft: 4 },
+    backBtn: { padding: 8, marginRight: 2 },
+    headerName: { fontSize: 16, fontWeight: '700', color: isDark ? '#FFFFFF' : '#0D1117', letterSpacing: -0.2 },
+    headerSub: { fontSize: 11.5, color: isDark ? 'rgba(200,210,220,0.55)' : 'rgba(0,0,0,0.45)', marginTop: 1 },
+    headerSubOnline: { fontSize: 11.5, color: '#27AE60', marginTop: 1, fontWeight: '600' },
+    // Avatar shapes
+    dmAvatar: { width: 40, height: 40, borderRadius: 20 },
+    groupAvatar: { width: 40, height: 40, borderRadius: 14, backgroundColor: isDark ? '#1A2030' : '#E8F4FD', alignItems: 'center', justifyContent: 'center' },
+    presenceDot: { position: 'absolute', right: 0, bottom: 0, width: 11, height: 11, borderRadius: 6, borderWidth: 2, borderColor: isDark ? '#121418' : '#FFFFFF' },
+    // Messages list
+    listContent: { paddingTop: 12, paddingHorizontal: 12 },
+    // Message row
+    row: { marginVertical: 2, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'flex-end' },
+    // Avatar in row
+    msgAvatar: { width: 32, height: 32, borderRadius: 16 },
+    msgAvatarWrap: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+    messageBlock: { flexDirection: 'column', alignItems: 'flex-start', maxWidth: windowWidth * 0.75 },
+    // Sender name label (groups)
+    senderName: { fontSize: 11.5, fontWeight: '700', marginBottom: 3, marginLeft: 2 },
+    // Bubbles
+    bubbleMe: {
+      backgroundColor: BUBBLE_ME_BG,
+      paddingVertical: 10, paddingHorizontal: 14,
+      borderRadius: 20, borderBottomRightRadius: 5,
+      alignSelf: 'flex-end',
+      shadowColor: isDark ? '#000' : '#25A55A',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+      elevation: 3,
+    },
+    bubbleThem: {
+      backgroundColor: BUBBLE_THEM_BG,
+      paddingVertical: 10, paddingHorizontal: 14,
+      borderRadius: 20, borderBottomLeftRadius: 5,
+      alignSelf: 'flex-start',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 4,
+      elevation: 1,
+    },
+    msgText: { fontSize: 15, lineHeight: 21, flexWrap: 'wrap', flexShrink: 1 },
+    // Time row
+    timeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginHorizontal: 4 },
+    timeText: { fontSize: 10.5, color: TIME_COLOR },
+    // Input bar
+    inputBar: {
+      position: 'absolute', left: 0, right: 0, bottom: 0,
+      paddingHorizontal: 12, paddingTop: 10,
+      backgroundColor: isDark ? '#121418' : '#FFFFFF',
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)',
+    },
+    inputRow: { flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'flex-end' },
+    textInput: {
+      flex: 1, marginHorizontal: 8,
+      backgroundColor: isDark ? '#1A1D24' : '#F0F2F5',
+      paddingVertical: Platform.OS === 'ios' ? 10 : 7,
+      paddingHorizontal: 16,
+      borderRadius: 24, color: isDark ? '#E8EAED' : '#0D1117',
+      fontSize: 15,
+      maxHeight: 120,
+    },
+    sendBtn: {
+      width: 44, height: 44, borderRadius: 22,
+      backgroundColor: GREEN,
+      justifyContent: 'center', alignItems: 'center',
+      shadowColor: GREEN,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.4,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    micBtn: {
+      width: 44, height: 44, borderRadius: 22,
+      justifyContent: 'center', alignItems: 'center',
+    },
+  }), [T, isDark, isRTL, windowWidth, BUBBLE_ME_BG, BUBBLE_THEM_BG]);
+
+  // ─── Render a single message item ──────────────────────────────────────────
   const renderItem = ({ item, index }: { item: any; index: number }) => {
-    const senderId = typeof item.senderId === 'object' && item.senderId ? (item.senderId._id || item.senderId.id) : item.senderId;
+    const senderId = typeof item.senderId === 'object' && item.senderId
+      ? (item.senderId._id || item.senderId.id)
+      : item.senderId;
     const isMe = String(senderId) === String((user as any)?._id || (user as any)?.id);
     const isTemp = String(item.id || '').startsWith('temp-');
     const avatarUrl = item.senderAvatarUrl || (typeof item.senderId === 'object' && item.senderId ? item.senderId.avatar?.url : null);
+    const senderDisplayName = String(item.senderName || 'A');
 
     const itemId = String(item.id || item._id);
     const shouldAnimate = !seenIds.current.has(itemId);
-    if (shouldAnimate) {
-      seenIds.current.add(itemId);
-    }
+    if (shouldAnimate) seenIds.current.add(itemId);
 
-    const delay = index * 40;
+    const delay = Math.min(index * 30, 300);
     const enteringAnimation = !shouldAnimate || reducedMotion
       ? undefined
-      : (isMe
-        ? SlideInRight.duration(250).delay(delay)
-        : FadeInDown.duration(250).delay(delay));
+      : (isMe ? SlideInRight.duration(220).delay(delay) : FadeInDown.duration(220).delay(delay));
 
-    // Attachment type helpers
     const firstAtt = item.attachments && item.attachments.length > 0 ? item.attachments[0] : null;
     const isAudio = firstAtt?.type === 'audio';
     const isImage = firstAtt?.type === 'image';
     const isVideo = firstAtt?.type === 'video';
 
+    const isHighlighted = item.id === highlightedMsgId;
     const bubbleStyle = isMe
-      ? (item.id === highlightedMsgId
-          ? [styles.bubbleRight, { backgroundColor: isDark ? '#196F3D' : '#27AE60', transform: [{ scale: 1.02 }] }]
-          : styles.bubbleRight)
-      : (item.id === highlightedMsgId
-          ? [styles.bubbleLeft, { backgroundColor: isDark ? '#2E4053' : '#D5F5E3', transform: [{ scale: 1.02 }] }]
-          : styles.bubbleLeft);
+      ? [styles.bubbleMe, isHighlighted && { opacity: 0.75, transform: [{ scale: 1.02 }] }]
+      : [styles.bubbleThem, isHighlighted && { backgroundColor: isDark ? '#2C3E50' : '#DFF9F0' }];
 
-    // Reaction pills shared between bubble types
+    // ── Reaction pills ──
     const reactionPills = item.reactionCounts && Object.keys(item.reactionCounts).length > 0 ? (
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 5, gap: 4 }}>
         {Object.entries(item.reactionCounts).map(([emoji, count]: any) => (
           <TouchableOpacity
             key={emoji}
             onPress={() => chat.handleToggleReaction(item.id || item._id, emoji)}
-            style={{ backgroundColor: 'rgba(0,0,0,0.07)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, marginRight: 5, marginBottom: 3, flexDirection: 'row', alignItems: 'center' }}
+            style={{
+              backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+              paddingHorizontal: 8, paddingVertical: 3,
+              borderRadius: 12,
+              flexDirection: 'row', alignItems: 'center',
+              borderWidth: 1,
+              borderColor: isMe ? 'rgba(255,255,255,0.12)' : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+            }}
           >
             <Text style={{ fontSize: 13 }}>{emoji}</Text>
-            <Text style={{ fontSize: 11, marginLeft: 3, color: isMe ? 'rgba(255,255,255,0.8)' : T.textMuted, fontWeight: '600' }}>{count}</Text>
+            <Text style={{ fontSize: 11, marginLeft: 4, color: isMe ? 'rgba(255,255,255,0.85)' : (isDark ? '#A0B0C0' : '#444'), fontWeight: '700' }}>{count}</Text>
           </TouchableOpacity>
         ))}
       </View>
     ) : null;
 
-    // Reply preview pill
+    // ── Reply preview ──
     const replyPreview = item.replyTo && item.replyTo.messageId ? (
       <View style={{
         borderLeftWidth: 3,
-        borderLeftColor: isMe ? 'rgba(255,255,255,0.6)' : (T.green || '#2ECC71'),
-        paddingLeft: 8,
-        marginBottom: 6,
-        backgroundColor: isMe ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.04)',
-        borderRadius: 4,
-        paddingVertical: 4,
+        borderLeftColor: isMe ? 'rgba(255,255,255,0.5)' : GREEN,
+        paddingLeft: 8, marginBottom: 8,
+        backgroundColor: isMe ? 'rgba(0,0,0,0.12)' : isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+        borderRadius: 8, paddingVertical: 5, paddingRight: 8,
       }}>
-        <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? 'rgba(255,255,255,0.8)' : (T.green || '#2ECC71') }}>
+        <Text style={{ fontSize: 11.5, fontWeight: '700', color: isMe ? 'rgba(255,255,255,0.85)' : GREEN }}>
           {item.replyTo.senderName || 'User'}
         </Text>
-        <Text numberOfLines={1} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.65)' : T.textMuted }}>
+        <Text numberOfLines={1} style={{ fontSize: 12.5, color: isMe ? 'rgba(255,255,255,0.65)' : (isDark ? '#8899A8' : '#7A8999'), marginTop: 2 }}>
           {item.replyTo.preview || '...'}
         </Text>
       </View>
     ) : null;
 
+    // ── Bubble content ──
     const renderBubbleContent = () => {
       if (item.deletedAt) {
         return (
-          <Text style={[styles.msgText, { fontStyle: 'italic', opacity: 0.55, color: isMe ? '#fff' : T.textMuted }]}>
+          <Text style={[styles.msgText, { fontStyle: 'italic', opacity: 0.55, color: isMe ? '#fff' : (isDark ? '#8899A8' : '#9AABB8') }]}>
             🗑 {t('Message deleted')}
           </Text>
         );
       }
 
-        // Loading indicator for optimistic messages
-        if (item.status === 'sending') {
-          if (isImage || isVideo) {
-            return (
-              <View style={{ width: Math.min(windowWidth * 0.6, 260), height: Math.min(windowWidth * 0.45, 200), borderRadius: 10, backgroundColor: T.surfaceAlt, alignItems: 'center', justifyContent: 'center' }}>
-                <ActivityIndicator size="small" color={isMe ? '#fff' : T.textMuted} />
-              </View>
-            );
-          }
+      if (item.status === 'sending') {
+        if (isImage || isVideo) {
           return (
-            <View style={{ paddingVertical: 8, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', minWidth: 100 }}>
-              <ActivityIndicator size="small" color={isMe ? '#fff' : T.textMuted} />
+            <View style={{ width: Math.min(windowWidth * 0.58, 240), height: Math.min(windowWidth * 0.43, 180), borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator size="small" color={isMe ? '#fff' : GREEN} />
             </View>
           );
         }
-
-        if (isAudio) {
         return (
-          <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 160 }}>
-            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: isMe ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.04)', justifyContent: 'center', alignItems: 'center' }}>
-              <Ionicons name={chat.playingId === (item.id || item._id) ? 'pause' : 'play'} size={16} color={isMe ? '#fff' : T.text} />
+          <View style={{ paddingVertical: 4, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', minWidth: 80 }}>
+            <ActivityIndicator size="small" color={isMe ? 'rgba(255,255,255,0.6)' : GREEN} />
+          </View>
+        );
+      }
+
+      if (isAudio) {
+        const isPlaying = chat.playingId === (item.id || item._id);
+        const waveHeights = [5, 9, 14, 18, 22, 18, 14, 9, 6, 10, 16, 20, 16, 10, 7];
+        return (
+          <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 170 }}>
+            {/* Play/Pause button */}
+            <View style={{
+              width: 38, height: 38, borderRadius: 19,
+              backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
+              justifyContent: 'center', alignItems: 'center',
+            }}>
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={17} color={isMe ? '#fff' : GREEN} />
             </View>
-            <View style={{ flex: 1, marginLeft: 8, marginRight: 6, justifyContent: 'center' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 26 }}>
-                {[6,10,14,20,14,10,8,12].map((h, idx) => {
-                  const isPlayed = chat.playingId === (item.id || item._id) && chat.audioProgress >= (idx / 8);
-                  return (
-                    <Animated.View key={idx} style={{ width: 3.5, marginHorizontal: 1.5, backgroundColor: isMe ? '#fff' : T.text, height: h - 2, borderRadius: 1.5, opacity: isPlayed ? 1 : 0.4 }} />
-                  );
-                })}
-              </View>
+            {/* Waveform */}
+            <View style={{ flex: 1, marginHorizontal: 10, flexDirection: 'row', alignItems: 'center', height: 28 }}>
+              {waveHeights.map((h, idx) => {
+                const progress = isPlaying ? chat.audioProgress : 0;
+                const filled = progress >= idx / waveHeights.length;
+                return (
+                  <View
+                    key={idx}
+                    style={{
+                      width: 2.5,
+                      height: h,
+                      marginHorizontal: 1,
+                      borderRadius: 2,
+                      backgroundColor: isMe
+                        ? (filled ? '#fff' : 'rgba(255,255,255,0.3)')
+                        : (filled ? GREEN : (isDark ? 'rgba(200,210,220,0.25)' : 'rgba(0,0,0,0.15)')),
+                    }}
+                  />
+                );
+              })}
             </View>
-            <Text style={{ color: isMe ? '#fff' : T.text, fontSize: 11 }}>{formatDuration(firstAtt?.duration || item.duration)}</Text>
+            {/* Duration */}
+            <Text style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.75)' : (isDark ? '#8899A8' : '#7A8999'), fontWeight: '600', minWidth: 34 }}>
+              {formatDuration(firstAtt?.duration || item.duration)}
+            </Text>
           </View>
         );
       }
@@ -381,59 +415,53 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         const imgUrl = firstAtt?.thumbnail || firstAtt?.url;
         return (
           <TouchableOpacity
-            activeOpacity={0.9}
+            activeOpacity={0.92}
             onPress={() => { if (firstAtt?.url) Linking.openURL(firstAtt.url).catch(() => {}); }}
-            style={{ borderRadius: 10, overflow: 'hidden' }}
+            style={{ borderRadius: 14, overflow: 'hidden' }}
           >
             <Image
               source={{ uri: imgUrl }}
               style={{
-                width: Math.min(windowWidth * 0.6, 260),
-                height: Math.min(windowWidth * 0.45, 200),
-                borderRadius: 10,
-                backgroundColor: T.surfaceAlt,
+                width: Math.min(windowWidth * 0.58, 240),
+                height: Math.min(windowWidth * 0.43, 180),
+                borderRadius: 14,
+                backgroundColor: isDark ? '#1A2030' : '#E8ECF0',
               }}
               resizeMode="cover"
             />
             {!!item.content && (
-              <Text style={[styles.msgText, { marginTop: 6, color: isMe ? '#fff' : T.text }]}>{item.content}</Text>
+              <Text style={[styles.msgText, { marginTop: 8, color: isMe ? '#fff' : BUBBLE_THEM_TEXT }]}>{item.content}</Text>
             )}
           </TouchableOpacity>
         );
       }
 
       if (isVideo) {
-        const thumbUrl = firstAtt?.thumbnail;
         return (
           <TouchableOpacity
-            activeOpacity={0.9}
+            activeOpacity={0.92}
             onPress={() => { if (firstAtt?.url) Linking.openURL(firstAtt.url).catch(() => {}); }}
-            style={{ borderRadius: 10, overflow: 'hidden', position: 'relative' }}
+            style={{ borderRadius: 14, overflow: 'hidden', position: 'relative' }}
           >
-            {thumbUrl ? (
+            {firstAtt?.thumbnail ? (
               <Image
-                source={{ uri: thumbUrl }}
-                style={{
-                  width: Math.min(windowWidth * 0.6, 260),
-                  height: Math.min(windowWidth * 0.38, 170),
-                  borderRadius: 10,
-                  backgroundColor: T.surfaceAlt,
-                }}
+                source={{ uri: firstAtt.thumbnail }}
+                style={{ width: Math.min(windowWidth * 0.58, 240), height: Math.min(windowWidth * 0.38, 160), borderRadius: 14, backgroundColor: isDark ? '#1A2030' : '#E8ECF0' }}
                 resizeMode="cover"
               />
             ) : (
-              <View style={{ width: Math.min(windowWidth * 0.6, 260), height: Math.min(windowWidth * 0.38, 170), borderRadius: 10, backgroundColor: isDark ? '#1a2a1a' : '#e8f5e9', justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="videocam" size={32} color={T.green || '#2ECC71'} />
+              <View style={{ width: Math.min(windowWidth * 0.58, 240), height: Math.min(windowWidth * 0.38, 160), borderRadius: 14, backgroundColor: isDark ? '#1A2030' : '#E0EAF4', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="videocam" size={34} color={GREEN} />
               </View>
             )}
             {/* Play overlay */}
-            <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center' }}>
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.42)', justifyContent: 'center', alignItems: 'center' }}>
                 <Ionicons name="play" size={22} color="#fff" />
               </View>
             </View>
             {!!item.content && (
-              <Text style={[styles.msgText, { marginTop: 6, color: isMe ? '#fff' : T.text }]}>{item.content}</Text>
+              <Text style={[styles.msgText, { marginTop: 8, color: isMe ? '#fff' : BUBBLE_THEM_TEXT }]}>{item.content}</Text>
             )}
           </TouchableOpacity>
         );
@@ -441,65 +469,58 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
 
       // Default: text
       return (
-        <Text style={[styles.msgText, isMe ? { color: '#fff' } : undefined]}>{item.content}</Text>
+        <Text style={[styles.msgText, { color: isMe ? BUBBLE_ME_TEXT : BUBBLE_THEM_TEXT }]}>
+          {item.content}
+        </Text>
       );
-    };
-
-    const longPressHandler = () => {
-      if (isTemp) return;
-      chat.setReactionMsgId(item.id || item._id);
-    };
-
-    const pressHandler = () => {
-      if (isTemp) return;
-      if (isAudio) {
-        chat.playAudio(item);
-      } else {
-        chat.handlePressMessage(item);
-      }
     };
 
     return (
       <AnimatedReanimated.View
         entering={enteringAnimation}
-        style={[styles.row, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}
+        style={[styles.row, { justifyContent: isMe ? 'flex-end' : 'flex-start', marginBottom: 2 }]}
       >
+        {/* Left avatar for others */}
         {!isMe && (
           avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            <Image source={{ uri: avatarUrl }} style={[styles.msgAvatar, { marginRight: 8 }]} />
           ) : (
-            <View style={[styles.avatar, { backgroundColor: T.surfaceAlt, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: T.divider }]}>
-              <Text style={{ color: T.text, fontSize: 13, fontWeight: '700' }}>
-                {String(item.senderName || 'A').charAt(0).toUpperCase()}
+            <View style={[styles.msgAvatarWrap, { backgroundColor: avatarColor(senderDisplayName), marginRight: 8 }]}>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff' }}>
+                {senderDisplayName.charAt(0).toUpperCase()}
               </Text>
             </View>
           )
         )}
 
-        {/* Optimistic send status indicators */}
+        {/* Status indicators for my messages */}
         {isMe && item.status === 'failed' && (
-          <TouchableOpacity onPress={() => chat.handleRetrySend(item)} style={{ marginRight: 6, alignSelf: 'center', padding: 4 }} accessibilityLabel="Retry sending">
-            <Ionicons name="alert-circle" size={20} color="#E74C3C" />
+          <TouchableOpacity onPress={() => chat.handleRetrySend(item)} style={{ marginRight: 6, alignSelf: 'center' }} accessibilityLabel="Retry">
+            <Ionicons name="alert-circle" size={18} color="#E74C3C" />
           </TouchableOpacity>
         )}
         {isMe && item.status === 'sending' && (
-          <View style={{ marginRight: 6, alignSelf: 'center', padding: 4 }}>
-            <ActivityIndicator size="small" color={T.textMuted} />
+          <View style={{ marginRight: 6, alignSelf: 'center' }}>
+            <ActivityIndicator size="small" color={isDark ? '#8899A8' : '#A0B0C0'} />
           </View>
         )}
 
-        <View style={[styles.messageBlock, isMe ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
-          {/* Only show sender name in GROUP conversations */}
+        <View style={[styles.messageBlock, { alignItems: isMe ? 'flex-end' : 'flex-start' }]}>
+          {/* Sender name in groups */}
           {!isMe && !dmPartnerId && (
-            <Text style={{ fontSize: 11, fontWeight: '600', color: T.green || '#2ECC71', marginBottom: 3, marginLeft: 6 }}>
+            <Text style={[styles.senderName, { color: avatarColor(senderDisplayName) }]}>
               {item.senderName || 'User'}
             </Text>
           )}
 
           <TouchableOpacity
             activeOpacity={0.92}
-            onLongPress={longPressHandler}
-            onPress={pressHandler}
+            onLongPress={() => { if (!isTemp) chat.setReactionMsgId(item.id || item._id); }}
+            onPress={() => {
+              if (isTemp) return;
+              if (isAudio) chat.playAudio(item);
+              else chat.handlePressMessage(item);
+            }}
             style={bubbleStyle}
           >
             {replyPreview}
@@ -507,18 +528,22 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
             {reactionPills}
           </TouchableOpacity>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, marginHorizontal: 6 }}>
-            {!!item.pinned && (
-              <Ionicons name="pin" size={11} color={T.green || '#2ECC71'} style={{ marginRight: 4 }} />
-            )}
-            <Text style={{ fontSize: 10, color: T.textMuted }}>
-              {formatMessageTime(item.createdAt || item.created_at)}
-            </Text>
+          {/* Timestamp + read status */}
+          <View style={[styles.timeRow, { flexDirection: isMe ? 'row-reverse' : 'row' }]}>
+            <Text style={styles.timeText}>{formatMessageTime(item.createdAt || item.created_at)}</Text>
             {isMe && !isTemp && (
-              <Ionicons name="checkmark-done" size={13} color={T.green || '#2ECC71'} style={{ marginLeft: 3 }} />
+              <Ionicons
+                name={item.seenBy && item.seenBy.length > 0 ? 'checkmark-done' : 'checkmark-done'}
+                size={14}
+                color={TICK_COLOR}
+                style={{ marginHorizontal: 3 }}
+              />
             )}
             {!!item.editedAt && (
-              <Text style={{ fontSize: 9, color: T.textMuted, marginLeft: 4, fontStyle: 'italic' }}>{t('edited')}</Text>
+              <Text style={{ fontSize: 10, color: TIME_COLOR, marginHorizontal: 3, fontStyle: 'italic' }}>{t('edited')}</Text>
+            )}
+            {!!item.pinned && (
+              <Ionicons name="pin" size={10} color={GREEN} style={{ marginHorizontal: 3 }} />
             )}
           </View>
         </View>
@@ -528,9 +553,9 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
 
   if (!chat.channel) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: T.bg }}>
-        <ActivityIndicator size="large" color={T.green || '#2ECC71'} />
-        <Text style={{ color: T.textMuted, marginTop: 12 }}>{t('Loading channel...')}</Text>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? '#0D0F13' : '#F5F7FA' }}>
+        <ActivityIndicator size="large" color={GREEN} />
+        <Text style={{ color: isDark ? '#8899A8' : '#9AABB8', marginTop: 12, fontSize: 14 }}>{t('Loading channel...')}</Text>
       </View>
     );
   }
@@ -538,49 +563,34 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   const display = getChatDisplay(chat.channel);
 
   return (
-    <SafeAreaView style={styles.container} edges={["top","left","right"]}>
-      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+
+      {/* ── HEADER ──────────────────────────────────────────────────────────── */}
       <View style={styles.header}>
-        {/* Left: back + avatar + identity */}
         <View style={styles.headerLeft}>
           <TouchableOpacity
-            onPress={() => {
-              if (navigation.canGoBack && navigation.canGoBack()) navigation.goBack();
-              else navigation.navigate('MessagingHome');
-            }}
+            onPress={() => { if (navigation.canGoBack && navigation.canGoBack()) navigation.goBack(); else navigation.navigate('MessagingHome'); }}
             style={styles.backBtn}
           >
-            <Ionicons name={isRTL ? 'arrow-forward-outline' : 'arrow-back-outline'} size={22} color={T.text} />
+            <Ionicons name={isRTL ? 'arrow-forward-outline' : 'chevron-back'} size={24} color={isDark ? '#E8EAED' : '#0D1117'} />
           </TouchableOpacity>
 
           {dmPartnerId ? (
-            /* ── DM Header ──────────────────────────────────────────────────── */
-            <TouchableOpacity
-              onPress={() => chat.setMembersSheetVisible(true)}
-              style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-              activeOpacity={0.75}
-            >
-              {/* Avatar with presence dot */}
+            <TouchableOpacity onPress={() => chat.setMembersSheetVisible(true)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} activeOpacity={0.75}>
               <View style={{ position: 'relative' }}>
                 {display.avatar ? (
                   <Image source={{ uri: display.avatar }} style={styles.dmAvatar} />
                 ) : (
-                  <View style={[styles.dmAvatar, { backgroundColor: isDark ? '#1E4A3A' : '#D5F5E3', alignItems: 'center', justifyContent: 'center' }]}>
-                    <Text style={{ fontSize: 16, fontWeight: '800', color: T.green || '#2ECC71' }}>
-                      {String(display.name || '?').charAt(0).toUpperCase()}
-                    </Text>
+                  <View style={[styles.dmAvatar, { backgroundColor: avatarColor(display.name), justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={{ fontSize: 17, fontWeight: '800', color: '#fff' }}>{String(display.name || '?').charAt(0).toUpperCase()}</Text>
                   </View>
                 )}
-                <View style={[styles.presenceDot, { backgroundColor: partnerOnline ? '#27AE60' : '#9E9E9E' }]} />
+                <View style={[styles.presenceDot, { backgroundColor: partnerOnline ? '#2ECC71' : '#636E72' }]} />
               </View>
-
-              {/* Name + status */}
-              <View style={styles.headerMeta}>
+              <View style={{ marginLeft: 10, flex: 1, minWidth: 0 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <Text style={styles.headerName} numberOfLines={1}>{display.name}</Text>
-                  {!!chat.channel?.myMuted && (
-                    <Ionicons name="notifications-off" size={13} color={T.textMuted} />
-                  )}
+                  {!!chat.channel?.myMuted && <Ionicons name="notifications-off" size={13} color={isDark ? '#8899A8' : '#9AABB8'} />}
                 </View>
                 {chat.typingUser ? (
                   <Text style={styles.headerSubOnline}>{t('typing...')}</Text>
@@ -592,75 +602,59 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
               </View>
             </TouchableOpacity>
           ) : (
-            /* ── Group Header ───────────────────────────────────────────────── */
-            <TouchableOpacity
-              onPress={() => chat.setMembersSheetVisible(true)}
-              style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-              activeOpacity={0.75}
-            >
-              {/* Group icon */}
+            <TouchableOpacity onPress={() => chat.setMembersSheetVisible(true)} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} activeOpacity={0.75}>
               <View style={styles.groupAvatar}>
                 {display.avatar ? (
-                  <Image source={{ uri: display.avatar }} style={{ width: 40, height: 40, borderRadius: 12 }} />
+                  <Image source={{ uri: display.avatar }} style={{ width: 40, height: 40, borderRadius: 14 }} />
                 ) : (
-                  <Ionicons name="people" size={20} color={T.green || '#2ECC71'} />
+                  <Ionicons name="people" size={20} color={GREEN} />
                 )}
               </View>
-
-              {/* Name + member count */}
-              <View style={styles.headerMeta}>
+              <View style={{ marginLeft: 10, flex: 1, minWidth: 0 }}>
                 <Text style={styles.headerName} numberOfLines={1}>{display.name}</Text>
                 <Text style={styles.headerSub}>
-                  {(chat.channel?.participants?.length || 0) > 0
-                    ? `${chat.channel.participants.length} ${t('members')}`
-                    : t('Group')}
+                  {chat.typingUser
+                    ? `${chat.typingUser} ${t('is typing')}...`
+                    : (chat.channel?.participants?.length || 0) > 0
+                      ? `${chat.channel.participants.length} ${t('members')}`
+                      : t('Group')}
                 </Text>
               </View>
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Right: actions */}
         <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={{ padding: 8 }}
-            onPress={() => chat.setMenuVisible(true)}
-            accessibilityLabel="Options"
-          >
-            <Ionicons name="ellipsis-vertical" size={20} color={T.text} />
+          <TouchableOpacity style={{ padding: 8 }} onPress={() => chat.setMenuVisible(true)} accessibilityLabel="Options">
+            <Ionicons name="ellipsis-vertical" size={20} color={isDark ? '#E8EAED' : '#0D1117'} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Pinned Messages Banner */}
+      {/* ── PINNED MESSAGES BANNER ──────────────────────────────────────────── */}
       {pinnedMessages.length > 0 && (() => {
         const safeIndex = Math.min(currentPinIndex, pinnedMessages.length - 1);
         const activePin = pinnedMessages[safeIndex];
         if (!activePin) return null;
-
         return (
-          <View 
+          <View
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             style={{
               borderBottomWidth: 1,
-              borderBottomColor: T.divider,
-              backgroundColor: isDark ? '#1C2833' : '#F2F4F4',
-              paddingVertical: 10,
-              paddingHorizontal: 16,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+              backgroundColor: isDark ? '#141820' : '#F8FFF8',
+              paddingVertical: 10, paddingHorizontal: 14,
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             }}
           >
             <TouchableOpacity
               onPress={() => {
-                const msgId = activePin.messageId;
-                const index = chat.messages.findIndex((m: any) => String(m.id || m._id) === String(msgId));
-                if (index >= 0) {
+                const idx = chat.messages.findIndex((m: any) => String(m.id || m._id) === String(activePin.messageId));
+                if (idx >= 0) {
                   try {
-                    chat.listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
-                    setHighlightedMsgId(msgId);
+                    chat.listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.5 });
+                    setHighlightedMsgId(activePin.messageId);
                     setTimeout(() => setHighlightedMsgId(null), 1500);
                   } catch (e) {}
                 } else {
@@ -669,60 +663,28 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
               }}
               style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}
             >
-              <Ionicons name="pin" size={16} color={T.green || '#2ECC71'} style={{ marginRight: 10 }} />
-              <View style={{ width: 2, height: 26, backgroundColor: T.divider, marginRight: 10 }} />
-              <View style={{ flex: 1, justifyContent: 'center' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: T.green || '#2ECC71' }}>
-                    {activePin.senderName || t('User')}
-                  </Text>
-                  {pinnedMessages.length > 1 && (
-                    <Text style={{ fontSize: 10, color: T.textMuted, marginLeft: 8 }}>
-                      ({safeIndex + 1} {t('of')} {pinnedMessages.length})
-                    </Text>
-                  )}
-                </View>
-                <Text numberOfLines={1} style={{ fontSize: 12.5, color: T.text, marginTop: 1 }}>
+              <View style={{ width: 3, height: 28, backgroundColor: GREEN, borderRadius: 2, marginRight: 10 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: GREEN }}>
+                  {activePin.senderName || t('Pinned')}{pinnedMessages.length > 1 ? `  ${safeIndex + 1}/${pinnedMessages.length}` : ''}
+                </Text>
+                <Text numberOfLines={1} style={{ fontSize: 13, color: isDark ? '#C0D0E0' : '#374151', marginTop: 1 }}>
                   {activePin.content || (activePin.attachments?.[0]?.type === 'audio' ? t('Voice Message') : t('[Attachment]'))}
                 </Text>
               </View>
             </TouchableOpacity>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              {pinnedMessages.length > 1 && (
-                <View style={{ flexDirection: 'row', marginRight: 8 }}>
-                  <TouchableOpacity 
-                    disabled={safeIndex === 0}
-                    onPress={() => setCurrentPinIndex(safeIndex - 1)}
-                    style={{ padding: 4, opacity: safeIndex === 0 ? 0.3 : 1 }}
-                  >
-                    <Ionicons name="chevron-back" size={16} color={T.text} />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    disabled={safeIndex === pinnedMessages.length - 1}
-                    onPress={() => setCurrentPinIndex(safeIndex + 1)}
-                    style={{ padding: 4, opacity: safeIndex === pinnedMessages.length - 1 ? 0.3 : 1 }}
-                  >
-                    <Ionicons name="chevron-forward" size={16} color={T.text} />
-                  </TouchableOpacity>
-                </View>
-              )}
-              
-              <TouchableOpacity
-                onPress={() => chat.handleTogglePin(activePin.messageId)}
-                style={{ padding: 4 }}
-                accessibilityLabel="Unpin message"
-              >
-                <Ionicons name="close" size={18} color={T.textMuted} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity onPress={() => chat.handleTogglePin(activePin.messageId)} style={{ padding: 6 }} accessibilityLabel="Unpin">
+              <Ionicons name="close" size={17} color={isDark ? '#8899A8' : '#9AABB8'} />
+            </TouchableOpacity>
           </View>
         );
       })()}
 
-      {/* Messages List */}
+      {/* ── MESSAGES LIST ───────────────────────────────────────────────────── */}
       {chat.loading && chat.messages.length === 0 ? (
-        <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator /></View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={GREEN} />
+        </View>
       ) : (
         <FlatList
           ref={chat.listRef}
@@ -737,103 +699,104 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
 
       {/* Emoji pop animation */}
       {chat.popEmoji ? (
-        <Animated.View pointerEvents="none" style={{ position: 'absolute', right: 36, bottom: 120, transform: [{ scale: chat.popAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1.15] }) }], opacity: chat.popAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0, 1, 0] }) }}>
-          <Text style={{ fontSize: 40 }}>{chat.popEmoji}</Text>
+        <Animated.View pointerEvents="none" style={{
+          position: 'absolute', right: 40, bottom: 120,
+          transform: [{ scale: chat.popAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1.2] }) }],
+          opacity: chat.popAnim.interpolate({ inputRange: [0, 0.65, 1], outputRange: [0, 1, 0] }),
+        }}>
+          <Text style={{ fontSize: 44 }}>{chat.popEmoji}</Text>
         </Animated.View>
       ) : null}
 
-      {/* Messaging Input Bar */}
+      {/* ── INPUT BAR ───────────────────────────────────────────────────────── */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 + insets.bottom : 0}>
-        <View style={[styles.inputBar, { bottom: insets.bottom }]}>
-          {chat.typingUser ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, paddingLeft: 8 }}>
-              <Text style={{ color: T.textMuted, fontSize: 12, fontStyle: 'italic' }}>
+        <View style={[styles.inputBar, { paddingBottom: insets.bottom + 10 }]}>
+
+          {/* Typing indicator */}
+          {chat.typingUser && !dmPartnerId && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, paddingLeft: 4 }}>
+              <Text style={{ color: isDark ? '#8899A8' : '#9AABB8', fontSize: 12.5, fontStyle: 'italic' }}>
                 {chat.typingUser} {t('is typing')}...
               </Text>
             </View>
-          ) : null}
+          )}
 
-          {chat.replyingTo ? (
-            <View style={{ backgroundColor: T.surfaceAlt, padding: 8, borderRadius: 10, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* Reply preview bar */}
+          {chat.replyingTo && (
+            <View style={{
+              backgroundColor: isDark ? '#1A1D24' : '#F0F2F5',
+              padding: 10, borderRadius: 14, marginBottom: 8,
+              flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+              borderLeftWidth: 3, borderLeftColor: GREEN,
+            }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: T.textMuted, fontSize: 12 }}>{t('Replying to')} <Text style={{ color: T.text, fontWeight: '700' }}>{chat.replyingTo.senderName}</Text></Text>
-                <Text style={{ color: T.textMuted, fontSize: 12 }} numberOfLines={1}>{chat.replyingTo.preview}</Text>
+                <Text style={{ color: GREEN, fontSize: 12.5, fontWeight: '700' }}>{t('Replying to')} {chat.replyingTo.senderName}</Text>
+                <Text style={{ color: isDark ? '#8899A8' : '#9AABB8', fontSize: 12.5, marginTop: 2 }} numberOfLines={1}>{chat.replyingTo.preview}</Text>
               </View>
-              <TouchableOpacity onPress={() => chat.setReplyingTo(null)} style={{ padding: 8 }}>
-                <Ionicons name="close" size={18} color={T.textMuted} />
+              <TouchableOpacity onPress={() => chat.setReplyingTo(null)} style={{ padding: 6 }}>
+                <Ionicons name="close" size={18} color={isDark ? '#8899A8' : '#9AABB8'} />
               </TouchableOpacity>
             </View>
-          ) : null}
+          )}
 
           <View style={styles.inputRow}>
+            {/* Attachment button */}
             {!chat.isRecording && (
               <TouchableOpacity
                 onPress={() => {
-                  if (Platform.OS === 'web') {
-                    chat.pickMediaAndSend();
-                  } else {
-                    Alert.alert(
-                      t('Attach Media'),
-                      '',
-                      [
-                        { text: t('Photo / Video'), onPress: () => chat.pickMediaAndSend() },
-                        { text: t('Cancel'), style: 'cancel' },
-                      ]
-                    );
-                  }
+                  if (Platform.OS === 'web') { chat.pickMediaAndSend(); return; }
+                  Alert.alert(t('Attach Media'), '', [
+                    { text: t('Photo / Video'), onPress: () => chat.pickMediaAndSend() },
+                    { text: t('Cancel'), style: 'cancel' },
+                  ]);
                 }}
                 style={{ padding: 8 }}
                 accessibilityLabel="Attach media"
               >
-                <Ionicons name="attach" size={22} color={T.text} />
+                <Ionicons name="attach" size={24} color={isDark ? '#8899A8' : '#9AABB8'} />
               </TouchableOpacity>
             )}
 
+            {/* Mic button */}
             <TouchableOpacity
               onPress={chat.isRecording ? chat.stopRecordingAndSend : chat.startRecording}
-              style={{ padding: 8 }}
+              style={styles.micBtn}
               accessibilityLabel="Voice message"
             >
               <View style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: 36, height: 36, borderRadius: 18,
                 backgroundColor: chat.isRecording ? '#E74C3C' : 'transparent',
-                justifyContent: 'center',
-                alignItems: 'center'
+                justifyContent: 'center', alignItems: 'center',
               }}>
-                <Ionicons name="mic" size={18} color={chat.isRecording ? '#fff' : T.text} />
+                <Ionicons name="mic" size={20} color={chat.isRecording ? '#fff' : (isDark ? '#8899A8' : '#9AABB8')} />
               </View>
             </TouchableOpacity>
 
+            {/* Recording state OR Text input + send */}
             {chat.isRecording ? (
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginLeft: 8 }}>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginLeft: 6 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#E74C3C', opacity: pulseAnim, marginRight: 6 }} />
-                  <Text style={{ color: T.text, fontSize: 14, fontWeight: '600' }}>
-                    {t('Recording')} {formatRecordingTime(chat.recordingDuration)}
+                  <Animated.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#E74C3C', opacity: pulseAnim, marginRight: 8 }} />
+                  <Text style={{ color: isDark ? '#E8EAED' : '#0D1117', fontSize: 14.5, fontWeight: '600' }}>
+                    {formatRecordingTime(chat.recordingDuration)}
                   </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <TouchableOpacity
                     onPress={chat.cancelRecording}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 6, marginRight: 4 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 16, backgroundColor: isDark ? '#2C2030' : '#FEF3F3' }}
                     accessibilityLabel="Cancel recording"
                   >
-                    <Ionicons name="trash-outline" size={16} color="#E74C3C" />
-                    <Text style={{ color: '#E74C3C', marginLeft: 3, fontWeight: '600', fontSize: 13 }}>
-                      {t('Cancel')}
-                    </Text>
+                    <Ionicons name="trash-outline" size={15} color="#E74C3C" />
+                    <Text style={{ color: '#E74C3C', marginLeft: 4, fontWeight: '700', fontSize: 13 }}>{t('Cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={chat.stopRecordingAndSend}
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#2ECC71', borderRadius: 16 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 7, backgroundColor: GREEN, borderRadius: 16 }}
                     accessibilityLabel="Send recording"
                   >
                     <Ionicons name="send" size={14} color="#fff" />
-                    <Text style={{ color: '#fff', marginLeft: 4, fontWeight: '700', fontSize: 13 }}>
-                      {t('Send')}
-                    </Text>
+                    <Text style={{ color: '#fff', marginLeft: 5, fontWeight: '700', fontSize: 13 }}>{t('Send')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -842,13 +805,17 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                 <TextInput
                   value={chat.input}
                   onChangeText={chat.setInput}
-                  placeholder={t('Message')}
-                  placeholderTextColor={T.textMuted}
+                  placeholder={chat.editingMsgId ? t('Edit message...') : t('Message')}
+                  placeholderTextColor={isDark ? 'rgba(200,210,220,0.35)' : 'rgba(0,0,0,0.3)'}
                   style={styles.textInput}
                   multiline
                 />
-                <TouchableOpacity onPress={() => { chat.handleSend(); chat.setReplyingTo(null); }} style={styles.sendBtn}>
-                  <Ionicons name="send" size={18} color="#fff" />
+                <TouchableOpacity
+                  onPress={() => { chat.handleSend(); chat.setReplyingTo(null); }}
+                  style={styles.sendBtn}
+                  accessibilityLabel="Send message"
+                >
+                  <Ionicons name={chat.editingMsgId ? 'checkmark' : 'send'} size={18} color="#fff" />
                 </TouchableOpacity>
               </>
             )}
@@ -856,7 +823,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         </View>
       </KeyboardAvoidingView>
 
-      {/* Options Menu Modal */}
+      {/* ── MODALS ──────────────────────────────────────────────────────────── */}
       <OptionsActionMenu
         visible={chat.menuVisible}
         onRequestClose={() => chat.setMenuVisible(false)}
@@ -874,7 +841,6 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         t={t}
       />
 
-      {/* Members Bottom Sheet */}
       <MembersBottomSheet
         visible={chat.membersSheetVisible}
         onClose={() => chat.setMembersSheetVisible(false)}
@@ -901,7 +867,6 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         BlurView={BlurView}
       />
 
-      {/* Edit Group Info Modal */}
       <EditGroupModal
         visible={chat.editSheetVisible}
         onClose={() => chat.setEditSheetVisible(false)}
@@ -925,7 +890,6 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         overlayFallback={overlayFallback}
       />
 
-      {/* Confirm Delete Modal */}
       <ConfirmDeleteModal
         visible={chat.confirmDeleteVisible}
         onClose={() => chat.setConfirmDeleteVisible(false)}
@@ -939,7 +903,6 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         overlayFallback={overlayFallback}
       />
 
-      {/* Reactions Overlay Modal */}
       <ReactionsOverlayModal
         visible={!!chat.reactionMsgId}
         reactionMsgId={chat.reactionMsgId}

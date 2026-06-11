@@ -11,6 +11,14 @@ import { API_BASE_URL } from '../../../core/config/api.config';
 import messagingHttp from '../../../core/network/messaging-http.client';
 import messagingEvents from '../../../shared/utils/messagingEvents';
 import { ChatCacheService } from '../services/chat-cache.service';
+import { 
+  useAudioPlayer, 
+  useAudioPlayerStatus, 
+  useAudioRecorder, 
+  RecordingPresets, 
+  requestRecordingPermissionsAsync, 
+  setAudioModeAsync 
+} from 'expo-audio';
 
 // Keep for legacy usages that don't go through the intercepted clients
 const CORE_API_URL = API_BASE_URL;
@@ -19,10 +27,6 @@ const MSG_SERVICE_URL = API_BASE_URL.replace(':5000', ':5001');
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-// Dynamic imports helper
-let ExpoAV: any = null;
-try { ExpoAV = require('expo-av'); } catch (e) { ExpoAV = null; }
 
 let ImageManipulator: any = null;
 try { ImageManipulator = require('expo-image-manipulator'); } catch (e) { ImageManipulator = null; }
@@ -38,19 +42,17 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
 
-  // Audio recording
+
+  // Audio recording & playback hooks
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const player = useAudioPlayer();
+  const { playing, currentTime, duration } = useAudioPlayerStatus(player);
+
   const [isRecording, setIsRecordingState] = useState(false);
   const isRecordingRef = useRef(false);
   const setIsRecording = (val: boolean) => {
     isRecordingRef.current = val;
     setIsRecordingState(val);
-  };
-
-  const [recordingInstance, setRecordingInstanceState] = useState<any>(null);
-  const recordingInstanceRef = useRef<any>(null);
-  const setRecordingInstance = (val: any) => {
-    recordingInstanceRef.current = val;
-    setRecordingInstanceState(val);
   };
 
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -70,8 +72,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState(0);
 
-  // Audio playback references
-  const activeSoundRef = useRef<any>(null);
 
   // Members lists
   const [members, setMembers] = useState<any[]>([]);
@@ -81,6 +81,99 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedToAdd, setSelectedToAdd] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
+
+  const fetchMembers = useCallback(async () => {
+    if (!channel) return;
+    setMembersLoading(true);
+    try {
+      const channelId = channel.id || channel._id;
+
+      // 1. Always try to get a fresh channel snapshot from the messaging-service
+      let freshParticipants: any[] | null = null;
+      try {
+        const res = await messagingHttp.get(`/channels/${channelId}`);
+        const fresh = res.data?.data || res.data;
+        if (fresh?.participants && Array.isArray(fresh.participants) && fresh.participants.length > 0) {
+          freshParticipants = fresh.participants; // [{ userId, role, muted }]
+          // Also update local channel state so isAdmin etc. stay accurate
+          setChannel((prev: any) => ({ ...prev, ...fresh }));
+        }
+      } catch { /* fall through to local cache */ }
+
+      // 2. Fall back to whatever is already in the local channel object
+      let raw: any = freshParticipants;
+      if (!raw || raw.length === 0) {
+        const candidateKeys = ['participants', 'members', 'userIds', 'participantIds', 'memberIds'];
+        for (const k of candidateKeys) {
+          if (channel[k] && Array.isArray(channel[k]) && channel[k].length > 0) {
+            raw = channel[k];
+            break;
+          }
+        }
+      }
+
+      if (!raw || raw.length === 0) { setMembers([]); return; }
+
+      // 3. Detect participant shape
+      const first = raw[0];
+
+      // Shape A: already has fullName/name — core API objects
+      if (typeof first === 'object' && (first.fullName || first.name || first.displayName)) {
+        setMembers(raw.map((m: any) => ({
+          _id: m._id || m.id || m.userId,
+          fullName: m.fullName || m.name || m.displayName || m.username || String(m._id || m.id || m.userId),
+          avatarUrl: m.avatarUrl || m.avatar || m.profilePicture || null,
+          role: m.role || (m.isAdmin ? 'admin' : 'member'),
+        })));
+        return;
+      }
+
+      // Shape B: messaging-service format { userId, role, muted } — batch-fetch profiles
+      const isMessagingServiceFormat = typeof first === 'object' && first.userId !== undefined;
+      const ids: string[] = isMessagingServiceFormat
+        ? raw.map((p: any) => String(p.userId)).filter(Boolean)
+        : typeof first === 'string'
+          ? raw.map((r: any) => String(r))
+          : raw.map((m: any) => String(m._id || m.id || m.userId)).filter(Boolean);
+
+      const roleMap: Record<string, string> = {};
+      if (isMessagingServiceFormat) {
+        raw.forEach((p: any) => { roleMap[String(p.userId)] = p.role || 'member'; });
+      }
+
+      // Batch-fetch user profiles from core API
+      let fetched: any[] = [];
+      try {
+        const res = await http.get(`/users?ids=${encodeURIComponent(ids.join(','))}`);
+        fetched = res.data?.data || res.data || [];
+        if (!Array.isArray(fetched)) fetched = [];
+      } catch {
+        try {
+          const res2 = await http.get('/users');
+          const all = res2.data?.data || res2.data || [];
+          fetched = (Array.isArray(all) ? all : []).filter((u: any) =>
+            ids.includes(String(u._id || u.id))
+          );
+        } catch { /* leave fetched empty */ }
+      }
+
+      setMembers(
+        ids.map((id) => {
+          const profile = fetched.find((u: any) => String(u._id || u.id) === id);
+          return {
+            _id: id,
+            fullName: profile?.fullName || profile?.name || profile?.displayName || id,
+            avatarUrl: profile?.avatarUrl || profile?.avatar || null,
+            role: roleMap[id] || profile?.role || 'member',
+          };
+        })
+      );
+    } catch {
+      setMembers([]);
+    } finally {
+      setMembersLoading(false);
+    }
+  }, [channel]);
 
   // Editing Group profile info
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -103,12 +196,20 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
   const isAdmin = useMemo(() => {
     if (!channel || !user) return false;
-    if (channel.ownerId && String(channel.ownerId) === String(user._id)) return true;
-    if (channel.createdBy && String(channel.createdBy) === String(user._id)) return true;
+    if (channel.ownerId    && String(channel.ownerId)    === String(user._id)) return true;
+    if (channel.createdBy  && String(channel.createdBy)  === String(user._id)) return true;
+    if (channel.createdById && String(channel.createdById) === String(user._id)) return true;
+    // myRole is set by the mapper for the requesting user
+    if (channel.myRole && (channel.myRole === 'admin' || channel.myRole === 'owner')) return true;
     if (Array.isArray(channel.admins) && channel.admins.some((a: any) => String(a) === String(user._id))) return true;
     const parts = channel.participants || channel.members;
     if (Array.isArray(parts)) {
-      const me = parts.find((p: any) => (p && (p._id || p.id)) && String(p._id || p.id) === String(user._id));
+      const me = parts.find((p: any) => {
+        if (!p) return false;
+        // messaging-service schema: { userId, role }
+        const pid = String(p.userId || p._id || p.id || '');
+        return pid && pid === String(user._id);
+      });
       if (me && (me.role === 'admin' || me.role === 'owner')) return true;
     }
     return false;
@@ -116,8 +217,19 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
   const isCreator = useMemo(() => {
     if (!channel || !user) return false;
-    if (channel.ownerId && String(channel.ownerId) === String(user._id)) return true;
-    if (channel.createdBy && String(channel.createdBy) === String(user._id)) return true;
+    if (channel.ownerId     && String(channel.ownerId)     === String(user._id)) return true;
+    if (channel.createdBy   && String(channel.createdBy)   === String(user._id)) return true;
+    if (channel.createdById && String(channel.createdById) === String(user._id)) return true;
+    if (channel.myRole === 'owner') return true;
+    const parts = channel.participants || channel.members;
+    if (Array.isArray(parts)) {
+      const me = parts.find((p: any) => {
+        if (!p) return false;
+        const pid = String(p.userId || p._id || p.id || '');
+        return pid && pid === String(user._id);
+      });
+      if (me && me.role === 'owner') return true;
+    }
     return false;
   }, [channel, user]);
 
@@ -145,11 +257,11 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       }
       if (!initialChannelId) return;
       try {
-        const res = await http.get(`/channels/${initialChannelId}`);
+        const res = await messagingHttp.get(`/channels/${initialChannelId}`);
         if (mounted) setChannel(res.data?.data || res.data || null);
       } catch (err) {
         try {
-          const listRes = await http.get('/channels');
+          const listRes = await messagingHttp.get('/channels');
           const list = listRes.data?.data || listRes.data || [];
           const found = Array.isArray(list) ? list.find((c: any) => String(c._id || c.id) === String(initialChannelId)) : null;
           if (mounted && found) setChannel(found);
@@ -159,6 +271,20 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     loadChannel();
     return () => { mounted = false; };
   }, [initialChannel, initialChannelId]);
+
+  // Fetch Message History with Cache-Aside strategy
+  // Call backend read receipt API
+  const markChannelAsRead = useCallback(async (msgId: string) => {
+    if (!channel || !msgId) return;
+    const targetId = channel.id || channel._id;
+    if (typeof targetId === 'string' && targetId.startsWith('local-')) return;
+    try {
+      await messagingHttp.post(`/channels/${targetId}/read`, { lastReadMsgId: msgId });
+      messagingEvents.emit('channel:opened', targetId);
+    } catch (err) {
+      console.warn('[community] Failed to mark channel as read', err);
+    }
+  }, [channel]);
 
   // Fetch Message History with Cache-Aside strategy
   useEffect(() => {
@@ -179,6 +305,12 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
           const filtered = cached.filter((m: any) => !m.status || m.status === 'sent');
           setMessages(filtered);
           setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 60);
+
+          // Mark as read up to the latest cached message
+          const latestCached = filtered[filtered.length - 1];
+          if (latestCached) {
+            markChannelAsRead(latestCached.id || latestCached._id);
+          }
         }
       } catch (err) {
         console.warn('[community] failed to load cached messages', err);
@@ -196,10 +328,16 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         // 3. Update the local cache
         await ChatCacheService.saveMessages(targetId, fresh);
         setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 120);
+
+        // Mark as read up to the latest fresh message
+        const latestFresh = fresh[fresh.length - 1];
+        if (latestFresh) {
+          markChannelAsRead(latestFresh.id || latestFresh._id);
+        }
       } catch (err) {
         console.warn('[community] loadHistory failed', err);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     }
     loadHistory();
@@ -210,7 +348,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     } catch (e) { }
 
     return () => { mounted = false; };
-  }, [channel]);
+  }, [channel, markChannelAsRead]);
 
   // Synchronize state mutations (new WS messages, reactions, edits, deletions) to cache
   useEffect(() => {
@@ -218,6 +356,29 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     const targetId = channel.id || channel._id;
     ChatCacheService.saveMessages(targetId, messages);
   }, [messages, channel]);
+
+  // Enrich pinnedMessages with senderName/content from local messages array
+  // The server only returns { messageId, pinnedAt, pinnedBy } — no preview text
+  useEffect(() => {
+    if (!channel || !channel.pinnedMessages || channel.pinnedMessages.length === 0 || messages.length === 0) return;
+    const needsEnrichment = channel.pinnedMessages.some((p: any) => !p.content && !p.senderName);
+    if (!needsEnrichment) return;
+    setChannel((prev: any) => {
+      if (!prev || !prev.pinnedMessages) return prev;
+      const enriched = prev.pinnedMessages.map((p: any) => {
+        if (p.content || p.senderName) return p; // already enriched
+        const localMsg = messages.find((m: any) => String(m.id || m._id) === String(p.messageId));
+        if (!localMsg) return p;
+        return {
+          ...p,
+          senderName: localMsg.senderName || 'User',
+          content: localMsg.content || '',
+          attachments: localMsg.attachments,
+        };
+      });
+      return { ...prev, pinnedMessages: enriched };
+    });
+  }, [messages, channel?.pinnedMessages?.length]);
 
   // Handle Channel edits from external events
   useEffect(() => {
@@ -268,6 +429,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         return [...prev, message];
       });
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+      markChannelAsRead(message.id || message._id);
     };
 
     const handleReactionUpdated = ({ messageId, emoji, count }: any) => {
@@ -325,12 +487,30 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       }
     };
 
+    const handleChannelUpdated = (data: any) => {
+      if (!data) return;
+      const incomingId = String(data.channelId || data.id || data._id || '');
+      const myId = String(channel?.id || channel?._id || '');
+      if (!incomingId || incomingId !== myId) return;
+      setChannel((prev: any) => {
+        if (!prev) return prev;
+        const updates: any = {};
+        if (data.name !== undefined)         updates.name         = data.name;
+        if (data.avatarUrl !== undefined)    updates.avatarUrl    = data.avatarUrl;
+        if (data.participants !== undefined) updates.participants = data.participants;
+        return { ...prev, ...updates };
+      });
+      // Refresh list of member profiles in real-time
+      fetchMembers();
+    };
+
     socket.on('message:new', handleNewMessage);
     socket.on('reaction:updated', handleReactionUpdated);
     socket.on('message:edited', handleMessageEdited);
     socket.on('message:deleted', handleMessageDeleted);
     socket.on('message:pinned', handleMessagePinned);
     socket.on('message:unpinned', handleMessageUnpinned);
+    socket.on('channel:updated', handleChannelUpdated);
 
     return () => {
       if (typeof targetId === 'string' && !targetId.startsWith('local-')) {
@@ -342,23 +522,37 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       socket.off('message:deleted', handleMessageDeleted);
       socket.off('message:pinned', handleMessagePinned);
       socket.off('message:unpinned', handleMessageUnpinned);
+      socket.off('channel:updated', handleChannelUpdated);
     };
-  }, [channel, socket]);
+  }, [channel, socket, markChannelAsRead, fetchMembers]);
 
-  // Clean up any playing audio and recording timers when the hook unmounts
+
+  // Clean up recording timers when the hook unmounts
   useEffect(() => {
     return () => {
-      if (activeSoundRef.current) {
-        activeSoundRef.current.stopAsync().catch(() => { });
-        activeSoundRef.current.unloadAsync().catch(() => { });
-      }
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
     };
   }, []);
 
-  // Emitting typing events (throttled client-side to prevent socket spam)
+  // Update playback progress bar in UI
+  useEffect(() => {
+    if (playingId && duration > 0) {
+      setAudioProgress(currentTime / duration);
+    } else {
+      setAudioProgress(0);
+    }
+  }, [currentTime, duration, playingId]);
+
+  // Automatically handle finished audio track
+  useEffect(() => {
+    if (playingId && !playing && currentTime >= duration && duration > 0) {
+      setPlayingId(null);
+      setAudioProgress(0);
+    }
+  }, [playing, currentTime, duration, playingId]);
+
   useEffect(() => {
     if (!input.trim() || !socket || !channel) return;
     const targetId = channel.id || channel._id;
@@ -538,22 +732,61 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     if (!channel) return;
     try {
       const targetId = channel.id || channel._id;
-      const isPinned = channel.pinnedMessages && channel.pinnedMessages.some((p: any) => String(p.messageId) === String(messageId));
+      const isPinned = channel.pinnedMessages &&
+        channel.pinnedMessages.some((p: any) => String(p.messageId) === String(messageId));
+
+      // Find the message in local state for preview enrichment
+      const msgObj = messages.find((m: any) => String(m.id || m._id) === String(messageId));
 
       if (isPinned) {
         const res = await messagingHttp.delete(`/channels/${targetId}/messages/${messageId}/pin`);
-        const updatedPinned = res.data?.pinnedMessages;
+        const rawPinned = res.data?.pinnedMessages || res.data?.data?.pinnedMessages;
         setMessages((prev) => prev.map((m) => (m.id === messageId || m._id === messageId) ? { ...m, pinned: false } : m));
-        if (updatedPinned) {
-          setChannel((prev: any) => prev ? { ...prev, pinnedMessages: updatedPinned } : prev);
-        }
+        setChannel((prev: any) => {
+          if (!prev) return prev;
+          const updatedPinned = rawPinned
+            ? rawPinned.map((p: any) => {
+                const localMsg = messages.find((m: any) => String(m.id || m._id) === String(p.messageId));
+                return {
+                  ...p,
+                  senderName: p.senderName || localMsg?.senderName || 'User',
+                  content: p.content || localMsg?.content || '',
+                  attachments: p.attachments || localMsg?.attachments,
+                };
+              })
+            : (prev.pinnedMessages || []).filter((p: any) => String(p.messageId) !== String(messageId));
+          return { ...prev, pinnedMessages: updatedPinned };
+        });
       } else {
         const res = await messagingHttp.post(`/channels/${targetId}/messages/${messageId}/pin`, {});
-        const updatedPinned = res.data?.pinnedMessages;
+        const rawPinned = res.data?.pinnedMessages || res.data?.data?.pinnedMessages;
         setMessages((prev) => prev.map((m) => (m.id === messageId || m._id === messageId) ? { ...m, pinned: true } : m));
-        if (updatedPinned) {
-          setChannel((prev: any) => prev ? { ...prev, pinnedMessages: updatedPinned } : prev);
-        }
+        setChannel((prev: any) => {
+          if (!prev) return prev;
+          let updatedPinned: any[];
+          if (rawPinned) {
+            updatedPinned = rawPinned.map((p: any) => {
+              const localMsg = messages.find((m: any) => String(m.id || m._id) === String(p.messageId));
+              return {
+                ...p,
+                senderName: p.senderName || localMsg?.senderName || 'User',
+                content: p.content || localMsg?.content || '',
+                attachments: p.attachments || localMsg?.attachments,
+              };
+            });
+          } else {
+            // Optimistic — use local message data
+            const newPin = {
+              messageId,
+              pinnedAt: new Date().toISOString(),
+              senderName: msgObj?.senderName || 'User',
+              content: msgObj?.content || '',
+              attachments: msgObj?.attachments,
+            };
+            updatedPinned = [...(prev.pinnedMessages || []), newPin];
+          }
+          return { ...prev, pinnedMessages: updatedPinned };
+        });
       }
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.error || err?.response?.data?.message || 'Failed to toggle pin');
@@ -574,15 +807,10 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     });
     setReactionMsgId(null);
   }, [socket]);
-
   // Audio Recording Operations
   const startRecording = useCallback(async () => {
-    if (!ExpoAV) {
-      Alert.alert('Audio not available', 'Audio module is not installed in this runtime.');
-      return;
-    }
     // If we are already recording or in preparation, a pressIn is interpreted as a tap-to-stop toggle
-    if (isRecordingRef.current || recordingInstanceRef.current || isPreparingRecordingRef.current) {
+    if (isRecordingRef.current || recorder.isRecording || isPreparingRecordingRef.current) {
       await stopRecordingAndSend();
       return;
     }
@@ -592,26 +820,23 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       shouldStopRecordingRef.current = false;
       setRecordingDuration(0);
 
-      const { status } = await ExpoAV.Audio.requestPermissionsAsync();
+      const { status } = await requestRecordingPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(t('Permission Denied ❌'), t('You must allow microphone access to record audio.'));
         isPreparingRecordingRef.current = false;
         return;
       }
 
-      await ExpoAV.Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const recording = new ExpoAV.Audio.Recording();
-      await recording.prepareToRecordAsync(ExpoAV.Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY);
+      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      await recorder.prepareToRecordAsync();
 
       // Check if user released while preparing
       if (shouldStopRecordingRef.current) {
-        await recording.stopAndUnloadAsync().catch(() => {});
         isPreparingRecordingRef.current = false;
         return;
       }
 
-      await recording.startAsync();
-      setRecordingInstance(recording);
+      await recorder.record();
       setIsRecording(true);
       isPreparingRecordingRef.current = false;
 
@@ -625,7 +850,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       isPreparingRecordingRef.current = false;
       setIsRecording(false);
     }
-  }, [t]);
+  }, [t, recorder]);
 
   const cancelRecording = useCallback(async () => {
     if (recordingTimerRef.current) {
@@ -635,15 +860,13 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     isPreparingRecordingRef.current = false;
     shouldStopRecordingRef.current = false;
 
-    const instance = recordingInstanceRef.current;
-    if (instance) {
-      await instance.stopAndUnloadAsync().catch(() => {});
+    if (recorder.isRecording) {
+      await recorder.stop().catch(() => {});
     }
 
     setIsRecording(false);
-    setRecordingInstance(null);
     setRecordingDuration(0);
-  }, []);
+  }, [recorder]);
 
   // ── Pick image / video from library and send as media message ──────────────
   const pickMediaAndSend = useCallback(async () => {
@@ -819,7 +1042,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       ));
     }
   }, [socket, channel, user, t, listRef]);
-
   const stopRecordingAndSend = useCallback(async () => {
     // If we are still preparing, mark that we should stop as soon as it's prepared
     if (isPreparingRecordingRef.current) {
@@ -827,8 +1049,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       return;
     }
 
-    const instance = recordingInstanceRef.current;
-    if (!instance) return;
+    if (!recorder.isRecording) return;
 
     // Distinguish between hold and quick tap
     const duration = Date.now() - pressStartRef.current;
@@ -847,17 +1068,16 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
       let durationSec = recordingDuration;
       try {
-        const status = await instance.getStatusAsync();
+        const status = recorder.getStatus();
         if (status && typeof status.durationMillis === 'number') {
           durationSec = Math.max(0, Math.round(status.durationMillis / 1000));
         }
       } catch (e) { }
 
-      await instance.stopAndUnloadAsync().catch(() => {});
-      const uri = instance.getURI();
+      await recorder.stop().catch(() => {});
+      const uri = recorder.uri;
 
       setIsRecording(false);
-      setRecordingInstance(null);
       setRecordingDuration(0);
 
       if (uri) {
@@ -865,177 +1085,81 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       }
     } catch (err) {
       setIsRecording(false);
-      setRecordingInstance(null);
       setRecordingDuration(0);
     }
-  }, [recordingDuration, uploadAudioAndSend]);
+  }, [recordingDuration, uploadAudioAndSend, recorder]);
 
   const playAudio = useCallback(async (message: any) => {
-    if (!ExpoAV) { Alert.alert('Audio not available'); return; }
     try {
-      // If tapping the currently playing audio, pause and unload it
-      if (playingId === message.id) {
-        if (activeSoundRef.current) {
-          await activeSoundRef.current.stopAsync().catch(() => { });
-          await activeSoundRef.current.unloadAsync().catch(() => { });
-          activeSoundRef.current = null;
-        }
-        setPlayingId(null);
-        setAudioProgress(0);
-        return;
-      }
+      const url = message.attachments[0]?.url;
+      if (!url) return;
 
-      // If another sound is currently playing, clean it up first
-      if (activeSoundRef.current) {
-        await activeSoundRef.current.stopAsync().catch(() => { });
-        await activeSoundRef.current.unloadAsync().catch(() => { });
-        activeSoundRef.current = null;
+      // If tapping the currently playing audio, pause/stop it
+      if (playingId === message.id) {
+        player.pause();
+        setPlayingId(null);
+        return;
       }
 
       setPlayingId(message.id);
-      setAudioProgress(0);
-
-      const soundObj = new ExpoAV.Audio.Sound();
-      activeSoundRef.current = soundObj;
-      await soundObj.loadAsync({ uri: message.attachments[0].url });
-      await soundObj.playAsync();
-
-      soundObj.setOnPlaybackStatusUpdate((status: any) => {
-        if (status?.didJustFinish) {
-          setPlayingId(null);
-          setAudioProgress(0);
-          soundObj.unloadAsync().catch(() => { });
-          if (activeSoundRef.current === soundObj) {
-            activeSoundRef.current = null;
-          }
-        } else if (status?.isPlaying && status?.durationMillis) {
-          setAudioProgress(status.positionMillis / status.durationMillis);
-        }
-      });
+      
+      // Replace source and play
+      await player.replace({ uri: url });
+      await player.play();
     } catch (err) {
       setPlayingId(null);
-      setAudioProgress(0);
-      activeSoundRef.current = null;
     }
-  }, [playingId]);
+  }, [playingId, player]);
 
-  const fetchMembers = useCallback(async () => {
-    if (!channel) return;
-    setMembersLoading(true);
-    try {
-      const candidateKeys = ['participants', 'members', 'userIds', 'participantIds', 'memberIds'];
-      let raw: any = null;
-      for (const k of candidateKeys) {
-        if (channel[k]) { raw = channel[k]; break; }
-      }
-
-      const membersEndpoints = [`/channels/${channel.id || channel._id}/members`, `/channels/${channel.id || channel._id}/participants`];
-      if (!raw || (Array.isArray(raw) && raw.length === 0)) {
-        for (const ep of membersEndpoints) {
-          try {
-            const res = await http.get(ep);
-            const data = res.data?.data || res.data;
-            if (Array.isArray(data) && data.length > 0) { raw = data; break; }
-          } catch (e) { }
-        }
-      }
-
-      if (!raw || (Array.isArray(raw) && raw.length === 0)) {
-        setMembers([]);
-        return;
-      }
-
-      if (Array.isArray(raw) && raw.length > 0 && typeof raw[0] === 'object') {
-        const normalized = raw.map((m: any) => ({
-          _id: m._id || m.id || m.userId,
-          fullName: m.fullName || m.name || m.displayName || m.username,
-          avatarUrl: m.avatarUrl || m.avatar || m.profilePicture,
-          role: m.role || (m.isAdmin ? 'admin' : 'member')
-        }));
-        setMembers(normalized);
-        return;
-      }
-
-      if (Array.isArray(raw) && (typeof raw[0] === 'string' || typeof raw[0] === 'number')) {
-        const ids = raw.map((r: any) => String(r));
-        let fetched: any[] = [];
-        try {
-          const res = await http.get(`/users?ids=${encodeURIComponent(ids.join(','))}`);
-          fetched = res.data?.data || res.data || [];
-        } catch (e) {
-          try {
-            const res2 = await http.get('/users');
-            fetched = (res2.data?.data || res2.data || []).filter((u: any) => ids.includes(String(u._id) || String(u.id)));
-          } catch (ee) { }
-        }
-        const ms = fetched.map((u: any) => ({
-          _id: u._id || u.id,
-          fullName: u.fullName || u.name || u.displayName,
-          avatarUrl: u.avatarUrl || u.avatar,
-          role: u.role || 'member'
-        }));
-        setMembers(ms);
-      }
-    } catch (err) {
-      setMembers([]);
-    } finally {
-      setMembersLoading(false);
-    }
-  }, [channel]);
+  // ── Load allUsers whenever the Add panel opens ──────────────────────────
+  useEffect(() => {
+    if (!showAddList) return;
+    if (allUsers.length > 0) return; // already loaded
+    (async () => {
+      try {
+        const res = await http.get('/users');
+        const list = res.data?.data || res.data || [];
+        setAllUsers(Array.isArray(list) ? list : []);
+      } catch { /* non-critical — Add panel will just show empty */ }
+    })();
+  }, [showAddList]);
 
   const addMembers = useCallback(async () => {
     if (!isAdmin) return;
     if (!selectedToAdd || selectedToAdd.length === 0) return;
     setAdding(true);
     try {
-      let ok = false;
-      try {
-        await http.post(`/channels/${channel.id || channel._id}/members`, { members: selectedToAdd });
-        ok = true;
-      } catch (e) { }
-
-      if (!ok) {
-        const added = allUsers.filter(u => selectedToAdd.includes(String(u._id || u.id)));
-        setMembers(prev => [...prev, ...added]);
-        setChannel((prev: any) => ({ ...prev, participants: [...(prev?.participants || []), ...added] }));
-      } else {
-        await fetchMembers();
-      }
+      const channelId = channel.id || channel._id;
+      await messagingHttp.post(`/channels/${channelId}/members`, { memberIds: selectedToAdd });
+      await fetchMembers();
       setSelectedToAdd([]);
       setShowAddList(false);
-    } catch (err) {
-      Alert.alert('Error', 'Failed to add members');
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.response?.data?.message || 'Failed to add members';
+      Alert.alert('Error', msg);
     } finally {
       setAdding(false);
     }
-  }, [channel, selectedToAdd, allUsers, isAdmin, fetchMembers]);
+  }, [channel, selectedToAdd, isAdmin, fetchMembers]);
 
-  const removeMember = useCallback((memberId: string) => {
+  const removeMember = useCallback(async (memberId: string) => {
     if (!isAdmin) return;
-    Alert.alert('Remove member', 'Are you sure you want to remove this member?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove', style: 'destructive', onPress: async () => {
-          try {
-            let ok = false;
-            try {
-              await http.delete(`/channels/${channel.id || channel._id}/members/${memberId}`);
-              ok = true;
-            } catch (e) { }
-
-            if (!ok) {
-              setMembers(prev => prev.filter(m => String(m._id || m.id) !== String(memberId)));
-              setChannel((prev: any) => ({ ...prev, participants: (prev?.participants || []).filter((p: any) => String(p._id || p.id) !== String(memberId)) }));
-            } else {
-              await fetchMembers();
-            }
-          } catch (err) {
-            Alert.alert('Error', 'Failed to remove member');
-          }
-        }
-      }
-    ]);
-  }, [channel, isAdmin, fetchMembers]);
+    try {
+      const channelId = channel.id || channel._id;
+      await messagingHttp.delete(`/channels/${channelId}/members/${memberId}`);
+      // Optimistically update local state
+      setMembers(prev => prev.filter(m => String(m._id || m.id) !== String(memberId)));
+      setChannel((prev: any) => ({
+        ...prev,
+        participants: (prev?.participants || []).filter((p: any) =>
+          String(p.userId || p._id || p.id) !== String(memberId)
+        ),
+      }));
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || err?.response?.data?.message || 'Failed to remove member';
+      Alert.alert('Error', msg);
+    }
+  }, [channel, isAdmin]);
 
   const uploadImageForEdit = useCallback(async (uri: string) => {
     setUploadingPhoto(true);
@@ -1120,32 +1244,65 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
   const saveGroupEdits = useCallback(async () => {
     if (!isAdmin && !isCreator) return;
-    if (!editName || editName.trim() === '') return;
+    if (!editName || editName.trim() === '') {
+      Alert.alert(t('Error'), t('Group name cannot be empty'));
+      return;
+    }
     setSaving(true);
     try {
       const payload: any = {};
-      if (editName && editName.trim() !== (channel?.name || '')) payload.name = editName.trim();
+      const trimmedName = editName.trim();
+      if (trimmedName !== (channel?.name || '').trim()) payload.name = trimmedName;
 
       let finalIcon = editPhotoUri;
       if (finalIcon && !/^https?:\/\//i.test(finalIcon)) {
         const uploadedUrl = await uploadImageForEdit(finalIcon);
         if (uploadedUrl) finalIcon = uploadedUrl;
+        else {
+          Alert.alert(t('Error'), t('Failed to upload photo'));
+          setSaving(false);
+          return;
+        }
       }
-      if (finalIcon) {
+      if (finalIcon && finalIcon !== channel?.avatarUrl && finalIcon !== channel?.icon) {
         payload.icon = finalIcon;
         payload.avatarUrl = finalIcon;
       }
 
-      try {
-        await http.patch(`/channels/${channel.id || channel._id}`, payload);
-      } catch (e) { }
+      if (Object.keys(payload).length === 0) {
+        setEditSheetVisible(false);
+        setSaving(false);
+        return;
+      }
 
-      const updated = { ...(channel || {}), name: payload.name || channel?.name, avatarUrl: payload.avatarUrl || channel?.avatarUrl, icon: payload.icon || channel?.icon };
+      // Try messaging-service first, fall back to core api
+      let saved = false;
+      try {
+        await messagingHttp.patch(`/channels/${channel.id || channel._id}`, payload);
+        saved = true;
+      } catch (e1: any) {
+        try {
+          await http.patch(`/channels/${channel.id || channel._id}`, payload);
+          saved = true;
+        } catch (e2: any) {
+          const msg = e2?.response?.data?.error || e2?.response?.data?.message || e1?.response?.data?.error || e1?.response?.data?.message || t('Failed to save changes');
+          Alert.alert(t('Error'), msg);
+          setSaving(false);
+          return;
+        }
+      }
+
+      const updated = {
+        ...(channel || {}),
+        name: payload.name !== undefined ? payload.name : (channel?.name || ''),
+        avatarUrl: payload.avatarUrl || channel?.avatarUrl,
+        icon: payload.icon || channel?.icon,
+      };
       setChannel(updated);
       messagingEvents.emit('channel:updated', updated);
       setEditSheetVisible(false);
-    } catch (err) {
-      Alert.alert('Error', t('Failed to save changes'));
+    } catch (err: any) {
+      Alert.alert(t('Error'), err?.message || t('Failed to save changes'));
     } finally {
       setSaving(false);
     }
@@ -1156,8 +1313,12 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     setDeleting(true);
     try {
       try {
-        await http.delete(`/channels/${channel.id || channel._id}`);
-      } catch (e) { }
+        await messagingHttp.delete(`/channels/${channel.id || channel._id}`);
+      } catch (e) {
+        try {
+          await http.delete(`/channels/${channel.id || channel._id}`);
+        } catch (ee) { }
+      }
 
       messagingEvents.emit('channel:deleted', channel.id || channel._id);
       navigation.goBack();

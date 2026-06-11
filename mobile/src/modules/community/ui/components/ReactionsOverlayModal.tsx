@@ -1,5 +1,8 @@
-import React from 'react';
-import { View, Text, Modal, Pressable, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import {
+  View, Text, Modal, Pressable, TouchableOpacity,
+  StyleSheet, Platform, Animated,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface ReactionsOverlayModalProps {
@@ -24,205 +27,199 @@ interface ReactionsOverlayModalProps {
 }
 
 export function ReactionsOverlayModal({
-  visible,
-  reactionMsgId,
-  onClose,
-  reactionEmojis,
-  handleToggleReaction,
-  selectedMsg,
-  handleReplyTo,
-  handleCopy,
-  handleStartEdit,
-  handleDeleteMessage,
-  handleTogglePin,
-  user,
-  theme: T,
-  isDark,
-  BlurView,
-  t,
-  modalBg,
-  overlayFallback
+  visible, reactionMsgId, onClose, reactionEmojis,
+  handleToggleReaction, selectedMsg, handleReplyTo, handleCopy,
+  handleStartEdit, handleDeleteMessage, handleTogglePin,
+  user, theme: T, isDark, BlurView, t,
 }: ReactionsOverlayModalProps) {
+  const slideAnim = useRef(new Animated.Value(300)).current;
+
+  // ── Theme tokens ──────────────────────────────────────────────────────────
+  const GREEN   = '#27AE60';
+  const SURFACE = isDark ? '#13161C' : '#FFFFFF';
+  const SURF2   = isDark ? '#1C2028' : '#F4F6F8';
+  const TEXT    = isDark ? '#E8EAED' : '#0D1117';
+  const MUTED   = isDark ? 'rgba(200,210,220,0.45)' : 'rgba(0,0,0,0.4)';
+  const DIVIDER = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const DANGER  = '#E74C3C';
+  const DANGER_BG = isDark ? 'rgba(231,76,60,0.14)' : 'rgba(231,76,60,0.08)';
+
+  useEffect(() => {
+    if (visible) {
+      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, damping: 24, stiffness: 260 }).start();
+    } else {
+      slideAnim.setValue(300);
+    }
+  }, [visible]);
+
   if (!visible) return null;
 
   const isAudio = selectedMsg?.attachments?.some((att: any) => att.type === 'audio');
+  const isMine = String(selectedMsg?.senderId?._id || selectedMsg?.senderId || '') === String(user?._id || '');
+  const isPinned = !!selectedMsg?.pinned;
+
+  const handleAction = (fn: () => void) => {
+    fn();
+    onClose();
+  };
+
+  // ── Action item renderer ──────────────────────────────────────────────────
+  const ActionItem = ({
+    icon, label, onPress, iconBg, iconColor, labelColor, bold,
+  }: {
+    icon: string; label: string; onPress: () => void;
+    iconBg?: string; iconColor?: string; labelColor?: string; bold?: boolean;
+  }) => (
+    <TouchableOpacity
+      onPress={onPress}
+      style={{
+        flexDirection: 'row', alignItems: 'center',
+        paddingVertical: 13, paddingHorizontal: 4,
+      }}
+      activeOpacity={0.68}
+    >
+      <View style={{
+        width: 40, height: 40, borderRadius: 13,
+        backgroundColor: iconBg || SURF2,
+        justifyContent: 'center', alignItems: 'center',
+        marginRight: 14,
+      }}>
+        <Ionicons name={icon as any} size={20} color={iconColor || TEXT} />
+      </View>
+      <Text style={{
+        fontSize: 15.5, fontWeight: bold ? '700' : '500',
+        color: labelColor || TEXT, flex: 1,
+      }}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+      {/* Backdrop */}
       {BlurView ? (
-        <Pressable onPress={onClose} style={StyleSheet.absoluteFill}>
-          <BlurView intensity={45} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+        <Pressable onPress={onClose} style={StyleSheet.absoluteFillObject}>
+          <BlurView intensity={40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFillObject} />
         </Pressable>
       ) : (
-        <Pressable onPress={onClose} style={[StyleSheet.absoluteFill, { backgroundColor: overlayFallback }]} />
+        <Pressable
+          onPress={onClose}
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.46)' }]}
+        />
       )}
 
-      <View style={s.bottomWrapper}>
-        <View style={[s.sheetContainer, { backgroundColor: T.surface }]}>
-          {/* Handle bar indicator */}
-          <View style={[s.handleBar, { backgroundColor: T.divider }]} />
-
-          {/* Emoji Reactions Row */}
-          <View style={[s.emojiRow, { borderBottomColor: T.divider }]}>
-            {reactionEmojis.map((emoji) => (
-              <TouchableOpacity
-                key={emoji}
-                onPress={() => {
-                  if (reactionMsgId) handleToggleReaction(reactionMsgId, emoji);
-                  onClose();
-                }}
-                style={s.emojiButton}
-                activeOpacity={0.7}
-              >
-                <Text style={s.emojiText}>{emoji}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Action List Options */}
-          <View style={s.actionList}>
-            <TouchableOpacity
-              onPress={() => { if (reactionMsgId) handleReplyTo(selectedMsg); }}
-              style={s.actionItem}
-              activeOpacity={0.7}
-            >
-              <View style={[s.iconWrap, { backgroundColor: T.surfaceAlt }]}>
-                <Ionicons name="arrow-undo-outline" size={20} color={T.text} />
-              </View>
-              <Text style={[s.actionText, { color: T.text }]}>{t('Reply')}</Text>
-            </TouchableOpacity>
-
-            {!isAudio && (
-              <TouchableOpacity
-                onPress={() => { if (selectedMsg) handleCopy(selectedMsg.content || ''); }}
-                style={s.actionItem}
-                activeOpacity={0.7}
-              >
-                <View style={[s.iconWrap, { backgroundColor: T.surfaceAlt }]}>
-                  <Ionicons name="copy-outline" size={20} color={T.text} />
-                </View>
-                <Text style={[s.actionText, { color: T.text }]}>{t('Copy Text')}</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              onPress={() => { if (reactionMsgId) handleTogglePin(reactionMsgId); onClose(); }}
-              style={s.actionItem}
-              activeOpacity={0.7}
-            >
-              <View style={[s.iconWrap, { backgroundColor: T.surfaceAlt }]}>
-                <Ionicons name="pin-outline" size={20} color={T.text} />
-              </View>
-              <Text style={[s.actionText, { color: T.text }]}>
-                {selectedMsg?.pinned ? t('Unpin Message') : t('Pin Message')}
-              </Text>
-            </TouchableOpacity>
-
-            {String(selectedMsg?.senderId?._id || selectedMsg?.senderId || '') === String(user?._id || '') && !selectedMsg?.deletedAt && (
-              <>
-                <View style={[s.divider, { backgroundColor: T.divider }]} />
-
-                {!isAudio && (
-                  <TouchableOpacity
-                    onPress={() => { if (selectedMsg) handleStartEdit(selectedMsg); }}
-                    style={s.actionItem}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[s.iconWrap, { backgroundColor: T.surfaceAlt }]}>
-                      <Ionicons name="create-outline" size={20} color={T.text} />
-                    </View>
-                    <Text style={[s.actionText, { color: T.text }]}>{t('Edit Message')}</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  onPress={() => { if (selectedMsg) handleDeleteMessage(selectedMsg.id); }}
-                  style={s.actionItem}
-                  activeOpacity={0.7}
-                >
-                  <View style={[s.iconWrap, { backgroundColor: 'rgba(231, 76, 60, 0.1)' }]}>
-                    <Ionicons name="trash-outline" size={20} color="#E74C3C" />
-                  </View>
-                  <Text style={[s.actionText, { color: '#E74C3C', fontWeight: '600' }]}>{t('Delete Message')}</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            <View style={[s.divider, { backgroundColor: T.divider }]} />
-
-            <TouchableOpacity onPress={onClose} style={[s.actionItem, { paddingBottom: Platform.OS === 'ios' ? 24 : 12 }]} activeOpacity={0.7}>
-              <View style={[s.iconWrap, { backgroundColor: T.surfaceAlt }]}>
-                <Ionicons name="close-outline" size={20} color={T.textMuted} />
-              </View>
-              <Text style={[s.actionText, { color: T.textMuted }]}>{t('Cancel')}</Text>
-            </TouchableOpacity>
-          </View>
+      {/* Sheet */}
+      <Animated.View style={{
+        position: 'absolute', left: 0, right: 0, bottom: 0,
+        backgroundColor: SURFACE,
+        borderTopLeftRadius: 28, borderTopRightRadius: 28,
+        paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+        transform: [{ translateY: slideAnim }],
+      }}>
+        {/* Handle */}
+        <View style={{ alignItems: 'center', paddingTop: 12, marginBottom: 4 }}>
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: DIVIDER }} />
         </View>
-      </View>
+
+        {/* ── EMOJI QUICK-REACTIONS ──────────────────────────────────── */}
+        <View style={{
+          flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center',
+          paddingHorizontal: 12, paddingVertical: 14,
+          marginHorizontal: 16, marginBottom: 12,
+          backgroundColor: SURF2, borderRadius: 20,
+        }}>
+          {reactionEmojis.map((emoji) => (
+            <TouchableOpacity
+              key={emoji}
+              onPress={() => {
+                if (reactionMsgId) handleToggleReaction(reactionMsgId, emoji);
+                onClose();
+              }}
+              style={{ padding: 6 }}
+              activeOpacity={0.6}
+            >
+              <Text style={{ fontSize: 29 }}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* ── MESSAGE PREVIEW (snippet) ─────────────────────────────── */}
+        {!!selectedMsg?.content && !selectedMsg.deletedAt && (
+          <View style={{
+            marginHorizontal: 16, marginBottom: 12, padding: 12,
+            backgroundColor: SURF2, borderRadius: 14,
+            borderLeftWidth: 3, borderLeftColor: GREEN,
+          }}>
+            <Text style={{ fontSize: 13.5, color: MUTED, fontWeight: '500' }} numberOfLines={2}>
+              {selectedMsg.content}
+            </Text>
+          </View>
+        )}
+
+        {/* ── ACTION LIST ───────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 16 }}>
+          <ActionItem
+            icon="arrow-undo"
+            label={t('Reply')}
+            onPress={() => handleAction(() => handleReplyTo(selectedMsg))}
+            iconBg={isDark ? 'rgba(39,174,96,0.15)' : 'rgba(39,174,96,0.1)'}
+            iconColor={GREEN}
+          />
+
+          {!isAudio && (
+            <ActionItem
+              icon="copy"
+              label={t('Copy Text')}
+              onPress={() => handleAction(() => handleCopy(selectedMsg?.content || ''))}
+            />
+          )}
+
+          <ActionItem
+            icon={isPinned ? 'pin' : 'pin-outline'}
+            label={isPinned ? t('Unpin Message') : t('Pin Message')}
+            onPress={() => handleAction(() => { if (reactionMsgId) handleTogglePin(reactionMsgId); })}
+            iconBg={isPinned ? (isDark ? 'rgba(247,183,49,0.15)' : 'rgba(247,183,49,0.1)') : SURF2}
+            iconColor={isPinned ? '#F7B731' : TEXT}
+          />
+
+          {isMine && !selectedMsg?.deletedAt && (
+            <>
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: DIVIDER, marginVertical: 4 }} />
+
+              {!isAudio && (
+                <ActionItem
+                  icon="create"
+                  label={t('Edit Message')}
+                  onPress={() => handleAction(() => handleStartEdit(selectedMsg))}
+                  iconBg={isDark ? 'rgba(9,132,227,0.15)' : 'rgba(9,132,227,0.08)'}
+                  iconColor="#0984E3"
+                />
+              )}
+
+              <ActionItem
+                icon="trash"
+                label={t('Delete Message')}
+                onPress={() => handleAction(() => handleDeleteMessage(selectedMsg?.id || selectedMsg?._id))}
+                iconBg={DANGER_BG}
+                iconColor={DANGER}
+                labelColor={DANGER}
+                bold
+              />
+            </>
+          )}
+
+          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: DIVIDER, marginVertical: 4 }} />
+
+          <ActionItem
+            icon="close"
+            label={t('Cancel')}
+            onPress={onClose}
+            iconColor={MUTED}
+            labelColor={MUTED}
+          />
+        </View>
+      </Animated.View>
     </Modal>
   );
 }
-
-const s = StyleSheet.create({
-  bottomWrapper: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'transparent'
-  },
-  sheetContainer: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 8,
-  },
-  handleBar: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  emojiRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    marginBottom: 8,
-  },
-  emojiButton: {
-    paddingHorizontal: 6,
-    paddingVertical: 8,
-  },
-  emojiText: {
-    fontSize: 28,
-  },
-  actionList: {
-    paddingTop: 4,
-  },
-  actionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-  actionText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 6,
-  }
-});
