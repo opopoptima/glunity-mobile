@@ -73,6 +73,7 @@ function messageHandler(io, socket) {
             content: msg.type === 'text' ? msg.content : `[${msg.type}]`,
             createdAt: msg.createdAt,
           },
+          'participants.$[].deletedAt': null,
         },
       }, { returnDocument: 'after' }).lean();
 
@@ -103,10 +104,12 @@ function messageHandler(io, socket) {
         for (const p of updatedChannel.participants) {
           const pId = (p.userId || p).toString();
           
-          // Count unread messages for this participant
+          // Count unread messages for this participant, respecting lastReadAt and clearedAt
+          const startFrom = [p.lastReadAt, p.clearedAt].filter(Boolean).sort((a, b) => b - a)[0] || new Date(0);
           const unreadCount = await Message.countDocuments({
             channelId,
-            createdAt: { $gt: p.lastReadAt || new Date(0) }
+            deletedAt: { $in: [null, undefined] },
+            createdAt: { $gt: startFrom }
           });
 
           // Emit conversation:updated to the participant's room
@@ -122,18 +125,19 @@ function messageHandler(io, socket) {
             unreadCount
           });
 
-            // If participant is not the sender, check if they are viewing the channel
-            if (pId !== userId) {
-              const userSockets = await io.in(pId).fetchSockets();
-              let isViewing = false;
-              for (const s of userSockets) {
-                if (s.rooms.has(`viewing:${channelId}`)) {
-                  isViewing = true;
-                  break;
-                }
+          // If participant is not the sender, check if they are viewing the channel
+          if (pId !== userId) {
+            const userSockets = await io.in(pId).fetchSockets();
+            let isViewing = false;
+            for (const s of userSockets) {
+              if (s.rooms.has(`viewing:${channelId}`)) {
+                isViewing = true;
+                break;
               }
+            }
 
-            if (!isViewing) {
+            // Only send toast notification if participant is not viewing the channel and has not muted notifications
+            if (!isViewing && !p.muted) {
               let conversationName = updatedChannel.name;
               if (updatedChannel.type === 'direct') {
                 conversationName = user.fullName;
