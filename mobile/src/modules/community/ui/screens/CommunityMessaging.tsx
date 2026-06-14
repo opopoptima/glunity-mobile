@@ -561,15 +561,6 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
     const showAvatarPlaceholder = !isMe && !dmPartnerId && shouldGroup;
 
     return (
-<<<<<<< HEAD
-      <AnimatedReanimated.View
-        entering={enteringAnimation}
-        style={[styles.row, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}
-      >
-        {!isMe && (
-          <TouchableOpacity onPress={() => senderId && chat.openUserProfile(senderId)} activeOpacity={0.8}>
-            {avatarUrl ? (
-=======
       <View>
         {renderDateSeparator(item, prevMsg)}
         <AnimatedReanimated.View
@@ -578,7 +569,6 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         >
           {showAvatar && (
             avatarUrl ? (
->>>>>>> dc9ec00fcb88f59aa4ede49c8b36eae1c3ceacca
               <Image source={{ uri: avatarUrl }} style={styles.avatar} />
             ) : (
               <View style={[styles.avatar, { backgroundColor: T.surfaceAlt, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: T.divider }]}>
@@ -586,35 +576,10 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                   {String(item.senderName || 'A').charAt(0).toUpperCase()}
                 </Text>
               </View>
-<<<<<<< HEAD
-            )}
-          </TouchableOpacity>
-        )}
-
-        {/* Optimistic send status indicators */}
-        {isMe && item.status === 'failed' && (
-          <TouchableOpacity onPress={() => chat.handleRetrySend(item)} style={{ marginRight: 6, alignSelf: 'center', padding: 4 }} accessibilityLabel="Retry sending">
-            <Ionicons name="alert-circle" size={20} color="#E74C3C" />
-          </TouchableOpacity>
-        )}
-        {isMe && item.status === 'sending' && (
-          <View style={{ marginRight: 6, alignSelf: 'center', padding: 4 }}>
-            <ActivityIndicator size="small" color={T.textMuted} />
-          </View>
-        )}
-
-        <View style={[styles.messageBlock, isMe ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
-          {/* Only show sender name in GROUP conversations */}
-          {!isMe && !dmPartnerId && (
-            <Text style={{ fontSize: 11, fontWeight: '600', color: T.green || '#2ECC71', marginBottom: 3, marginLeft: 6 }}>
-              {item.senderName || 'User'}
-            </Text>
-=======
             )
           )}
           {showAvatarPlaceholder && (
             <View style={styles.avatar} />
->>>>>>> dc9ec00fcb88f59aa4ede49c8b36eae1c3ceacca
           )}
 
           {/* Optimistic send status indicators */}
@@ -717,13 +682,8 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                     </Text>
                   </View>
                 )}
-<<<<<<< HEAD
-                <View style={[styles.presenceDot, { backgroundColor: partnerOnline ? '#27AE60' : '#9E9E9E' }]} />
-              </TouchableOpacity>
-=======
                 <OnlineDot isOnline={partnerOnline} size={12} />
-              </View>
->>>>>>> dc9ec00fcb88f59aa4ede49c8b36eae1c3ceacca
+              </TouchableOpacity>
 
               {/* Name + status */}
               <View style={styles.headerMeta}>

@@ -735,37 +735,8 @@ export default function MessagingHome({ navigation }: any) {
                   onLongPress={() => handleLongPressChannel(item)}
                 >
                   <View style={{ position: 'relative' }}>
-<<<<<<< HEAD
-                    {disp.isDM ? (
-                      <TouchableOpacity
-                        onPress={() => {
-                          const other = findOtherParticipant(item);
-                          if (other) openUserProfile(other._id || other.id);
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <Image source={{ uri: avatarUri }} style={styles.avatar} />
-                      </TouchableOpacity>
-                    ) : (
-                      <Image source={{ uri: avatarUri }} style={styles.avatar} />
-                    )}
-                    {showOnlineDot && (
-                      <View style={{
-                        position: 'absolute',
-                        right: 1,
-                        bottom: 1,
-                        width: 13,
-                        height: 13,
-                        borderRadius: 7,
-                        backgroundColor: '#4CAF50',
-                        borderWidth: 2,
-                        borderColor: T.bg,
-                      }} />
-                    )}
-=======
                     <Image source={{ uri: avatarUri }} style={styles.avatar} />
                     <OnlineDot isOnline={showOnlineDot} size={13} />
->>>>>>> dc9ec00fcb88f59aa4ede49c8b36eae1c3ceacca
                   </View>
                   <View style={styles.rowContent}>
                     <View style={styles.rowTop}>
