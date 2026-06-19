@@ -13,6 +13,8 @@ const participantSchema = new Schema(
     /** Snapshot of last read position for unread-count derivation (redundant
      *  with ReadReceipt, but keeps channel list queries fast — no join needed). */
     lastReadAt: { type: Date, default: null },
+    clearedAt:  { type: Date, default: null },
+    deletedAt:  { type: Date, default: null },
   },
   { _id: false }
 );
@@ -133,6 +135,7 @@ channelSchema.statics.updateLastMessage = async function (channelId, message) {
           createdAt:  message.createdAt || new Date(),
         },
         'participants.$.lastReadAt': message.createdAt || new Date(),
+        'participants.$[].deletedAt': null,
       },
       $inc: { messageCount: 1 },
     },
