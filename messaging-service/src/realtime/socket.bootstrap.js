@@ -39,10 +39,6 @@ function bootstrap(httpServer) {
     socket.userId = userId;
     const redisClient = require('../bootstrap/redis.bootstrap').getPubClient();
 
-    // import { registerPresenceHandler } from './handlers/presence.handler.js';
-    const { registerPresenceHandler } = require('./handlers/presence.handler.js');
-    registerPresenceHandler(io, socket, redisClient);
-
     socket.data.io = io;
     if (userId !== 'unknown') {
       socket.join(userId);
@@ -51,7 +47,7 @@ function bootstrap(httpServer) {
     channelHandler (io, socket);
     messageHandler (io, socket);
     reactionHandler(io, socket);
-    presenceHandler(io, socket);
+    presenceHandler(io, socket, redisClient);
 
     socket.on('disconnect', (reason) => {
       logger.info('[socket.io] Client disconnected', { userId, reason });

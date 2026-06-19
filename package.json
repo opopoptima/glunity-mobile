@@ -17,5 +17,8 @@
     "lint": "npm --workspace api run lint && npm --workspace mobile run lint && npm --workspace glunity-messaging-service run lint",
     "test": "npm --workspace api run test && npm --workspace mobile run test && npm --workspace glunity-messaging-service run test",
     "typecheck": "npm --workspace mobile run typecheck"
+  },
+  "dependencies": {
+    "react-native-worklets": "0.7.4"
   }
 }

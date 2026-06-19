@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useSocket } from '../context/socket.context';
 
 export interface UsePresenceReturn {
@@ -7,12 +7,15 @@ export interface UsePresenceReturn {
   fetchStatuses: (userIds: string[]) => void;
 }
 
-export function usePresence(): UsePresenceReturn {
+const PresenceContext = createContext<UsePresenceReturn | undefined>(undefined);
+
+export function PresenceProvider({ children }: { children: React.ReactNode }) {
   const { socket } = useSocket();
   const [presenceMap, setPresenceMap] = useState<Map<string, boolean>>(new Map());
   const [lastSeenMap, setLastSeenMap] = useState<Map<string, string>>(new Map());
+  const trackedUserIds = useRef<Set<string>>(new Set());
 
-  // 1. On mount, listen for socket events:
+  // 1. On mount / socket connection, bind global listeners
   useEffect(() => {
     if (!socket) return;
 
@@ -42,17 +45,45 @@ export function usePresence(): UsePresenceReturn {
     socket.on('presence:online', handleOnline);
     socket.on('presence:offline', handleOffline);
 
+    // If socket reconnects, re-fetch statuses for all currently tracked users automatically
+    if (socket.connected && trackedUserIds.current.size > 0) {
+      const userIds = Array.from(trackedUserIds.current);
+      socket.emit('presence:get_status', { userIds }, (response: any) => {
+        if (response) {
+          if (response.statuses) {
+            setPresenceMap((prev) => {
+              const next = new Map(prev);
+              Object.entries(response.statuses).forEach(([uId, isOnline]) => {
+                next.set(uId, !!isOnline);
+              });
+              return next;
+            });
+          }
+          if (response.lastSeens) {
+            setLastSeenMap((prev) => {
+              const next = new Map(prev);
+              Object.entries(response.lastSeens).forEach(([uId, lastSeen]) => {
+                if (lastSeen) {
+                  next.set(uId, lastSeen as string);
+                }
+              });
+              return next;
+            });
+          }
+        }
+      });
+    }
+
     return () => {
       socket.off('presence:online', handleOnline);
       socket.off('presence:offline', handleOffline);
     };
   }, [socket]);
 
-  // 2. Send heartbeat every 25 seconds:
+  // 2. Periodic global heartbeat ping to show self as online
   useEffect(() => {
     if (!socket) return;
 
-    // Send a ping immediately on connect/mount if connected
     if (socket.connected) {
       socket.emit('presence:ping');
     }
@@ -68,37 +99,108 @@ export function usePresence(): UsePresenceReturn {
     };
   }, [socket]);
 
-  // 3. fetchStatuses(userIds):
+  // 3. Periodic background polling of tracked users' statuses (fallback/database middleware sync)
+  useEffect(() => {
+    if (!socket) return;
+
+    const intervalId = setInterval(() => {
+      if (socket.connected && trackedUserIds.current.size > 0) {
+        const userIds = Array.from(trackedUserIds.current);
+        socket.emit('presence:get_status', { userIds }, (response: { statuses?: Record<string, boolean>; lastSeens?: Record<string, string | null> }) => {
+          if (response) {
+            if (response.statuses) {
+              const statuses = response.statuses;
+              setPresenceMap((prev) => {
+                const next = new Map(prev);
+                Object.entries(statuses).forEach(([userId, isOnline]) => {
+                  next.set(userId, isOnline);
+                });
+                return next;
+              });
+            }
+            if (response.lastSeens) {
+              const lastSeens = response.lastSeens;
+              setLastSeenMap((prev) => {
+                const next = new Map(prev);
+                Object.entries(lastSeens).forEach(([userId, lastSeen]) => {
+                  if (lastSeen) {
+                    next.set(userId, lastSeen);
+                  }
+                });
+                return next;
+              });
+            }
+          }
+        });
+      }
+    }, 30000); // Poll database state every 30 seconds
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [socket]);
+
+  // 4. Fetch specific user statuses on demand (triggered by components)
   const fetchStatuses = useCallback((userIds: string[]) => {
     if (!socket || !userIds || userIds.length === 0) return;
 
-    socket.emit('presence:get_status', { userIds }, (response: { statuses?: Record<string, boolean> }) => {
-      if (response && response.statuses) {
-        const statuses = response.statuses;
-        setPresenceMap((prev) => {
-          const next = new Map(prev);
-          Object.entries(statuses).forEach(([userId, isOnline]) => {
-            next.set(userId, isOnline);
+    let hasNewId = false;
+    userIds.forEach((id) => {
+      if (id && !trackedUserIds.current.has(id)) {
+        trackedUserIds.current.add(id);
+        hasNewId = true;
+      }
+    });
+
+    socket.emit('presence:get_status', { userIds }, (response: { statuses?: Record<string, boolean>; lastSeens?: Record<string, string | null> }) => {
+      if (response) {
+        if (response.statuses) {
+          const statuses = response.statuses;
+          setPresenceMap((prev) => {
+            const next = new Map(prev);
+            Object.entries(statuses).forEach(([userId, isOnline]) => {
+              next.set(userId, isOnline);
+            });
+            return next;
           });
-          return next;
-        });
+        }
+        if (response.lastSeens) {
+          const lastSeens = response.lastSeens;
+          setLastSeenMap((prev) => {
+            const next = new Map(prev);
+            Object.entries(lastSeens).forEach(([userId, lastSeen]) => {
+              if (lastSeen) {
+                next.set(userId, lastSeen);
+              }
+            });
+            return next;
+          });
+        }
       }
     });
   }, [socket]);
 
-  // 4. isOnline(userId):
   const isOnline = useCallback((userId: string): boolean => {
     return presenceMap.get(userId) ?? false;
   }, [presenceMap]);
 
-  // getLastSeen(userId):
   const getLastSeen = useCallback((userId: string): string | null => {
     return lastSeenMap.get(userId) ?? null;
   }, [lastSeenMap]);
 
-  return {
+  const value = useMemo(() => ({
     isOnline,
     getLastSeen,
     fetchStatuses,
-  };
+  }), [isOnline, getLastSeen, fetchStatuses]);
+
+  return React.createElement(PresenceContext.Provider, { value }, children);
+}
+
+export function usePresence(): UsePresenceReturn {
+  const context = useContext(PresenceContext);
+  if (context === undefined) {
+    throw new Error('usePresence must be used within a PresenceProvider');
+  }
+  return context;
 }
