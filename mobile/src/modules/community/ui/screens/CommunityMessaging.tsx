@@ -247,7 +247,6 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
     timeText: { fontSize: 10, color: T.textMuted, marginTop: 2 },
     messageBlock: { flexDirection: 'column', alignItems: 'flex-start' },
     inputBar: {
-      position: 'absolute', left: 0, right: 0, bottom: 0,
       padding: 12, backgroundColor: T.surface,
       borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: T.divider,
     },
@@ -831,56 +830,65 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         );
       })()}
 
-      {/* Messages List */}
-      {chat.loading && chat.messages.length === 0 ? (
-        <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator /></View>
-      ) : (
-        <FlatList
-          ref={chat.listRef}
-          data={chat.messages}
-          keyExtractor={(i) => String(i.id || i._id || Math.random())}
-          renderItem={renderItem}
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingBottom: 120 + insets.bottom },
-            chat.messages.length === 0 && { flexGrow: 1, justifyContent: 'center' }
-          ]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          onContentSizeChange={() => {
-            if (chat.shouldScrollToEndRef.current) {
-              chat.listRef.current?.scrollToEnd({ animated: true });
-              chat.shouldScrollToEndRef.current = false;
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 + insets.top : 0}
+      >
+        {/* Messages List */}
+        {chat.loading && chat.messages.length === 0 ? (
+          <View style={{ flex: 1, justifyContent: 'center' }}><ActivityIndicator /></View>
+        ) : (
+          <FlatList
+            ref={chat.listRef}
+            data={chat.messages}
+            keyExtractor={(i) => String(i.id || i._id || Math.random())}
+            renderItem={renderItem}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: 16 },
+              chat.messages.length === 0 && { flexGrow: 1, justifyContent: 'center' }
+            ]}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            onContentSizeChange={() => {
+              if (chat.shouldScrollToEndRef.current) {
+                chat.listRef.current?.scrollToEnd({ animated: true });
+                chat.shouldScrollToEndRef.current = false;
+              }
+            }}
+            onLayout={() => {
+              if (chat.messages.length > 0) {
+                chat.listRef.current?.scrollToEnd({ animated: true });
+              }
+            }}
+            ListEmptyComponent={
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
+                <Ionicons name="chatbubbles-outline" size={64} color={T.textMuted} style={{ marginBottom: 12, opacity: 0.5 }} />
+                <Text style={{ fontSize: 16, fontWeight: '600', color: T.text, textAlign: 'center' }}>
+                  {dmPartnerId 
+                    ? `${t('Say hi to')} ${display.name} 👋` 
+                    : t('Start the conversation!')}
+                </Text>
+                <Text style={{ fontSize: 13, color: T.textMuted, textAlign: 'center', marginTop: 4, paddingHorizontal: 40 }}>
+                  {dmPartnerId 
+                    ? t('Send a message to start direct messaging')
+                    : t('No messages in this group yet')}
+                </Text>
+              </View>
             }
-          }}
-          ListEmptyComponent={
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
-              <Ionicons name="chatbubbles-outline" size={64} color={T.textMuted} style={{ marginBottom: 12, opacity: 0.5 }} />
-              <Text style={{ fontSize: 16, fontWeight: '600', color: T.text, textAlign: 'center' }}>
-                {dmPartnerId 
-                  ? `${t('Say hi to')} ${display.name} 👋` 
-                  : t('Start the conversation!')}
-              </Text>
-              <Text style={{ fontSize: 13, color: T.textMuted, textAlign: 'center', marginTop: 4, paddingHorizontal: 40 }}>
-                {dmPartnerId 
-                  ? t('Send a message to start direct messaging')
-                  : t('No messages in this group yet')}
-              </Text>
-            </View>
-          }
-        />
-      )}
+          />
+        )}
 
-      {/* Emoji pop animation */}
-      {chat.popEmoji ? (
-        <Animated.View pointerEvents="none" style={{ position: 'absolute', right: 36, bottom: 120, transform: [{ scale: chat.popAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1.15] }) }], opacity: chat.popAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0, 1, 0] }) }}>
-          <Text style={{ fontSize: 40 }}>{chat.popEmoji}</Text>
-        </Animated.View>
-      ) : null}
+        {/* Emoji pop animation */}
+        {chat.popEmoji ? (
+          <Animated.View pointerEvents="none" style={{ position: 'absolute', right: 36, bottom: 80, transform: [{ scale: chat.popAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1.15] }) }], opacity: chat.popAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0, 1, 0] }) }}>
+            <Text style={{ fontSize: 40 }}>{chat.popEmoji}</Text>
+          </Animated.View>
+        ) : null}
 
-      {/* Messaging Input Bar */}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 + insets.bottom : 0}>
-        <View style={[styles.inputBar, { bottom: insets.bottom }]}>
+        {/* Messaging Input Bar */}
+        <View style={[styles.inputBar, { paddingBottom: chat.isRecording ? 12 : insets.bottom + 12 }]}>
           {chat.typingUser ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6, paddingLeft: 8 }}>
               <Text style={{ color: T.textMuted, fontSize: 12, fontStyle: 'italic' }}>
