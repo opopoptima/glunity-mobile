@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Pressable, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, useWindowDimensions, Alert, Linking, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../auth/state/auth.context';
@@ -10,6 +10,7 @@ import { useCommunityChat } from '../../hooks/useCommunityChat';
 import { usePresence } from '../../../../shared/hooks/usePresence';
 import OnlineDot from '../../../../shared/components/OnlineDot';
 import AnimatedReanimated, { FadeInDown, SlideInRight, useReducedMotion } from 'react-native-reanimated';
+import http from '../../../../core/network/http.client';
 
 // Decoupled sub-components
 import { OptionsActionMenu } from '../components/OptionsActionMenu';
@@ -92,7 +93,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
     const ch = chat.channel;
     if (!ch) return null;
     const parts = ch.participants || ch.members || ch.userIds || ch.participantIds || [];
-    const isDM = ch.name?.startsWith('DM-') || ch.type === 'direct' || ch.type === 'dm' || (Array.isArray(parts) && parts.length === 2);
+    const isDM = ch.name?.startsWith('DM-') || ch.type === 'direct' || ch.type === 'dm' || String(ch.type).toUpperCase() === 'DM' || (Array.isArray(parts) && parts.length === 2);
     if (!isDM) return null;
     for (const p of parts) {
       const id = p.userId ? String(p.userId) : String(p._id || p.id || p);
@@ -109,14 +110,40 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
       ch.name?.startsWith('DM-') ||
       ch.type === 'direct' ||
       ch.type === 'dm' ||
+      String(ch.type).toUpperCase() === 'DM' ||
       (Array.isArray(parts) && parts.length === 2)
     );
   }, [chat.channel]);
 
+  const [partnerUser, setPartnerUser] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    if (!dmPartnerId) {
+      setPartnerUser(null);
+      return;
+    }
+    let active = true;
+    async function loadPartner() {
+      try {
+        const res = await http.get(`/users/${dmPartnerId}`);
+        const userData = res.data?.data || res.data;
+        if (active && userData) {
+          setPartnerUser(userData);
+        }
+      } catch (err) {
+        console.warn('Failed to load DM partner user profile', err);
+      }
+    }
+    loadPartner();
+    return () => { active = false; };
+  }, [dmPartnerId]);
+
   const partnerOnline = dmPartnerId ? isOnline(dmPartnerId) : false;
+  const [presenceFetched, setPresenceFetched] = React.useState(false);
 
   const formatLastSeen = useMemo(() => {
     return (pId: string): string => {
+      if (!presenceFetched) return '···'; // still loading, don't flash Offline
       const lastSeen = getLastSeen(pId);
       if (!lastSeen) return t('Offline');
       const date = new Date(lastSeen);
@@ -130,12 +157,25 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
       if (diffHours < 24) return t('Last seen {{count}}h ago').replace('{{count}}', String(diffHours));
       return t('Last seen on {{date}}').replace('{{date}}', date.toLocaleDateString());
     };
-  }, [getLastSeen, t]);
+  }, [getLastSeen, t, presenceFetched]);
 
+  // Initial fetch — marks presenceFetched=true once it resolves
   React.useEffect(() => {
-    if (dmPartnerId) {
+    if (!dmPartnerId) return;
+    setPresenceFetched(false);
+    fetchStatuses([dmPartnerId]);
+    // Give it 1.5s for the socket round-trip, then mark as fetched
+    const t1 = setTimeout(() => setPresenceFetched(true), 1500);
+    return () => clearTimeout(t1);
+  }, [dmPartnerId, fetchStatuses]);
+
+  // Poll every 15s while this screen is open to keep status fresh
+  React.useEffect(() => {
+    if (!dmPartnerId) return;
+    const id = setInterval(() => {
       fetchStatuses([dmPartnerId]);
-    }
+    }, 15000);
+    return () => clearInterval(id);
   }, [dmPartnerId, fetchStatuses]);
 
   // Re-fetch partner status whenever the socket reconnects (e.g. after backgrounding the app)
@@ -260,18 +300,18 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
     row: { marginVertical: 3, flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'flex-end' },
     bubbleLeft: {
       backgroundColor: T.surfaceAlt,
-      paddingVertical: 8, paddingHorizontal: 12,
-      borderRadius: 18, borderBottomLeftRadius: 4,
-      maxWidth: windowWidth * 0.72, minWidth: 60,
+      paddingVertical: 10, paddingHorizontal: 14,
+      borderRadius: 20, borderBottomLeftRadius: 4,
+      maxWidth: '75%', minWidth: 60,
       alignSelf: 'flex-start', flexShrink: 1, marginHorizontal: 6,
       overflow: 'hidden',
       ...(Platform.OS === 'web' ? { wordBreak: 'break-word', overflowWrap: 'break-word' } as any : {}),
     },
     bubbleRight: {
       backgroundColor: isDark ? '#1E7A4D' : '#2ECC71',
-      paddingVertical: 8, paddingHorizontal: 12,
-      borderRadius: 18, borderBottomRightRadius: 4,
-      maxWidth: windowWidth * 0.72, minWidth: 60,
+      paddingVertical: 10, paddingHorizontal: 14,
+      borderRadius: 20, borderBottomRightRadius: 4,
+      maxWidth: '75%', minWidth: 60,
       alignSelf: 'flex-end', flexShrink: 1, marginHorizontal: 6,
       overflow: 'hidden', alignItems: 'flex-start',
       ...(Platform.OS === 'web' ? { wordBreak: 'break-word', overflowWrap: 'break-word' } as any : {}),
@@ -373,7 +413,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
     );
   };
 
-  const renderItem = ({ item, index }: { item: any; index: number }) => {
+  const renderItem = useCallback(({ item, index }: { item: any; index: number }) => {
     const senderId = typeof item.senderId === 'object' && item.senderId ? (item.senderId._id || item.senderId.id) : item.senderId;
     const isMe = String(senderId) === String((user as any)?._id || (user as any)?.id);
     const isTemp = String(item.id || '').startsWith('temp-');
@@ -710,7 +750,15 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         </AnimatedReanimated.View>
       </View>
     );
-  };
+  }, [
+    chat.messages, chat.channel, chat.playingId, chat.audioProgress,
+    user, T, isDark, isRTL, dmPartnerId, isDMChannel,
+    highlightedMsgId, windowWidth, seenIds, reducedMotion,
+    chat.handleToggleReaction, chat.setReactionMsgId, chat.playAudio,
+    chat.handlePressMessage, chat.handleRetrySend, chat.handleTogglePin,
+    setReactorsMsgId, setReactorsCounts, setReactorsSheetVisible,
+    t, formatMessageTime, formatDuration, styles,
+  ]);
 
   if (!chat.channel) {
     return (
@@ -742,7 +790,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           {isDMChannel ? (
             /* ── DM Header ──────────────────────────────────────────────────── */
             <TouchableOpacity
-              onPress={() => chat.setMembersSheetVisible(true)}
+              onPress={() => dmPartnerId && chat.openUserProfile(dmPartnerId)}
               style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
               activeOpacity={0.75}
             >
@@ -752,12 +800,12 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                 activeOpacity={0.8}
                 style={{ position: 'relative' }}
               >
-                {display.avatar ? (
-                  <Image source={{ uri: display.avatar }} style={styles.dmAvatar} />
+                {partnerUser?.avatarUrl || partnerUser?.avatar || display.avatar ? (
+                  <Image source={{ uri: partnerUser?.avatarUrl || partnerUser?.avatar || display.avatar }} style={styles.dmAvatar} />
                 ) : (
                   <View style={[styles.dmAvatar, { backgroundColor: isDark ? '#1E4A3A' : '#D5F5E3', alignItems: 'center', justifyContent: 'center' }]}>
                     <Text style={{ fontSize: 16, fontWeight: '800', color: T.green || '#2ECC71' }}>
-                      {String(display.name || '?').charAt(0).toUpperCase()}
+                      {String(partnerUser?.fullName || partnerUser?.name || display.name || '?').charAt(0).toUpperCase()}
                     </Text>
                   </View>
                 )}
@@ -767,7 +815,9 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
               {/* Name + status */}
               <View style={styles.headerMeta}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <Text style={styles.headerName} numberOfLines={1}>{display.name}</Text>
+                  <Text style={styles.headerName} numberOfLines={1}>
+                    {partnerUser?.fullName || partnerUser?.name || display.name}
+                  </Text>
                   {!!chat.channel?.myMuted && (
                     <Ionicons name="notifications-off" size={13} color={T.textMuted} />
                   )}
@@ -950,9 +1000,27 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
             ]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
+            // ── Performance ────────────────────────────────────────────
+            windowSize={10}
+            maxToRenderPerBatch={10}
+            initialNumToRender={20}
+            removeClippedSubviews={Platform.OS === 'android'}
+            // ── Scroll throttle — fire at most every 100ms ─────────────
+            scrollEventThrottle={100}
             onScroll={(event) => {
-              const { contentOffset } = event.nativeEvent;
-              if (contentOffset.y <= 10) {
+              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+
+              // Track whether user is near the bottom (within 150px)
+              const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+              chat.isNearBottomRef.current = distanceFromBottom < 150;
+
+              // If the user reaches the bottom, clear unread count
+              if (distanceFromBottom < 150 && chat.unreadCount > 0) {
+                chat.setUnreadCount(0);
+              }
+
+              // Load more when scrolled to the very top
+              if (contentOffset.y <= 20 && !chat.loadingMore) {
                 chat.loadMoreMessages();
               }
             }}
@@ -963,17 +1031,9 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                 </View>
               ) : null
             }
-            onContentSizeChange={() => {
-              if (chat.shouldScrollToEndRef.current) {
-                chat.listRef.current?.scrollToEnd({ animated: true });
-                chat.shouldScrollToEndRef.current = false;
-              }
-            }}
-            onLayout={() => {
-              if (chat.messages.length > 0) {
-                chat.listRef.current?.scrollToEnd({ animated: true });
-              }
-            }}
+            onContentSizeChange={() => { /* no-op — auto-scroll disabled */ }}
+            onLayout={() => { /* no-op — auto-scroll disabled */ }}
+
             ListEmptyComponent={
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
                 <Ionicons name="chatbubbles-outline" size={64} color={T.textMuted} style={{ marginBottom: 12, opacity: 0.5 }} />
@@ -998,6 +1058,69 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
             <Text style={{ fontSize: 40 }}>{chat.popEmoji}</Text>
           </Animated.View>
         ) : null}
+
+        {/* Floating Scroll to Bottom Arrow */}
+        {chat.unreadCount > 0 && (() => {
+          const ButtonContent = (
+            <Ionicons name="arrow-down" size={20} color={T.text} />
+          );
+
+          return (
+            <View
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: chat.isRecording ? 104 : insets.bottom + 104, // floats elegantly above the input bar with plenty of clearance
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 99,
+              }}
+            >
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  chat.listRef.current?.scrollToEnd({ animated: true });
+                  chat.setUnreadCount(0);
+                }}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  overflow: 'hidden',
+                  backgroundColor: isDark ? 'rgba(30, 30, 30, 0.7)' : 'rgba(255, 255, 255, 0.75)',
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 3 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 5,
+                  elevation: 4,
+                }}
+              >
+                {BlurView ? (
+                  <BlurView
+                    intensity={60}
+                    tint={isDark ? 'dark' : 'light'}
+                    style={{
+                      ...StyleSheet.absoluteFillObject,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {ButtonContent}
+                  </BlurView>
+                ) : (
+                  <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' }}>
+                    {ButtonContent}
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
 
         {/* Messaging Input Bar */}
         <View style={[styles.inputBar, { paddingBottom: chat.isRecording ? 12 : insets.bottom + 12 }]}>

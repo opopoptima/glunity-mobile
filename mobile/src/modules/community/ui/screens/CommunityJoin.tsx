@@ -34,7 +34,7 @@ function formatTime(iso?: string) {
 function isDMChannel(c: any) {
   if (!c) return false;
   if (c.name && typeof c.name === 'string' && c.name.startsWith('DM-')) return true;
-  if (c.type && (c.type === 'direct' || c.type === 'dm')) return true;
+  if (c.type && (c.type === 'direct' || c.type === 'dm' || String(c.type).toUpperCase() === 'DM')) return true;
   if (c.participants && Array.isArray(c.participants) && c.participants.length === 2) return true;
   return false;
 }

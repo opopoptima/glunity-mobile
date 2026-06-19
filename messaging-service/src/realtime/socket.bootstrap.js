@@ -10,10 +10,21 @@ const messageHandler  = require('./handlers/message.handler');
 const reactionHandler = require('./handlers/reaction.handler');
 const presenceHandler = require('./handlers/presence.handler');
 
+const isAllowedLocalDevOrigin = (origin) => {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin);
+};
+
 function bootstrap(httpServer) {
   const io = new Server(httpServer, {
     cors: {
-      origin:      env.socket.corsOrigins,
+      origin(origin, callback) {
+        if (!origin) return callback(null, true);
+        const isAllowed = env.socket.corsOrigins.includes(origin) || (env.isDev && isAllowedLocalDevOrigin(origin));
+        if (isAllowed) {
+          return callback(null, true);
+        }
+        return callback(new Error(`CORS: Origin "${origin}" is not allowed`));
+      },
       methods:     ['GET', 'POST'],
       credentials: true,
     },

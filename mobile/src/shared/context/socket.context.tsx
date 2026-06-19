@@ -13,9 +13,29 @@ interface SocketContextValue {
 
 const SocketContext = createContext<SocketContextValue | undefined>(undefined);
 
-const CORE_API_URL = API_BASE_URL;
-const MSG_SERVICE_URL = CORE_API_URL.replace(':5000', ':5001');
-const MSG_SERVICE_SOCKET_URL = MSG_SERVICE_URL.replace('/api', '');
+const resolveSocketUrl = (apiBaseUrl: string): string => {
+  let resolved = apiBaseUrl.replace(':5000', ':5001');
+  if (resolved === apiBaseUrl) {
+    try {
+      const match = apiBaseUrl.match(/^https?:\/\/([^/:]+)/i);
+      const host = match ? match[1] : '';
+      if (host === 'localhost' || host === '127.0.0.1' || /^192\.168\./.test(host) || /^10\./.test(host)) {
+        resolved = apiBaseUrl.replace(host, `${host}:5001`);
+      }
+    } catch (e) {
+      console.warn('[SocketProvider] Failed parsing host for port replacement:', e);
+    }
+  }
+  
+  if (resolved.endsWith('/api')) {
+    resolved = resolved.slice(0, -4);
+  } else if (resolved.endsWith('/api/')) {
+    resolved = resolved.slice(0, -5);
+  }
+  return resolved;
+};
+
+const MSG_SERVICE_SOCKET_URL = resolveSocketUrl(API_BASE_URL);
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -54,7 +74,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
       console.log('[SocketProvider] Connecting to socket service:', MSG_SERVICE_SOCKET_URL);
       const s = io(MSG_SERVICE_SOCKET_URL, {
         auth: { token },
-        transports: ['websocket'], // Use WebSocket for efficiency and stability in mobile envs
+        transports: ['polling', 'websocket'], // Allow polling fallback for maximum reliability
       });
 
       s.on('connect', () => {

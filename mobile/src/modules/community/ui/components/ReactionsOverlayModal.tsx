@@ -189,14 +189,19 @@ const s = StyleSheet.create({
   },
   emojiRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
     paddingBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     marginBottom: 8,
   },
   emojiButton: {
-    paddingHorizontal: 6,
-    paddingVertical: 8,
+    width: 46,
+    height: 46,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 23,
+    marginVertical: 4,
   },
   emojiText: {
     fontSize: 28,

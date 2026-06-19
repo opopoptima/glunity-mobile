@@ -21,14 +21,29 @@ app.use(requestId);
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`[${new Date().toISOString()}] [API] ${req.method} ${req.originalUrl} - ${res.statusCode} (${duration}ms)`);
+    const status = res.statusCode;
+    // Only log errors — suppress routine 2xx / 3xx / OPTIONS noise
+    if (status >= 400) {
+      const duration = Date.now() - start;
+      console.error(`[${new Date().toISOString()}] [API ERROR] ${req.method} ${req.originalUrl} - ${status} (${duration}ms)`);
+    }
   });
   next();
 });
 
+const isAllowedLocalDevOrigin = (origin) => {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin);
+};
+
 app.use(cors({
-  origin: env.socket.corsOrigins,
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    const isAllowed = env.socket.corsOrigins.includes(origin) || (env.isDev && isAllowedLocalDevOrigin(origin));
+    if (isAllowed) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS: Origin "${origin}" is not allowed`));
+  },
   credentials: true,
 }));
 app.use(cookieParser());

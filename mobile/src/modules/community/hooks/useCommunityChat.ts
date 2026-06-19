@@ -50,6 +50,15 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   }, [navigation]);
 
   const [channel, setChannel] = useState<any>(initialChannel || null);
+  // ── Stable primitive ID — only changes when the user opens a DIFFERENT channel.
+  // Using this instead of the full `channel` object in useEffect deps prevents
+  // the loadHistory/socket effects from re-firing every time setChannel() is
+  // called (e.g. on read-receipts), which was causing the infinite GET/POST loop.
+  const channelId: string | undefined = useMemo(
+    () => channel?.id || channel?._id || undefined,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [channel?.id, channel?._id]
+  );
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
@@ -127,7 +136,8 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const [popEmoji, setPopEmoji] = useState<string | null>(null);
   const lastTapRef = useRef<{ id: string | null; time: number }>({ id: null, time: 0 });
   const listRef = useRef<any>(null);
-  const shouldScrollToEndRef = useRef(false);
+  const isNearBottomRef = useRef(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   // Tracks real message IDs already confirmed by the send ack callback.
   // Prevents the subsequent message:new socket event from re-inserting the same message.
   const confirmedIdsRef = useRef<Set<string>>(new Set());
@@ -243,12 +253,12 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
   // Fetch Message History with Cache-Aside strategy
   useEffect(() => {
-    if (!channel) return;
+    if (!channelId) return;
     let mounted = true;
 
     async function loadHistory() {
-      const targetId = channel.id || channel._id;
-      if (typeof targetId === 'string' && targetId.startsWith('local-')) {
+      const id = channelId as string; // guarded by `if (!channelId) return` above
+      if (id.startsWith('local-')) {
         setLoading(false);
         return;
       }
@@ -259,11 +269,10 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
       // 1. Try to load from cache first for instant UI response
       try {
-        const cached = await ChatCacheService.getMessages(targetId);
+        const cached = await ChatCacheService.getMessages(id);
         if (mounted && cached && cached.length > 0) {
           const filtered = cached.filter((m: any) => !m.status || m.status === 'sent');
           setMessages(filtered);
-          setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 60);
         }
       } catch (err) {
         console.warn('[community] failed to load cached messages', err);
@@ -272,7 +281,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       setLoading(true);
       try {
         // 2. Fetch fresh messages from the backend (uses auto-refresh interceptor)
-        const res = await messagingHttp.get(`/channels/${targetId}/messages?limit=60`);
+        const res = await messagingHttp.get(`/channels/${id}/messages?limit=60`);
         if (!mounted) return;
 
         const fresh = res.data?.data || [];
@@ -282,14 +291,13 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         }
 
         // 3. Update the local cache
-        await ChatCacheService.saveMessages(targetId, fresh);
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 120);
+        await ChatCacheService.saveMessages(id, fresh);
 
         if (fresh.length > 0) {
           const lastMsg = fresh[fresh.length - 1];
           const lastMsgId = lastMsg.id || lastMsg._id;
           if (lastMsgId) {
-            markAsRead(targetId, lastMsgId);
+            markAsRead(id, lastMsgId);
           }
         }
       } catch (err) {
@@ -302,18 +310,17 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
     // Mark channel as read
     try {
-      messagingEvents.emit('channel:opened', channel.id || channel._id);
+      messagingEvents.emit('channel:opened', channelId);
     } catch (e) { }
 
     return () => { mounted = false; };
-  }, [channel, markAsRead]);
+  }, [channelId, markAsRead]);
 
   // Synchronize state mutations (new WS messages, reactions, edits, deletions) to cache
   useEffect(() => {
-    if (!channel || messages.length === 0) return;
-    const targetId = channel.id || channel._id;
-    ChatCacheService.saveMessages(targetId, messages);
-  }, [messages, channel]);
+    if (!channelId || messages.length === 0) return;
+    ChatCacheService.saveMessages(channelId, messages);
+  }, [messages, channelId]);
 
   // Handle Channel edits from external events
   useEffect(() => {
@@ -330,17 +337,15 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
   // Websocket Room Listener bindings
   useEffect(() => {
-    if (!channel || !socket) return;
+    if (!channelId || !socket) return;
 
-    const targetId = channel.id || channel._id;
-    if (typeof targetId === 'string' && !targetId.startsWith('local-')) {
-      socket.emit('channel:join', { channelId: targetId });
+    if (typeof channelId === 'string' && !channelId.startsWith('local-')) {
+      socket.emit('channel:join', { channelId });
     }
 
     const handleNewMessage = ({ message }: any) => {
       const msgChannelId = message.channelId?.toString?.() || message.channelId;
-      const thisChannelId = (channel.id || channel._id)?.toString?.() || (channel.id || channel._id);
-      if (msgChannelId !== thisChannelId) return;
+      if (msgChannelId !== channelId) return;
 
       if (Platform.OS !== 'web') {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -383,18 +388,19 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
       // Mark the incoming message as read if it is from someone else
       if (String(message.senderId) !== String(user?._id)) {
-        markAsRead(thisChannelId, message.id || message._id);
+        markAsRead(channelId, message.id || message._id);
         setTypingUser(null);
-      }
 
-      shouldScrollToEndRef.current = true;
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
+        // Increment unreadCount if user is not near the bottom
+        if (!isNearBottomRef.current) {
+          setUnreadCount((prev) => prev + 1);
+        }
+      }
     };
 
     const handleReactionUpdated = ({ messageId, emoji, count }: any) => {
-      if (Platform.OS !== 'web') {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      }
+      // Note: LayoutAnimation intentionally removed — it fires during scroll gestures
+      // and causes the FlatList to stutter/lag for the user.
       setMessages((prev) => prev.map((m) => {
         // Match by either id or _id — server emits `id`, local messages may have `_id`
         if (String(m.id || m._id || '') !== String(messageId)) return m;
@@ -446,17 +452,15 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       }
     };
 
-    const handleChannelDeleted = ({ channelId }: any) => {
-      const thisChannelId = (channel.id || channel._id)?.toString?.() || (channel.id || channel._id);
-      if (String(channelId) === String(thisChannelId)) {
+    const handleChannelDeleted = ({ channelId: deletedId }: any) => {
+      if (String(deletedId) === String(channelId)) {
         Alert.alert(t('Deleted'), t('This conversation has been deleted.'));
         safeGoBack();
       }
     };
 
-    const handleChannelCleared = ({ channelId }: any) => {
-      const thisChannelId = (channel.id || channel._id)?.toString?.() || (channel.id || channel._id);
-      if (String(channelId) === String(thisChannelId)) {
+    const handleChannelCleared = ({ channelId: clearedId }: any) => {
+      if (String(clearedId) === String(channelId)) {
         setMessages([]);
         setChannel((prev: any) => prev ? { ...prev, lastMessage: null, pinnedMessages: [] } : prev);
       }
@@ -487,8 +491,8 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     socket.on('channel:read', handleChannelRead);
 
     return () => {
-      if (typeof targetId === 'string' && !targetId.startsWith('local-')) {
-        socket.emit('channel:leave', { channelId: targetId });
+      if (typeof channelId === 'string' && !channelId.startsWith('local-')) {
+        socket.emit('channel:leave', { channelId });
       }
       socket.off('message:new', handleNewMessage);
       socket.off('reaction:updated', handleReactionUpdated);
@@ -500,7 +504,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       socket.off('channel:cleared', handleChannelCleared);
       socket.off('channel:read', handleChannelRead);
     };
-  }, [channel, socket, markAsRead, user?._id]);
+  }, [channelId, socket, markAsRead, user?._id]);
 
   // Clean up any playing audio and recording timers when the hook unmounts
   useEffect(() => {
@@ -517,25 +521,23 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
   // Emitting typing events (throttled client-side to prevent socket spam)
   useEffect(() => {
-    if (!input.trim() || !socket || !channel) return;
-    const targetId = channel.id || channel._id;
-    if (typeof targetId === 'string' && targetId.startsWith('local-')) return;
+    if (!input.trim() || !socket || !channelId) return;
+    if (channelId.startsWith('local-')) return;
 
     const now = Date.now();
     if (now - lastTypingSentRef.current > 2000) {
       lastTypingSentRef.current = now;
-      socket.emit('message:typing', { channelId: targetId });
+      socket.emit('message:typing', { channelId });
     }
-  }, [input, socket, channel]);
+  }, [input, socket, channelId]);
 
   // Listen for other participants typing
   useEffect(() => {
-    if (!channel || !socket) return;
-    const targetId = channel.id || channel._id;
+    if (!channelId || !socket) return;
     let timeoutInstance: any = null;
 
     const handleTyping = (data: any) => {
-      if (String(data.channelId) === String(targetId) && String(data.userId) !== String(user?._id)) {
+      if (String(data.channelId) === String(channelId) && String(data.userId) !== String(user?._id)) {
         setTypingUser(data.fullName || t('Someone'));
         if (timeoutInstance) clearTimeout(timeoutInstance);
         timeoutInstance = setTimeout(() => setTypingUser(null), 3000);
@@ -547,7 +549,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       socket.off('message:typing', handleTyping);
       if (timeoutInstance) clearTimeout(timeoutInstance);
     };
-  }, [channel, socket, user, t]);
+  }, [channelId, socket, user, t]);
 
   // --- REST Operations & Actions ---
 
@@ -602,8 +604,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       }
       return [...prev, optimisticMsg];
     });
-    shouldScrollToEndRef.current = true;
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
 
     const payload: any = {
       channelId: channel.id || channel._id,
@@ -850,8 +850,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       }
       setMessages((prev) => [...prev, optimistic]);
-      shouldScrollToEndRef.current = true;
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
 
       // Build multipart form
       const form = new FormData();
@@ -891,8 +889,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
           return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent' } : m));
         });
         try { messagingEvents.emit('message:new', serverMsg); } catch (e) { }
-        shouldScrollToEndRef.current = true;
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
       } else {
         // Mark as sent even without full payload
         setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m)));
@@ -931,8 +927,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       }
       setMessages((prev) => [...prev, optimistic]);
-      shouldScrollToEndRef.current = true;
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
 
       // 2. Build multipart form
       const form = new FormData();
@@ -970,8 +964,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
           return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent' } : m));
         });
         try { messagingEvents.emit('message:new', serverMsg); } catch (e) { }
-        shouldScrollToEndRef.current = true;
-        setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150);
       } else {
         // Mark as sent even without full payload
         setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'sent' } : m)));
@@ -1548,7 +1540,9 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     popEmoji,
     popAnim,
     listRef,
-    shouldScrollToEndRef,
+    isNearBottomRef,
+    unreadCount,
+    setUnreadCount,
 
     // permissions & flags
     isAdmin,
