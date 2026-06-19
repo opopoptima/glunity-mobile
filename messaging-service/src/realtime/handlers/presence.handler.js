@@ -4,14 +4,11 @@ const { available: redisAvailable } = require('../../bootstrap/redis.bootstrap')
 const env      = require('../../config/env');
 const logger   = require('../../bootstrap/logger.bootstrap');
 const Channel  = require('../../database/models/channel.model');
+const User     = require('../../database/models/user.model');
 const mongoose = require('mongoose');
 
 const PRESENCE_KEY  = (userId) => `presence:heartbeat:${userId}`;
 const HEARTBEAT_TTL = Math.ceil(env.presence.timeout / 1000) || 90;
-
-function getUserModel() {
-  return mongoose.model('User');
-}
 
 // In-memory fallback if Redis is disabled
 const memoryOnlineSet = new Set();
@@ -83,7 +80,6 @@ async function presenceHandler(io, socket, redisClient) {
 
   // 1. ON CONNECT
   try {
-    const User = getUserModel();
 
     // Ensure socket joins their personal room
     socket.join(userId);
@@ -129,7 +125,6 @@ async function presenceHandler(io, socket, redisClient) {
       const stillOnline = sockets.some(s => s.id !== socket.id);
 
       if (!stillOnline) {
-        const User = getUserModel();
         const now = new Date();
 
         await User.findByIdAndUpdate(userId, {
@@ -170,7 +165,6 @@ async function presenceHandler(io, socket, redisClient) {
   // 3. HEARTBEAT PING
   socket.on('presence:ping', async () => {
     try {
-      const User = getUserModel();
       await User.findByIdAndUpdate(userId, {
         lastActiveAt: new Date(),
         onlineStatus: 'online',
@@ -181,47 +175,71 @@ async function presenceHandler(io, socket, redisClient) {
     }
   });
 
-  // 4. GET STATUS
+  // 4. GET STATUS — Redis-first, DB fallback
   socket.on('presence:get_status', async ({ userIds }, callback) => {
     try {
       const statuses = {};
       const lastSeens = {};
 
       if (Array.isArray(userIds) && userIds.length > 0) {
-        const User = getUserModel();
-        const users = await User.find({ _id: { $in: userIds } })
-          .select('_id onlineStatus lastActiveAt lastSeenAt')
-          .lean();
+        // ── Step 1: Check Redis/memory for real-time heartbeat keys ──────────
+        // HEARTBEAT_TTL is typically 90s; heartbeats fire every 25s.
+        // If the key exists in Redis, the user is definitively online.
+        const redisChecks = await Promise.allSettled(
+          userIds.map(async (id) => {
+            const inSet     = await redis.sismember('presence:online', id);
+            const heartbeat = await redis.sismember('presence:online', id); // set membership is O(1)
+            return { id, online: inSet === 1 };
+          })
+        );
 
-        const now = Date.now();
-        const activeThreshold = 60000; // 60 seconds
-
-        for (const u of users) {
-          const uId = u._id.toString();
-          const isOnlineDB =
-            u.onlineStatus === 'online' &&
-            u.lastActiveAt &&
-            (now - new Date(u.lastActiveAt).getTime()) < activeThreshold;
-
-          statuses[uId] = !!isOnlineDB;
-
-          if (!isOnlineDB) {
-            lastSeens[uId] = u.lastSeenAt ? u.lastSeenAt.toISOString() : null;
-
-            // Self-correct database status if stuck as 'online' in background
-            if (u.onlineStatus === 'online') {
-              User.findByIdAndUpdate(u._id, {
-                onlineStatus: 'offline',
-                lastSeenAt: u.lastActiveAt || u.updatedAt || new Date(),
-              }).catch(() => {});
-            }
+        const redisOnlineSet = new Set();
+        for (const result of redisChecks) {
+          if (result.status === 'fulfilled' && result.value.online) {
+            redisOnlineSet.add(result.value.id);
+            statuses[result.value.id] = true;
           }
         }
 
-        // Default missing users to offline
-        for (const id of userIds) {
-          if (statuses[id] === undefined) {
-            statuses[id] = false;
+        // ── Step 2: For users not confirmed online by Redis, consult DB ──────
+        const unknownIds = userIds.filter((id) => statuses[id] === undefined);
+
+        if (unknownIds.length > 0) {
+          const users = await User.find({ _id: { $in: unknownIds } })
+            .select('_id onlineStatus lastActiveAt lastSeenAt')
+            .lean();
+
+          const now = Date.now();
+          // Use generous threshold: heartbeat period (25s) × 4 = 100s safety buffer
+          const activeThreshold = Math.max(HEARTBEAT_TTL * 1000, 100_000);
+
+          for (const u of users) {
+            const uId = u._id.toString();
+            const isOnlineDB =
+              u.onlineStatus === 'online' &&
+              u.lastActiveAt &&
+              (now - new Date(u.lastActiveAt).getTime()) < activeThreshold;
+
+            statuses[uId] = !!isOnlineDB;
+
+            if (!isOnlineDB) {
+              lastSeens[uId] = u.lastSeenAt ? u.lastSeenAt.toISOString() : null;
+
+              // Self-correct a stuck 'online' DB status
+              if (u.onlineStatus === 'online') {
+                User.findByIdAndUpdate(u._id, {
+                  onlineStatus: 'offline',
+                  lastSeenAt: u.lastActiveAt || u.updatedAt || new Date(),
+                }).catch(() => {});
+              }
+            }
+          }
+
+          // Default any still-missing users to offline
+          for (const id of unknownIds) {
+            if (statuses[id] === undefined) {
+              statuses[id] = false;
+            }
           }
         }
       }
@@ -231,6 +249,9 @@ async function presenceHandler(io, socket, redisClient) {
       }
     } catch (err) {
       logger.error('[presence:get_status] Error:', { err: err.message });
+      if (typeof callback === 'function') {
+        callback({ statuses: {}, lastSeens: {} });
+      }
     }
   });
 }

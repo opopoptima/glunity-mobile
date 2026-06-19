@@ -55,36 +55,5 @@ reactionSchema.index({ messageId: 1, emoji: 1 });
  */
 reactionSchema.index({ userId: 1, messageId: 1 });
 
-// ── Hooks ─────────────────────────────────────────────────────────────────────
-
-/**
- * After a reaction is saved, bump the aggregated counter on the parent message.
- * This keeps Message.reactionCounts eventually-consistent with zero extra reads.
- */
-reactionSchema.post('save', async function (doc) {
-  try {
-    const Message = require('./message.model');
-    await Message.adjustReactionCount(doc.messageId, doc.emoji, +1);
-  } catch (err) {
-    // Non-critical — the Reaction row is the source of truth;
-    // reactionCounts is a performance cache.
-    console.error('[Reaction] post-save hook failed to update reactionCounts:', err.message);
-  }
-});
-
-/**
- * After a reaction is removed, decrement the counter.
- * Uses findOneAndDelete so we have access to the deleted doc.
- */
-reactionSchema.post('findOneAndDelete', async function (doc) {
-  if (!doc) return;
-  try {
-    const Message = require('./message.model');
-    await Message.adjustReactionCount(doc.messageId, doc.emoji, -1);
-  } catch (err) {
-    console.error('[Reaction] post-findOneAndDelete hook failed to update reactionCounts:', err.message);
-  }
-});
-
 const Reaction = model('Reaction', reactionSchema);
 module.exports = Reaction;

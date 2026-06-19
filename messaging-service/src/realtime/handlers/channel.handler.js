@@ -18,7 +18,7 @@ function channelHandler(io, socket) {
       for (const ch of channels) {
         socket.join(`channel:${ch._id.toString()}`);
       }
-      logger.info(`[socket:channel] Auto-joined ${channels.length} rooms for user`, { userId });
+      // (auto-join logged at debug level only)
     } catch (err) {
       logger.error('[socket:channel] Auto-join failed', { err: err.message });
     }
@@ -44,7 +44,7 @@ function channelHandler(io, socket) {
 
       socket.join(`viewing:${channelId}`);
       socket.join(`channel:${channelId}`);
-      logger.info('[socket:channel] Joined viewing and channel rooms', { channelId, userId });
+      // joined — no-op log
     } catch (err) {
       logger.error('[socket:channel] Join handler error', { err: err.message });
     }
@@ -52,7 +52,7 @@ function channelHandler(io, socket) {
 
   socket.on('channel:leave', ({ channelId }) => {
     socket.leave(`viewing:${channelId}`);
-    logger.info('[socket:channel] Left viewing room', { channelId, userId });
+    // left — no-op log
   });
 }
 
