@@ -3,6 +3,7 @@
 const mongoose = require('mongoose');
 const Channel  = require('../../database/models/channel.model');
 const Message  = require('../../database/models/message.model');
+const Reaction = require('../../database/models/reaction.model');
 const emitter  = require('../emitters/channel.emitter');
 const logger   = require('../../bootstrap/logger.bootstrap');
 
@@ -242,7 +243,11 @@ function messageHandler(io, socket) {
       if (!msg) throw new Error('Message not found or unauthorized');
 
       msg.deletedAt = new Date();
+      msg.reactionCounts = new Map();
       await msg.save();
+
+      // Delete reactions from Reaction collection
+      await Reaction.deleteMany({ messageId });
 
       // Revert Channel's lastMessage if this was the deleted message
       const channel = await Channel.findById(msg.channelId);
