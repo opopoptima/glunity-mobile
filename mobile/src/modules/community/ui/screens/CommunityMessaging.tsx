@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../auth/state/auth.context';
 import { useTheme } from '../../../../shared/context/theme.context';
 import { useLanguage } from '../../../../shared/context/language.context';
+import { useSocket } from '../../../../shared/context/socket.context';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCommunityChat } from '../../hooks/useCommunityChat';
 import { usePresence } from '../../../../shared/hooks/usePresence';
@@ -27,6 +28,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   const { user } = useAuth();
   const { theme: T, isDark } = useTheme();
   const { t, isRTL } = useLanguage();
+  const { socket } = useSocket();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
 
@@ -112,6 +114,18 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
       fetchStatuses([dmPartnerId]);
     }
   }, [dmPartnerId, fetchStatuses]);
+
+  // Re-fetch partner status whenever the socket reconnects (e.g. after backgrounding the app)
+  React.useEffect(() => {
+    if (!socket || !dmPartnerId) return;
+    const handleReconnect = () => {
+      fetchStatuses([dmPartnerId]);
+    };
+    socket.on('connect', handleReconnect);
+    return () => {
+      socket.off('connect', handleReconnect);
+    };
+  }, [socket, dmPartnerId, fetchStatuses]);
 
   const seenIds = React.useRef<Set<string>>(new Set());
   const reducedMotion = useReducedMotion();
@@ -392,8 +406,8 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           { borderBottomLeftRadius: shouldGroup ? 18 : 4 }
         ];
 
-    // Reaction pills shared between bubble types
-    const reactionPills = item.reactionCounts && Object.keys(item.reactionCounts).length > 0 ? (
+    // Reaction pills — hidden on deleted messages
+    const reactionPills = !item.deletedAt && item.reactionCounts && Object.keys(item.reactionCounts).length > 0 ? (
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
         {Object.entries(item.reactionCounts).map(([emoji, count]: any) => (
           <TouchableOpacity
@@ -480,6 +494,8 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => { if (firstAtt?.url) Linking.openURL(firstAtt.url).catch(() => {}); }}
+            onLongPress={longPressHandler}
+            delayLongPress={300}
             style={{ borderRadius: 10, overflow: 'hidden' }}
           >
             <Image
@@ -505,6 +521,8 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => { if (firstAtt?.url) Linking.openURL(firstAtt.url).catch(() => {}); }}
+            onLongPress={longPressHandler}
+            delayLongPress={300}
             style={{ borderRadius: 10, overflow: 'hidden', position: 'relative' }}
           >
             {thumbUrl ? (
@@ -543,7 +561,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
     };
 
     const longPressHandler = () => {
-      if (isTemp) return;
+      if (isTemp || item.deletedAt) return;
       chat.setReactionMsgId(item.id || item._id);
     };
 
@@ -609,8 +627,11 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
             >
               {replyPreview}
               {renderBubbleContent()}
-              {reactionPills}
             </TouchableOpacity>
+
+            {/* Reaction pills — rendered OUTSIDE the bubble touchable to prevent
+                event bubbling from pill taps triggering the bubble's onPress handler */}
+            {reactionPills}
 
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, marginHorizontal: 6 }}>
               {!!item.pinned && (

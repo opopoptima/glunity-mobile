@@ -175,17 +175,21 @@ export default function CommunityJoin({ navigation }: any) {
                 keyExtractor={(i) => i._id}
                 showsHorizontalScrollIndicator={false}
                 decelerationRate="fast"
+                initialNumToRender={5}
+                maxToRenderPerBatch={5}
+                windowSize={5}
+                updateCellsBatchingPeriod={50}
                 contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 }}
                 renderItem={({ item }) => (
                   <View style={styles.userCardWrap}>
                     <View style={styles.userCard}>
                       <View style={{ position: 'relative' }}>
                         <View style={styles.avatarWrap}>
-                          {item.avatarUrl ? (
-                            <Image source={{ uri: item.avatarUrl }} style={styles.avatarImage} />
-                          ) : (
-                            <View style={styles.avatarImage} />
-                          )}
+                          <Image
+                            source={{ uri: item.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.fullName || 'U')}&background=8BC34A&color=fff&size=128` }}
+                            style={styles.avatarImage}
+                            fadeDuration={0}
+                          />
                         </View>
                         {/* Live presence dot */}
                         <OnlineDot isOnline={isOnline(item._id)} size={14} />

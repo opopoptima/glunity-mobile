@@ -379,9 +379,9 @@ export default function MessagingHome({ navigation }: any) {
           const cId = String(c._id || c.id || c.channelId || '');
           if (cId === cid) {
             found = true;
-            const isSenderMe = String(message.senderId) === String(user?._id);
-            const unread = isSenderMe ? 0 : ((c.unreadCount || 0) + 1);
-            return { ...c, lastMessage: { content: message.content, createdAt: message.createdAt, messageId: message.id || message._id }, unreadCount: unread };
+            // Only update the lastMessage snippet for instant UI feedback.
+            // unreadCount is updated authoritatively by conversation:updated event from the server.
+            return { ...c, lastMessage: { content: message.content, createdAt: message.createdAt, messageId: message.id || message._id } };
           }
           return c;
         });
@@ -498,9 +498,8 @@ export default function MessagingHome({ navigation }: any) {
           const cId = String(c._id || c.id || c.channelId || '');
           if (cId === cid) {
             found = true;
-            const isSenderMe = String(message.senderId) === String(user?._id);
-            const unread = isSenderMe ? 0 : ((c.unreadCount || 0) + 1);
-            return { ...c, lastMessage: { content: message.content, createdAt: message.createdAt, messageId: message.id || message._id }, unreadCount: unread };
+            // Only update lastMessage snippet — conversation:updated sets the authoritative unreadCount
+            return { ...c, lastMessage: { content: message.content, createdAt: message.createdAt, messageId: message.id || message._id } };
           }
           return c;
         });

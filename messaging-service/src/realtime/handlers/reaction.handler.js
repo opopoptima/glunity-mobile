@@ -12,6 +12,24 @@ function reactionHandler(io, socket) {
   const user   = socket.data.user;
   const userId = user._id.toString();
 
+  /**
+   * Extract numeric count for a given emoji from the returned Mongoose document.
+   * reactionCounts is a Mongoose Map, so use .get() if available, else plain object access.
+   * Clamps to 0 to avoid broadcasting negative counts.
+   */
+  function extractCount(updatedDoc, emojiChar) {
+    if (!updatedDoc) return 0;
+    const counts = updatedDoc.reactionCounts;
+    if (!counts) return 0;
+    let count;
+    if (typeof counts.get === 'function') {
+      count = counts.get(emojiChar);
+    } else {
+      count = counts[emojiChar];
+    }
+    return Math.max(0, count || 0);
+  }
+
   socket.on('reaction:toggle', async ({ messageId, emoji }, callback) => {
     try {
       if (!EMOJI_WHITELIST.has(emoji)) {
@@ -20,6 +38,7 @@ function reactionHandler(io, socket) {
 
       const msg = await Message.findById(messageId);
       if (!msg) throw new Error('Message not found');
+      if (msg.deletedAt) throw new Error('Cannot react to a deleted message');
 
       // Verify membership
       const channelId = msg.channelId.toString();
@@ -36,28 +55,6 @@ function reactionHandler(io, socket) {
         if (!hasAccess) throw new Error('Forbidden');
       }
 
-      // Helper to check the correct count and cleanup empty fields
-      const getReactionCount = async (msgId, emojiChar) => {
-        const updated = await Message.findById(msgId).lean();
-        const counts = updated?.reactionCounts || {};
-        let count = 0;
-        
-        if (counts instanceof Map) {
-          count = counts.get(emojiChar) || 0;
-        } else if (typeof counts.get === 'function') {
-          count = counts.get(emojiChar) || 0;
-        } else {
-          count = counts[emojiChar] || 0;
-        }
-
-        if (count <= 0) {
-          const key = `reactionCounts.${emojiChar}`;
-          await Message.findByIdAndUpdate(msgId, { $unset: { [key]: '' } });
-          count = 0;
-        }
-        return count;
-      };
-
       // Check if user has ANY reaction on this message
       const existing = await Reaction.findOne({ messageId, userId });
 
@@ -65,28 +62,43 @@ function reactionHandler(io, socket) {
         if (existing.emoji === emoji) {
           // Case A: Toggle off the same reaction
           await Reaction.findOneAndDelete({ _id: existing._id });
-          const count = await getReactionCount(messageId, emoji);
-          
+
+          // Atomically decrement reactionCounts on Message
+          const updatedDoc = await Message.adjustReactionCount(messageId, emoji, -1);
+          let count = extractCount(updatedDoc, emoji);
+          // Clean up zero/negative keys
+          if (count <= 0) {
+            await Message.findByIdAndUpdate(messageId, { $unset: { [`reactionCounts.${emoji}`]: '' } });
+            count = 0;
+          }
+
           emitter.reactionUpdated(io, channelId, messageId, emoji, count, 'removed', userId);
         } else {
-          // Case B: Switched reaction from existing.emoji to emoji
+          // Case B: Switched reaction from existing.emoji to new emoji
           const oldEmoji = existing.emoji;
-          
-          // Delete old reaction first
+
+          // Remove old reaction and decrement its count
           await Reaction.findOneAndDelete({ _id: existing._id });
-          const oldCount = await getReactionCount(messageId, oldEmoji);
+          const oldDoc = await Message.adjustReactionCount(messageId, oldEmoji, -1);
+          let oldCount = extractCount(oldDoc, oldEmoji);
+          if (oldCount <= 0) {
+            await Message.findByIdAndUpdate(messageId, { $unset: { [`reactionCounts.${oldEmoji}`]: '' } });
+            oldCount = 0;
+          }
           emitter.reactionUpdated(io, channelId, messageId, oldEmoji, oldCount, 'removed', userId);
 
-          // Add new reaction
+          // Add new reaction and increment its count
           await Reaction.create({ messageId, userId, emoji });
-          const newCount = await getReactionCount(messageId, emoji);
+          const newDoc = await Message.adjustReactionCount(messageId, emoji, 1);
+          const newCount = extractCount(newDoc, emoji);
           emitter.reactionUpdated(io, channelId, messageId, emoji, newCount, 'added', userId);
         }
       } else {
-        // Case C: Add new reaction (no existing reaction)
+        // Case C: Fresh reaction — no existing reaction from this user
         await Reaction.create({ messageId, userId, emoji });
-        const count = await getReactionCount(messageId, emoji);
-        
+        const updatedDoc = await Message.adjustReactionCount(messageId, emoji, 1);
+        const count = extractCount(updatedDoc, emoji);
+
         emitter.reactionUpdated(io, channelId, messageId, emoji, count, 'added', userId);
       }
 

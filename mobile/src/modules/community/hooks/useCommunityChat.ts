@@ -124,6 +124,9 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const lastTapRef = useRef<{ id: string | null; time: number }>({ id: null, time: 0 });
   const listRef = useRef<any>(null);
   const shouldScrollToEndRef = useRef(false);
+  // Tracks real message IDs already confirmed by the send ack callback.
+  // Prevents the subsequent message:new socket event from re-inserting the same message.
+  const confirmedIdsRef = useRef<Set<string>>(new Set());
 
   const reactionEmojis = useMemo(() => ['❤️', '👍', '😂', '😮', '😢', '🔥', '🎉', '✅'], []);
 
@@ -277,16 +280,33 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       }
 
       setMessages((prev) => {
-        const realId = message.id || message._id;
-        // Already in list (exact id match) — skip
+        const realId = String(message.id || message._id || '');
+
+        // Already in list (exact id or _id match) — deduplicate
         if (prev.some(m => (m.id || m._id) === realId)) return prev;
 
-        // Own message: replace the first temp- placeholder so it doesn't ghost
+        // The send callback already swapped this temp → real message; skip
+        if (confirmedIdsRef.current.has(realId)) {
+          confirmedIdsRef.current.delete(realId); // free memory
+          return prev;
+        }
+
+        // Own message: replace the best-matching temp- placeholder.
         if (String(message.senderId) === String(user?._id)) {
-          const tempIdx = prev.findIndex(m => String(m.id || '').startsWith('temp-'));
-          if (tempIdx !== -1) {
+          const now = Date.now();
+          let bestIdx = -1;
+          let bestScore = -1;
+          prev.forEach((m, idx) => {
+            if (!String(m.id || '').startsWith('temp-')) return;
+            let score = 0;
+            if (m.content === message.content) score += 2;
+            const age = now - parseInt(String(m.id || '0').replace('temp-', '') || '0', 10);
+            if (age > 0) score += 1;
+            if (score > bestScore) { bestScore = score; bestIdx = idx; }
+          });
+          if (bestIdx !== -1) {
             const next = [...prev];
-            next[tempIdx] = { ...message, status: 'sent' };
+            next[bestIdx] = { ...message, status: 'sent' };
             return next;
           }
         }
@@ -327,7 +347,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       }
       setMessages((prev) => prev.map((m) =>
         String(m.id || m._id || '') === String(messageId)
-          ? { ...m, deletedAt: new Date().toISOString(), content: null }
+          ? { ...m, deletedAt: new Date().toISOString(), content: null, reactionCounts: {} }
           : m
       ));
     };
@@ -526,15 +546,17 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       }
       if (res?.ok) {
+        const realId = String(res.data?.id || res.data?._id || '');
         // Clear reply context now that the message was sent successfully
         setReplyingTo(null);
         setMessages((prev) => {
-          const realId = res.data?.id || res.data?._id;
           // handleNewMessage already swapped temp- with the real message — just remove the ghost temp
           if (realId && prev.some(m => (m.id || m._id) === realId)) {
             return prev.filter(m => m.id !== tempId);
           }
-          // Socket event hasn't arrived yet — do the swap ourselves
+          // Socket event hasn't arrived yet — do the swap ourselves AND mark the ID
+          // as confirmed so that when message:new fires, it won't re-insert it.
+          if (realId) confirmedIdsRef.current.add(realId);
           return prev.map(m => m.id === tempId ? { ...res.data, status: 'sent' } : m);
         });
         try { messagingEvents.emit('message:new', res.data); } catch (e) { }
@@ -615,7 +637,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       }
       if (res?.ok) {
-        setMessages((prev) => prev.map((m) => String(m.id || m._id) === String(messageId) ? { ...m, deletedAt: new Date().toISOString(), content: null } : m));
+        setMessages((prev) => prev.map((m) => String(m.id || m._id) === String(messageId) ? { ...m, deletedAt: new Date().toISOString(), content: null, reactionCounts: {} } : m));
       } else {
         Alert.alert('Error', res?.error || 'Failed to delete message');
       }
@@ -769,10 +791,13 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         }
         setMessages((prev) => {
-          const realId = serverMsg.id || serverMsg._id;
-          if (realId && prev.some((m) => String(m.id || m._id) === String(realId))) {
+          const realId = String(serverMsg.id || serverMsg._id || '');
+          if (realId && prev.some((m) => String(m.id || m._id) === realId)) {
+            // Socket event already swapped the temp — just clean up the temp ghost if still there
             return prev.filter((m) => m.id !== tempId);
           }
+          // Mark as confirmed so the subsequent message:new socket event skips it
+          if (realId) confirmedIdsRef.current.add(realId);
           return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent' } : m));
         });
         try { messagingEvents.emit('message:new', serverMsg); } catch (e) { }
@@ -847,10 +872,11 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
           LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         }
         setMessages((prev) => {
-          const realId = serverMsg.id || serverMsg._id;
-          if (realId && prev.some((m) => String(m.id || m._id) === String(realId))) {
+          const realId = String(serverMsg.id || serverMsg._id || '');
+          if (realId && prev.some((m) => String(m.id || m._id) === realId)) {
             return prev.filter((m) => m.id !== tempId);
           }
+          if (realId) confirmedIdsRef.current.add(realId);
           return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent' } : m));
         });
         try { messagingEvents.emit('message:new', serverMsg); } catch (e) { }

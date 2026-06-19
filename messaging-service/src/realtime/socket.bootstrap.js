@@ -51,7 +51,8 @@ function bootstrap(httpServer) {
     channelHandler (io, socket);
     messageHandler (io, socket);
     reactionHandler(io, socket);
-    presenceHandler(io, socket);
+    // NOTE: presenceHandler (the old top-level function) is intentionally NOT called here.
+    // registerPresenceHandler (already called above) fully handles presence for this socket.
 
     socket.on('disconnect', (reason) => {
       logger.info('[socket.io] Client disconnected', { userId, reason });
