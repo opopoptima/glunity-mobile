@@ -20,9 +20,14 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// Dynamic imports helper
-let ExpoAV: any = null;
-try { ExpoAV = require('expo-av'); } catch (e) { ExpoAV = null; }
+import { 
+  useAudioPlayer, 
+  useAudioPlayerStatus, 
+  useAudioRecorder, 
+  RecordingPresets, 
+  requestRecordingPermissionsAsync, 
+  setAudioModeAsync 
+} from 'expo-audio';
 
 let ImageManipulator: any = null;
 try { ImageManipulator = require('expo-image-manipulator'); } catch (e) { ImageManipulator = null; }
@@ -67,19 +72,16 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Audio recording
+  // Audio recording & playback hooks
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const player = useAudioPlayer();
+  const { playing, currentTime, duration } = useAudioPlayerStatus(player);
+
   const [isRecording, setIsRecordingState] = useState(false);
   const isRecordingRef = useRef(false);
   const setIsRecording = (val: boolean) => {
     isRecordingRef.current = val;
     setIsRecordingState(val);
-  };
-
-  const [recordingInstance, setRecordingInstanceState] = useState<any>(null);
-  const recordingInstanceRef = useRef<any>(null);
-  const setRecordingInstance = (val: any) => {
-    recordingInstanceRef.current = val;
-    setRecordingInstanceState(val);
   };
 
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -108,7 +110,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const [profileSheetVisible, setProfileSheetVisible] = useState(false);
 
   // Audio playback references
-  const activeSoundRef = useRef<any>(null);
   const lastTypingSentRef = useRef<number>(0);
 
   // Members lists
@@ -532,13 +533,26 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     };
   }, [channelId, socket, markAsRead, user?._id]);
 
-  // Clean up any playing audio and recording timers when the hook unmounts
+  // Automatically handle finished audio track
+  useEffect(() => {
+    if (playingId && !playing && currentTime >= duration && duration > 0) {
+      setPlayingId(null);
+      setAudioProgress(0);
+    }
+  }, [playing, currentTime, duration, playingId]);
+
+  // Update playback progress bar in UI
+  useEffect(() => {
+    if (playingId && duration > 0) {
+      setAudioProgress(currentTime / duration);
+    } else {
+      setAudioProgress(0);
+    }
+  }, [currentTime, duration, playingId]);
+
+  // Clean up recording timers when the hook unmounts
   useEffect(() => {
     return () => {
-      if (activeSoundRef.current) {
-        activeSoundRef.current.stopAsync().catch(() => { });
-        activeSoundRef.current.unloadAsync().catch(() => { });
-      }
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
@@ -763,12 +777,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
   // Audio Recording Operations
   const startRecording = useCallback(async () => {
-    if (!ExpoAV) {
-      Alert.alert('Audio not available', 'Audio module is not installed in this runtime.');
-      return;
-    }
-    // If we are already recording or in preparation, a pressIn is interpreted as a tap-to-stop toggle
-    if (isRecordingRef.current || recordingInstanceRef.current || isPreparingRecordingRef.current) {
+    if (isRecordingRef.current || recorder.isRecording || isPreparingRecordingRef.current) {
       await stopRecordingAndSend();
       return;
     }
@@ -778,40 +787,46 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       shouldStopRecordingRef.current = false;
       setRecordingDuration(0);
 
-      const { status } = await ExpoAV.Audio.requestPermissionsAsync();
+      if (typeof requestRecordingPermissionsAsync !== 'function') {
+        Alert.alert(t('Recording Error ❌'), t('Audio recording permissions function is not available on this platform.'));
+        isPreparingRecordingRef.current = false;
+        return;
+      }
+
+      const { status } = await requestRecordingPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(t('Permission Denied ❌'), t('You must allow microphone access to record audio.'));
         isPreparingRecordingRef.current = false;
         return;
       }
 
-      await ExpoAV.Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const recording = new ExpoAV.Audio.Recording();
-      await recording.prepareToRecordAsync(ExpoAV.Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY);
+      try {
+        await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      } catch (modeErr) {
+        console.warn('Failed to set audio mode:', modeErr);
+      }
 
-      // Check if user released while preparing
+      await recorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+
       if (shouldStopRecordingRef.current) {
-        await recording.stopAndUnloadAsync().catch(() => {});
         isPreparingRecordingRef.current = false;
         return;
       }
 
-      await recording.startAsync();
-      setRecordingInstance(recording);
+      await recorder.record();
       setIsRecording(true);
       isPreparingRecordingRef.current = false;
 
-      // Start timer
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = setInterval(() => {
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
-    } catch (err) {
+    } catch (err: any) {
       console.warn('startRecording failed', err);
       isPreparingRecordingRef.current = false;
       setIsRecording(false);
     }
-  }, [t]);
+  }, [t, recorder]);
 
   const cancelRecording = useCallback(async () => {
     if (recordingTimerRef.current) {
@@ -821,15 +836,13 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     isPreparingRecordingRef.current = false;
     shouldStopRecordingRef.current = false;
 
-    const instance = recordingInstanceRef.current;
-    if (instance) {
-      await instance.stopAndUnloadAsync().catch(() => {});
+    if (recorder.isRecording) {
+      await recorder.stop().catch(() => {});
     }
 
     setIsRecording(false);
-    setRecordingInstance(null);
     setRecordingDuration(0);
-  }, []);
+  }, [recorder]);
 
   // ── Pick image / video from library and send as media message ──────────────
   const pickMediaAndSend = useCallback(async () => {
@@ -1007,25 +1020,19 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   }, [socket, channel, user, t, listRef]);
 
   const stopRecordingAndSend = useCallback(async () => {
-    // If we are still preparing, mark that we should stop as soon as it's prepared
     if (isPreparingRecordingRef.current) {
       shouldStopRecordingRef.current = true;
       return;
     }
 
-    const instance = recordingInstanceRef.current;
-    if (!instance) return;
+    if (!recorder.isRecording) return;
 
-    // Distinguish between hold and quick tap
     const duration = Date.now() - pressStartRef.current;
-    // If it's a quick tap (< 500ms) and we just started, treat it as "tap to toggle" mode.
-    // So we don't stop yet on release.
     if (duration < 500 && isRecordingRef.current && recordingDuration === 0) {
       return;
     }
 
     try {
-      // Clear timer
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
         recordingTimerRef.current = null;
@@ -1033,17 +1040,16 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
       let durationSec = recordingDuration;
       try {
-        const status = await instance.getStatusAsync();
+        const status = recorder.getStatus();
         if (status && typeof status.durationMillis === 'number') {
           durationSec = Math.max(0, Math.round(status.durationMillis / 1000));
         }
       } catch (e) { }
 
-      await instance.stopAndUnloadAsync().catch(() => {});
-      const uri = instance.getURI();
+      await recorder.stop().catch(() => {});
+      const uri = recorder.uri;
 
       setIsRecording(false);
-      setRecordingInstance(null);
       setRecordingDuration(0);
 
       if (uri) {
@@ -1051,59 +1057,28 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       }
     } catch (err) {
       setIsRecording(false);
-      setRecordingInstance(null);
       setRecordingDuration(0);
     }
-  }, [recordingDuration, uploadAudioAndSend]);
+  }, [recordingDuration, uploadAudioAndSend, recorder]);
 
   const playAudio = useCallback(async (message: any) => {
-    if (!ExpoAV) { Alert.alert('Audio not available'); return; }
     try {
-      // If tapping the currently playing audio, pause and unload it
+      const url = message.attachments[0]?.url;
+      if (!url) return;
+
       if (playingId === message.id) {
-        if (activeSoundRef.current) {
-          await activeSoundRef.current.stopAsync().catch(() => { });
-          await activeSoundRef.current.unloadAsync().catch(() => { });
-          activeSoundRef.current = null;
-        }
+        player.pause();
         setPlayingId(null);
-        setAudioProgress(0);
         return;
       }
 
-      // If another sound is currently playing, clean it up first
-      if (activeSoundRef.current) {
-        await activeSoundRef.current.stopAsync().catch(() => { });
-        await activeSoundRef.current.unloadAsync().catch(() => { });
-        activeSoundRef.current = null;
-      }
-
       setPlayingId(message.id);
-      setAudioProgress(0);
-
-      const soundObj = new ExpoAV.Audio.Sound();
-      activeSoundRef.current = soundObj;
-      await soundObj.loadAsync({ uri: message.attachments[0].url });
-      await soundObj.playAsync();
-
-      soundObj.setOnPlaybackStatusUpdate((status: any) => {
-        if (status?.didJustFinish) {
-          setPlayingId(null);
-          setAudioProgress(0);
-          soundObj.unloadAsync().catch(() => { });
-          if (activeSoundRef.current === soundObj) {
-            activeSoundRef.current = null;
-          }
-        } else if (status?.isPlaying && status?.durationMillis) {
-          setAudioProgress(status.positionMillis / status.durationMillis);
-        }
-      });
+      await player.replace({ uri: url });
+      await player.play();
     } catch (err) {
       setPlayingId(null);
-      setAudioProgress(0);
-      activeSoundRef.current = null;
     }
-  }, [playingId]);
+  }, [playingId, player]);
 
   const fetchMembers = useCallback(async () => {
     if (!channel) return;
