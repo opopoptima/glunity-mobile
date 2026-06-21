@@ -492,11 +492,11 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
     // On reconnect: re-join the room and re-sync missed messages
     const handleReconnect = async () => {
-      if (typeof targetId === 'string' && !targetId.startsWith('local-')) {
-        socket.emit('channel:join', { channelId: targetId });
+      if (typeof channelId === 'string' && !channelId.startsWith('local-')) {
+        socket.emit('channel:join', { channelId });
       }
       try {
-        const res = await messagingHttp.get(`/channels/${targetId}/messages?limit=60`);
+        const res = await messagingHttp.get(`/channels/${channelId}/messages?limit=60`);
         const fresh: any[] = res.data?.data || [];
         if (fresh.length > 0) {
           setMessages((prev: any[]) => {
@@ -1569,7 +1569,6 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     isNearBottomRef,
     unreadCount,
     setUnreadCount,
-    shouldScrollToEndRef,
     setMessages,
 
     // permissions & flags

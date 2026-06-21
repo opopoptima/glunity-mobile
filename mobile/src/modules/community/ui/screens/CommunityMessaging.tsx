@@ -90,16 +90,28 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   // ── Derive the DM partner's ID for presence lookup ───────────────────────
   const dmPartnerId = useMemo(() => {
     const ch = chat.channel;
-    if (!ch) return null;
+    if (!ch || !user) return null;
+    
     const parts = ch.participants || ch.members || ch.userIds || ch.participantIds || [];
     const isDM = ch.name?.startsWith('DM-') || ch.type === 'direct' || ch.type === 'dm' || String(ch.type).toUpperCase() === 'DM' || (Array.isArray(parts) && parts.length === 2);
     if (!isDM) return null;
-    for (const p of parts) {
-      const id = p.userId ? String(p.userId) : String(p._id || p.id || p);
-      if (id && id !== String(user?._id)) return id;
+
+    let otherId: any = null;
+    if (parts && Array.isArray(parts)) {
+      const ids = parts.map((p: any) => (typeof p === 'string' ? p : (p._id || p.id || p.userId || p._userId)));
+      otherId = ids.find((id: any) => id && String(id) !== String(user._id) && String(id) !== '[object Object]');
     }
-    return null;
-  }, [chat.channel, user?._id]);
+
+    if (!otherId && ch.name && typeof ch.name === 'string') {
+      const matches = ch.name.match(/[0-9a-fA-F]{6,}/g);
+      if (matches && matches.length) {
+        const m = matches.find((mId: string) => String(mId) !== String(user._id));
+        if (m) otherId = m;
+      }
+    }
+
+    return otherId ? String(otherId) : null;
+  }, [chat.channel, user]);
 
   const isDMChannel = React.useMemo(() => {
     const ch = chat.channel;
@@ -142,6 +154,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
 
   const formatLastSeen = useMemo(() => {
     return (pId: string): string => {
+      if (!pId) return t('Offline');
       if (!presenceFetched) return '···'; // still loading, don't flash Offline
       const lastSeen = getLastSeen(pId);
       if (!lastSeen) return t('Offline');

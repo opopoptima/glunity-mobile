@@ -99,7 +99,6 @@ async function presenceHandler(io, socket, redisClient) {
     const channels = await Channel.find({
       $or: [
         { 'participants.userId': userId },
-        { participants: userId },
         { isPrivate: { $ne: true } }
       ]
     }, { _id: 1 }).lean();
@@ -143,7 +142,6 @@ async function presenceHandler(io, socket, redisClient) {
         const channels = await Channel.find({
           $or: [
             { 'participants.userId': userId },
-            { participants: userId },
             { isPrivate: { $ne: true } }
           ]
         }, { _id: 1 }).lean();
