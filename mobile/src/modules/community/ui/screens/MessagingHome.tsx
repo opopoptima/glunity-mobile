@@ -211,43 +211,38 @@ export default function MessagingHome({ navigation }: any) {
     return channels.filter(c => isGroupChannel(c) || isDMChannel(c));
   }, [channels, activeTab]);
 
-  // Sort channels using explicit sortOrder array (updated on each new message).
-  // Falls back to timestamp sort only if sortOrder has no entry for a channel.
-  // Group channels are always kept on top of direct messages.
+  // Channel list sort rules:
+  //  1. Group channels always appear ABOVE direct messages.
+  //  2. Groups are ordered by creation date (oldest → newest, so order is stable).
+  //  3. Direct messages are ordered by last message sent time (newest → top).
   const sortedChannels = useMemo(() => {
     const list = filteredChannels ? [...filteredChannels] : [];
     list.sort((a: any, b: any) => {
-      // 1. Group comparison: groups always on top of direct messages
       const aIsGroup = isGroupChannel(a);
       const bIsGroup = isGroupChannel(b);
+
+      // Groups always on top
       if (aIsGroup && !bIsGroup) return -1;
       if (!aIsGroup && bIsGroup) return 1;
 
-      // 2. If both are groups: sort by creation date (oldest first so it stays fixed)
+      // Both groups → stable sort by creation date (ascending)
       if (aIsGroup && bIsGroup) {
         const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return ta - tb;
       }
 
-      // 3. If both are DMs: sort by sortOrder (most recent first) or timestamp
-      const aId = String(a._id || a.id);
-      const bId = String(b._id || b.id);
-      
-      if (sortOrder.length > 0) {
-        const ai = sortOrder.indexOf(aId);
-        const bi = sortOrder.indexOf(bId);
-        if (ai !== -1 && bi !== -1) return ai - bi;
-        if (ai !== -1) return -1;
-        if (bi !== -1) return 1;
-      }
-      
+      // Both DMs → newest last-message first (descending)
       const ta = a?.lastMessage?.createdAt || a?.updatedAt || a?.createdAt || 0;
       const tb = b?.lastMessage?.createdAt || b?.updatedAt || b?.createdAt || 0;
-      return new Date(tb).getTime() - new Date(ta).getTime();
+      const timeA = ta ? new Date(ta).getTime() : 0;
+      const timeB = tb ? new Date(tb).getTime() : 0;
+      
+      return timeB - timeA;
     });
     return list;
-  }, [filteredChannels, sortOrder]);
+  }, [filteredChannels]);
+
 
 
   const contactsList = useMemo(() => {
@@ -383,22 +378,12 @@ export default function MessagingHome({ navigation }: any) {
 
     const handleNewMessage = ({ message }: any) => {
       const cid = String(message.channelId || message.channel || '');
-      
-      // Bubble this channel to front of sortOrder
-      setSortOrder(prev => {
-        const next = prev.filter(id => id !== cid);
-        next.unshift(cid);
-        return next;
-      });
-
       setChannels((prev) => {
         let found = false;
         const next = prev.map((c) => {
           const cId = String(c._id || c.id || c.channelId || '');
           if (cId === cid) {
             found = true;
-            // Only update the lastMessage snippet for instant UI feedback.
-            // unreadCount is updated authoritatively by conversation:updated event from the server.
             return { ...c, lastMessage: { content: message.content, createdAt: message.createdAt, messageId: message.id || message._id } };
           }
           return c;
@@ -429,14 +414,6 @@ export default function MessagingHome({ navigation }: any) {
     const handleConversationUpdated = ({ channelId, lastMessage, unreadCount }: any) => {
       if (!channelId) return;
       const cid = String(channelId);
-
-      // Bubble this channel to front of sortOrder
-      setSortOrder(prev => {
-        const next = prev.filter(id => id !== cid);
-        next.unshift(cid);
-        return next;
-      });
-
       setChannels((prev) => {
         const idx = prev.findIndex(c => String(c._id || c.id) === cid);
         if (idx === -1) return prev;
@@ -504,19 +481,12 @@ export default function MessagingHome({ navigation }: any) {
     const onLocalMessage = (message: any) => {
       if (!message) return;
       const cid = String(message.channelId || message.channel || '');
-      // Bubble this channel to top of sort order
-      setSortOrder(prev => {
-        const next = prev.filter(id => id !== cid);
-        next.unshift(cid);
-        return next;
-      });
       setChannels((prev) => {
         let found = false;
         const next = prev.map((c) => {
           const cId = String(c._id || c.id || c.channelId || '');
           if (cId === cid) {
             found = true;
-            // Only update lastMessage snippet — conversation:updated sets the authoritative unreadCount
             return { ...c, lastMessage: { content: message.content, createdAt: message.createdAt, messageId: message.id || message._id } };
           }
           return c;
@@ -697,6 +667,7 @@ export default function MessagingHome({ navigation }: any) {
       ) : (
         <FlatList
           data={flattenedList}
+          extraData={channels}
           contentContainerStyle={{ paddingBottom: 120 }}
           keyExtractor={(i, idx) => i.isHeader ? `header-${i.title}-${idx}` : String(i._id || i.id || i.name || idx)}
           renderItem={({ item, index }) => {
