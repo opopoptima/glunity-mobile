@@ -1,0 +1,681 @@
+﻿Cahier des 
+Charges
+Glunity Mobile
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+CAHIER 
+DES 
+CHARGES
+Glunity Mobile
+├ëlabor├⌐e par Optima Junior Entreprise
+Personne ├á contacter :  Omnia Blel
+Adresse :  13, Rue Taher Memmi, Menzah 6, Ariana 
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+Sommaire
+I. Pr├⌐sentation Optima JE
+II. Pr├⌐sentation Client
+III. Description du projet
+A. Impact
+B. Enjeux
+C. Etude Risque
+IV. P├⌐rim├¿tre du projet
+V. Description fonctionnelle
+VI. Description technique
+VII. Design et graphisme
+VIII. M├⌐thodologie & Planning
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+I. Pr├⌐sentation Optima JE
+Nom :  Optima Junior Entreprise
+Logo : 
+Secteur dΓÇÖactivit├⌐ : Technologie dΓÇÖinformation
+Services : D├⌐veloppement Web , D├⌐veloppement 
+Mobile , R├⌐f├⌐rencement , Chatbot , ERP
+Date de cr├⌐ation : 2013
+Adresse : 13, Rue Taher Memmi, Menzah 6, Ariana
+Nom du contact : Hamza Hizaoui
+E-mail : optimajuniorentreprise@gmail.com
+Num├⌐ro de t├⌐l├⌐phone : +216 29 372 099
+Valeurs:  
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+II. Pr├⌐sentation Client
+Client :  Sirine BOUFARES
+Logo : 
+Domaine dΓÇÖactivit├⌐ : Agroalimentaire 
+technologiques
+Adresse : 18 Rue 20 Mars, Zaghouan, 1100
+Nom du contact :  Mme. Sirine Boufares
+E-mail :  sirine.af12@gmail.com
+Num├⌐ro de t├⌐l├⌐phone : + 216 26 535 835
+Nom du projet : Glunity Mobile
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+III. Description du projet
+A. Impact
+1.
+Contexte : 
+Glunity est une application mobile interactive et inclusive d├⌐di├⌐e aux 
+personnes c┼ôliaques et intol├⌐rantes au gluten, ├á leurs proches (famille, 
+amis, coll├¿gues) et aux professionnels (points de vente, prestataires 
+alimentaires, nutritionnistes, m├⌐decins). Elle centralise lΓÇÖinformation 
+fiable, facilite le quotidien sans gluten et cr├⌐e un ├⌐cosyst├¿me 
+entrepreneurial et communautaire autour de la vie sans gluten en 
+Tunisie, avec une vocation internationale.
+2.
+Objectifs du projet :  
+Faciliter la s├⌐curit├⌐ alimentaire et le quotidien des personnes c┼ôliaques.
+Transformer lΓÇÖentourage en soutien actif et sensibiliser le grand public.
+Accro├«tre la visibilit├⌐ des entreprises partenaires et booster les ventes de 
+produits/services sans gluten.
+Cr├⌐er des partenariats strat├⌐giques et recueillir les retours utilisateurs 
+pour am├⌐liorer les offres.
+Transformer une contrainte m├⌐dicale en fiert├⌐ personnelle via la 
+gamification.
+3.
+Besoin g├⌐n├⌐rale : 
+Concevoir une application mobile qui r├⌐ponde aux besoins sp├⌐cifiques 
+de la communaut├⌐ c┼ôliaque en offrant des outils pratiques (scan, carte, 
+recettes), un soutien communautaire, une gamification engageante et 
+des fonctionnalit├⌐s d├⌐di├⌐es aux diff├⌐rents profils dΓÇÖutilisateurs.
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+III. Description du projet
+A. Impact
+4.     Cible : 
+Principale : Personnes c┼ôliaques / intol├⌐rantes au gluten.
+Secondaire : Proches (famille, amis, coll├¿gues).
+Professionnels : Points de vente & prestataires alimentaires (restaurants, 
+boulangeries, etc.).
+Professionnels de sant├⌐ (m├⌐decins, nutritionnistes).
+5.     Type dΓÇÖimpact/port├⌐e du projet :
+National (Tunisie prioritaire) avec potentiel 
+international.
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+B. Enjeux
+1.
+Les exigences techniques : 
+LΓÇÖapplication doit ├¬tre s├⌐curis├⌐e (donn├⌐es de sant├⌐ sensibles).
+LΓÇÖapplication doit offrir une exp├⌐rience utilisateur fluide, intuitive et rapide 
+(offline partiel pour la carte et le scan).
+Compatibilit├⌐ iOS et Android.
+La qualit├⌐ g├⌐n├⌐rale doit r├⌐pondre aux normes ├⌐lev├⌐es des stores (App Store / 
+Google Play).
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+C. Etude Risque
+Registre des risques
+ID
+01
+02
+03
+Nature du risque
+Technique
+Humain 
+Humain
+Description
+Probl├¿me serveur : 
+le site inaccessible 
+├á cause dΓÇÖun 
+probl├¿me au 
+niveau du serveur
+Retard de la 
+part des 
+d├⌐veloppeurs
+Retard de la 
+part du client
+Impact
+Catastrophique
+Majeur
+Mineur
+Probabilit├⌐
+probable
+probable
+probable
+Criticit├⌐
+Tr├¿s Critique
+Critique
+Critique
+Cons├⌐quence si
+D├⌐lais
+D├⌐lais
+D├⌐lais
+Tendance
+Stable
+Stable
+Stable
+Actions pr├⌐ventives
+Avoir un 
+h├⌐bergement bien 
+s├⌐curis├⌐ et 
+recommand├⌐ + 
+avoir un backup
+Avoir des 
+deadlines bien 
+fix├⌐s pour 
+chaque jalon et 
+chaque t├óche
+Avoir une date 
+maximale de 
+retard de la 
+part du client 
+fix├⌐e au contrat
+Actions correctives
+Contacter 
+lΓÇÖH├⌐bergeur
+R├⌐cup├⌐rer le 
+retard dans 
+dΓÇÖautres Jalons
+D├⌐pendant sur 
+la dur├⌐e du 
+retard soit on 
+relance le 
+travail soit on 
+relance le 
+projet
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+ID
+04
+05
+06
+Nature du risque
+Technique
+Externe
+Technique
+Description
+Piratage du site
+retour Covid
+malfonctionnem
+ent ├á cause 
+dΓÇÖune mise ├á 
+jour
+Impact
+Catastrophique
+Mineur
+Catastrophique
+Probabilit├⌐
+Peu probable
+Peu probable
+Tr├¿s probable
+Criticit├⌐
+Tr├¿s critique
+Mod├⌐r├⌐
+Tr├¿s critique
+Cons├⌐quence si
+D├⌐lais
+Qualit├⌐
+D├⌐lais
+Tendance
+Stable
+Baisse
+Stable
+Actions pr├⌐ventives
+Avoir un backup 
+├á jour + assurer 
+la s├⌐curit├⌐ du site
+On soit pr├¬t 
+pour le travail 
+en ligne
+Avoir un backup 
+avant la mise ├á 
+jour
+Actions correctives
+Employer le 
+backup et 
+├⌐liminer les 
+failles de s├⌐curit├⌐
+Travail en ligne
+Retour aux 
+versions 
+pr├⌐c├⌐dentes ou 
+fixer les erreurs 
+qui 
+apparaissent
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+Matrice de criticit├⌐ des 
+risques
+L├⌐gende :
+Mod├⌐r├⌐
+Critique
+Tr├¿s critique
+Catastrophique
+4
+4
+8
+12
+16
+Grave
+3
+3
+6
+9
+12
+Majeur
+2
+2
+4
+6
+8
+Mineur
+1
+1
+2
+3
+4
+Improbable
+1
+Peu 
+probable
+2
+Probable
+3
+Tr├¿s 
+probable
+4
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+IV. P├⌐rim├¿tre du projet 
+1.
+Type de projet: 
+Mobile native ou cross-platform (iOS & Android)
+2.
+Complexit├⌐ du site: 
+├ëlev├⌐e
+3.
+R├⌐f├⌐rences:
+ΓùÅ
+url: https://glutenlibre.co/a-propos-de-gluten-libre/
+4.
+P├⌐rim├¿tres du projet: (Estimation)
+ΓùÅ
+Nombre de pages : 5
+Γùï
+Description des pages:
+Γûá
+Inscription avec choix de profil (c┼ôliaque, 
+proche, professionnel, sant├⌐)
+Γûá
+Carte collaborative des lieux s├╗rs
+Γûá
+Recettes sans gluten
+Γûá
+Communaut├⌐ (canaux th├⌐matiques)
+ΓùÅ
+Application Multilingue : oui
+ΓùÅ
+Les langues du site:  fran├ºais (principale) /anglais / arabe 
+(tunisien)
+Application Native.
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+V. Description fonctionnelle :
+ΓùÅ
+Titre : Glunity Mobile
+ΓùÅ
+Objectif fonctionnelle (sp├⌐cifique) principal du site web : 
+Une application mobile inclusive qui centralise les outils et la communaut├⌐ 
+pour vivre sereinement sans gluten, tout en cr├⌐ant un ├⌐cosyst├¿me 
+entrepreneurial local.
+Application native
+ΓùÅ
+Les Cibles: 
+Γùï
+Personnes c┼ôliaques/intol├⌐rantes (principale)
+Γùï
+Proches
+Γùï
+Points de vente & prestataires
+Γùï
+Professionnels de sant├⌐
+Γùï
+Administrateur (gestion contenu/mod├⌐ration)
+ΓùÅ
+Les besoins des cibles: 
+S├⌐curit├⌐ alimentaire
+Gain de temps
+Information fiable
+Soutien moral
+Inspiration quotidienne
+ΓùÅ
+Les fonctionnalit├⌐s qui peuvent y r├⌐pondre (par priorit├⌐) : 
+Γùï
+Inscription & profils diff├⌐renci├⌐s : Choix du profil ├á lΓÇÖonboarding avec 
+personnalisation des besoins.
+Γùï
+Carte collaborative : G├⌐olocalisation des lieux s├╗rs (restaurants, 
+magasins) avec filtres, avis certifi├⌐s et contribution utilisateurs.
+Γùï
+Recettes sans gluten : Base de recettes filtrables (tunisiennes, faciles, 
+etc.) avec photos/vid├⌐os.
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+V. Description fonctionnelle :
+ΓùÅ
+Communaut├⌐ : Canaux th├⌐matiques (#Nouveaux-diagnostiqu├⌐s, 
+#Recettes-tunisiennes, #Sorties-restos, etc.) style Discord/Slack.
+Alertes personnalis├⌐es
+ΓùÅ
+Fonctionnalit├⌐s par profil
+Proches : Guide ├⌐ducatif, recettes pour recevoir
+Professionnels commerce : Fiche ├⌐tablissement, 
+d├⌐claration produits, statistiques visibilit├⌐
+Professionnels sant├⌐ : Contenus valid├⌐s, ressources 
+patients
+ΓùÅ
+Autres
+Notifications push
+Mode offline partiel (cache carte, recettes)
+Multilingue : Fran├ºais (principal), Arabe (tunisien), Anglais
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+Application Native
+Cartographie Impact Mapping
+D├⌐velopper une application mobile interactive 
+et inclusive d├⌐di├⌐e aux personnes c┼ôliaques et 
+intol├⌐rantes au gluten, ├á leurs proches et aux 
+professionnels
+Supervise la gestion 
+des produits et 
+services.
+consommateur
+Administrateur
+ g├⌐rer les 
+contenus et les 
+├⌐v├⌐nements.
+Influence la 
+visibilit├⌐ des 
+produits.
+Partage d'avis et 
+d'exp├⌐riences.
+Gestion des 
+produits et 
+des stocks.
+├ëvaluation 
+des produits 
+et services.
+Recherche de 
+produits sans 
+gluten.
+Acc├¿s ├á des 
+recettes et 
+informations.
+Gestion des 
+utilisateurs 
+Objectif
+Fonctionnalit├⌐s
+Impact
+Acteur
+les vendeurs
+Offrent une 
+vari├⌐t├⌐ de 
+produits sans 
+gluten.
+Suivi des 
+transactions 
+et du stock.
+Suivi des 
+commandes et 
+des livraisons.
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+LΓÇÖarborescence
+Niveau 0
+Acceuil
+Niveau 1
+Profil
+Carte
+Recettes
+Communaut├⌐
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+Description des pages:
+Niveau 0 :
+ΓùÅ
+Page dΓÇÖaccueil : 
+-
+Compteur jours sans gluten, d├⌐fis en cours, badges r├⌐cents, suggestions 
+personnalis├⌐es (recettes, lieux proches, posts communaut├⌐).
+Niveau 1 : 
+Γùï
+Page Inscription: 
+-
+Choix profil (c┼ôliaque, proche, pro commerce, pro sant├⌐), personnalisation 
+besoins, tutoriel rapide.
+-
+Page Recettes: 
+-Liste filtrable, d├⌐tail recette (ingr├⌐dients, ├⌐tapes, photos/vid├⌐o), favoris, 
+partage.
+-
+Page Communaut├⌐ : 
+ 
+-Liste channels (#Recettes-tunisiennes, #Sorties-restos, etc.), 
+discussions en temps r├⌐el, cr├⌐ation sujets.)
+Γùï
+Page Profil : 
+Γùï
+Infos personnelles, historique, param├¿tres notifications, contenus 
+sp├⌐cifiques au profil (guide proches, fiche ├⌐tablissement, ressources 
+sant├⌐).
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+Description des pages:
+ΓùÅ
+Page Carte Collaborative: 
+-
+Map interactive, filtres (restaurants, magasins), fiches lieux, avis certifi├⌐s, 
+contribution.
+ΓùÅ
+Notifications : Push personnalis├⌐es (nouveaux lieux, r├⌐ponses 
+communaut├⌐).
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+Liste des fonctionnalit├⌐s :
+ID
+Fonctionnalit├⌐
+Description
+01
+Inscription & Gestion 
+de profil
+Interface d'inscription et de 
+connexion avec choix du profil 
+(c┼ôliaque/intol├⌐rant, proche, 
+professionnel commerce, 
+professionnel sant├⌐).
+02
+G├⌐olocalisation & 
+Carte collaborative
+Carte interactive affichant les lieux 
+s├╗rs sans gluten (restaurants, 
+magasins, etc.) ├á proximit├⌐, avec 
+filtres (distance, type, notes), avis 
+certifi├⌐s et possibilit├⌐ 
+d'ajouter/contributor des lieux.
+03
+Recherche avanc├⌐e
+Recherche globale avec filtres 
+avanc├⌐s pour produits, lieux, 
+recettes ou utilisateurs, tri├⌐s par 
+emplacement, type, prix, popularit├⌐, 
+etc.
+04
+Base de donn├⌐es 
+produits sans gluten
+Acc├¿s ├á une vaste base 
+collaborative de produits sans 
+gluten, avec descriptions d├⌐taill├⌐es, 
+images et statut gluten v├⌐rifi├⌐.
+05
+Recettes sans gluten
+Catalogue de recettes filtrables 
+(tunisiennes, faciles, rapides, etc.), 
+avec ingr├⌐dients, ├⌐tapes, 
+photos/vid├⌐os, favoris et partage.
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+Liste des fonctionnalit├⌐s :
+ID
+Fonctionnalit├⌐
+Description
+06
+Contenus sp├⌐cifiques 
+par profil
+- Proches : Mini-guide maladie 
+c┼ôliaque, liste produits s├╗rs, 
+recettes pour recevoir, FAQ, badge 
+Alli├⌐
+- Professionnels commerce : Fiche 
+├⌐tablissement, d├⌐claration 
+produits, avis certifi├⌐s, statistiques 
+visibilit├⌐, badge Recommand├⌐
+- Professionnels sant├⌐ : Contenus 
+├⌐ducatifs valid├⌐s, ressources 
+patients, ateliers/lives
+07
+Notifications & Alertes 
+personnalis├⌐es
+Push notifications pour nouveaux 
+lieux proches, d├⌐fis, r├⌐ponses 
+communaut├⌐, alertes produits ou 
+├⌐v├⌐nements.
+08
+Module ├ëv├⌐nements
+Calendrier d'├⌐v├⌐nements (ateliers, 
+webinaires, sorties), inscription et 
+partage.
+09
+Mode offline partiel
+Acc├¿s limit├⌐ hors connexion (cache 
+carte, recettes favorites, base 
+produits r├⌐cente).
+10
+Fonctionnalit├⌐s
+sociales &
+Communaut├⌐
+Canaux th├⌐matiques style
+Discord/Slack
+(#Nouveaux-diagnostiqu├⌐s,
+#Recettes-tunisiennes,
+#Sorties-restos,
+#Parents-dΓÇÖenfants-c┼ôliaques,
+etc.). Discussions en temps r├⌐el,
+cr├⌐ation de sujets, partage
+d'exp├⌐riences et conseils.
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+VI. Description technique :
+CPU
+RAM
+BASE DE 
+DONN├ëES
+ESPACE 
+DISQUE
+Au moins 6 
+vCore
+8 Go ou plus
+1 ou plus
+160Go
+Standard :
+3.
+Technologies : 
+1.
+Nom de domaine : 
+├á fournir par le client
+2.
+H├⌐bergement recommand├⌐:
+Front-end
+Back-end
+React Native
+Node js
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+VII. Design et graphisme :
+1.
+Logo : 
+2.
+Couleurs :
+#c8102eff
+#8bc34a
+#8bc34aff
+#2e2e2e
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+M├⌐thodologie de travail : agile
+SCRUM
+VIII. M├⌐thodologie & planning : 
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+Cha├«ne de production du site
+JALONS, IMPLICATIONS ET D├ëLAI
+OptimaJuniorentreprise@gmail.com
+90 410 480 / 27 905 188
+29 372 099/ 29 372 207
+Planning:
+Expression de vos besoins
+Analyse et r├⌐flexion
+D├⌐finition du p├⌐rim├¿tre du site
+Arborescence du site
+R├⌐daction du cahier des charges
+Maquettage
+1├¿re rencontre
+Validation de lΓÇÖexpression des besoins
+Validation du p├⌐rim├¿tre
+Validation arborescence
+Validation maquettes
+PLAN STRAT├ëGIQUE / CONCEPTION
+D├⌐veloppements informatiques 
+(Cycles)
+Contr├┤le, tests des modules
+Formation ├á lΓÇÖutilisation de 
+la solution
+Tests sur diff├⌐rents 
+navigateurs et 
+environnements
+Livraison des contenus
+Validation des modules
+Int├⌐gration des contenus
+Tests et recettage final
+Livraison finale du 
+projet
+Deux mois de 
+maintenance
+MANAGEMENT DE PROJET
+int├⌐gration de la 
+solution ├á la source
+D├ëPLOIEMENT/MAINTENANCE
+CLIENT
+OPTIMA
+Signature cahier des 
+charges
+Enqu├¬te satisfaction
+Signature du client :
+date et lieu : 
+Signature du concepteur:
+date et lieu : 
+

@@ -11,7 +11,12 @@ const reelSchema = new Schema(
 		caption: { type: String, trim: true, default: '' },
 		duration: { type: Number, default: 0 }, // Video length in seconds
 		viewsCount: { type: Number, default: 0 },
-		likedBy: [{ type: Types.ObjectId, ref: 'User' }],
+		likesCount: { type: Number, default: 0 },
+		commentsCount: { type: Number, default: 0 },
+		sharesCount: { type: Number, default: 0 },
+		status: { type: String, enum: ['processing', 'ready', 'failed'], default: 'ready', index: true },
+		category: { type: String, enum: ['all', 'recipes', 'tips', 'products', 'lifestyle'], default: 'all', index: true },
+		channelRef: { type: Types.ObjectId, ref: 'Channel', default: null, index: true },
 	},
 	{
 		timestamps: true,
@@ -21,10 +26,8 @@ const reelSchema = new Schema(
 	}
 );
 
-// Virtual property to dynamically compute total likes
-reelSchema.virtual('likeCount').get(function() {
-	return this.likedBy ? this.likedBy.length : 0;
-});
+// Index compound for performant paginated feed queries
+reelSchema.index({ status: 1, createdAt: -1 });
 
 const Reel = model('Reel', reelSchema);
 module.exports = Reel;

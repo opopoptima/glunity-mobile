@@ -86,6 +86,12 @@ export interface SellerStats {
   avgPrice: number;
   topCategories: { name: string; count: number }[];
   mostViewedProduct: string;
+  // Reels
+  reelsCount: number;
+  reelsViewsCount: number;
+  reelsLikesCount: number;
+  reelsCommentsCount: number;
+  reelsEngagementRate: number;
   // Engagement
   topInteractionDay: string;
   // Charts

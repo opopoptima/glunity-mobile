@@ -24,6 +24,7 @@ const reviewsRoutes = require('./modules/reviews/reviews.routes');
 const channelsRoutes = require('./modules/channels/channels.routes');
 const patientResourcesRoutes = require('./modules/patient-resources/patient-resources.routes');
 const uploadsRoutes = require('./modules/uploads/uploads.routes');
+const reelsRoutes = require('./modules/reels/reels.routes');
 
 const app = express();
 
@@ -119,6 +120,7 @@ app.use('/api/channels', channelsRoutes);
 app.use('/api/conversations', channelsRoutes);
 app.use('/api/patient-resources', patientResourcesRoutes);
 app.use('/api/uploads', uploadsRoutes);
+app.use('/api/reels', reelsRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

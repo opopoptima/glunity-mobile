@@ -169,6 +169,17 @@ const usersController = {
     const productsCount = products.length;
     const productIds = products.map(p => p._id);
 
+    // ── 1b. Reels ────────────────────────────────────────────────────────────
+    const Reel = require('../../../database/models/reel.model');
+    const reels = await Reel.find({ authorId: sellerId }).select('viewsCount likesCount commentsCount');
+    const reelsCount = reels.length;
+    const reelsViewsCount = reels.reduce((sum, r) => sum + (r.viewsCount || 0), 0);
+    const reelsLikesCount = reels.reduce((sum, r) => sum + (r.likesCount || 0), 0);
+    const reelsCommentsCount = reels.reduce((sum, r) => sum + (r.commentsCount || 0), 0);
+    const reelsEngagementRate = reelsViewsCount > 0
+      ? (((reelsLikesCount + reelsCommentsCount) / reelsViewsCount) * 100).toFixed(1)
+      : '0.0';
+
     // Certified GF count
     const certifiedGFCount = products.filter(p => p.certifiedGF).length;
 
@@ -298,6 +309,12 @@ const usersController = {
         avgPrice: parseFloat(avgPrice),
         topCategories,
         mostViewedProduct,
+        // Reels
+        reelsCount,
+        reelsViewsCount,
+        reelsLikesCount,
+        reelsCommentsCount,
+        reelsEngagementRate: parseFloat(reelsEngagementRate),
         // Engagement
         topInteractionDay,
         // Charts

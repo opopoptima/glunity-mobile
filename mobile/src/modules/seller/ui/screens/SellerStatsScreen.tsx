@@ -770,6 +770,60 @@ export default function SellerStatsScreen({ navigation }: Props) {
           </>
         )}
 
+        {/* ── Reels Analytics ─────────────────────────────────────────────── */}
+        <Text style={[s.sectionTitle, { marginBottom: 12, marginTop: 12 }]}>{t('Reels Analytics')}</Text>
+        <View style={s.statsGrid}>
+          <View style={s.statCard}>
+            <View style={[s.cardIndicator, { backgroundColor: '#FF2D55' }]} />
+            <View style={s.statHeader}>
+              <View style={[s.iconWrapper, { backgroundColor: 'rgba(255, 45, 85, 0.12)' }]}>
+                <Feather name="film" size={15} color="#FF2D55" />
+              </View>
+              <Text style={s.statTitle}>{t('Reels Published')}</Text>
+            </View>
+            <Text style={s.statValue}>{loading ? '...' : (statsData?.reelsCount ?? 0).toString()}</Text>
+            <Text style={s.statMeta}>{t('Total short videos')}</Text>
+          </View>
+
+          <View style={s.statCard}>
+            <View style={[s.cardIndicator, { backgroundColor: '#F59E0B' }]} />
+            <View style={s.statHeader}>
+              <View style={[s.iconWrapper, { backgroundColor: 'rgba(245, 158, 11, 0.12)' }]}>
+                <Feather name="play" size={15} color="#F59E0B" />
+              </View>
+              <Text style={s.statTitle}>{t('Reel Views')}</Text>
+            </View>
+            <Text style={s.statValue}>{loading ? '...' : (statsData?.reelsViewsCount ?? 0).toLocaleString()}</Text>
+            <Text style={s.statMeta}>{t('Across all videos')}</Text>
+          </View>
+
+          <View style={s.statCard}>
+            <View style={[s.cardIndicator, { backgroundColor: '#3B82F6' }]} />
+            <View style={s.statHeader}>
+              <View style={[s.iconWrapper, { backgroundColor: 'rgba(59, 130, 246, 0.12)' }]}>
+                <Feather name="heart" size={15} color="#3B82F6" />
+              </View>
+              <Text style={s.statTitle}>{t('Reel Interactions')}</Text>
+            </View>
+            <Text style={s.statValue}>
+              {loading ? '...' : `${(statsData?.reelsLikesCount ?? 0) + (statsData?.reelsCommentsCount ?? 0)}`}
+            </Text>
+            <Text style={s.statMeta}>{`${statsData?.reelsLikesCount ?? 0} likes • ${statsData?.reelsCommentsCount ?? 0} comments`}</Text>
+          </View>
+
+          <View style={s.statCard}>
+            <View style={[s.cardIndicator, { backgroundColor: T.green }]} />
+            <View style={s.statHeader}>
+              <View style={[s.iconWrapper, { backgroundColor: T.greenLight }]}>
+                <Feather name="percent" size={15} color={T.green} />
+              </View>
+              <Text style={s.statTitle}>{t('Engagement Rate')}</Text>
+            </View>
+            <Text style={s.statValue}>{loading ? '...' : `${statsData?.reelsEngagementRate ?? '0.0'}%`}</Text>
+            <Text style={s.statMeta}>{t('Likes + Comments / Views')}</Text>
+          </View>
+        </View>
+
         {/* ── Insights ────────────────────────────────────────────────────── */}
         <Text style={[s.sectionTitle, { marginBottom: 12 }]}>{t('Insights')}</Text>
         <View style={s.insightsList}>

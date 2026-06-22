@@ -174,12 +174,12 @@ export function BottomNavBar({
           id={`${idPrefix}-reels`}
           accessibilityRole="tab"
           accessibilityLabel={t('Reels')}
-          accessibilityState={{ selected: activeTab === 'reels' || activeTab === 'community' }}
+          accessibilityState={{ selected: activeTab === 'reels' }}
         >
-          <View style={[styles.iconFrame, (activeTab === 'reels' || activeTab === 'community') ? styles.iconFrameActive : null]}>
-            <MaterialCommunityIcons name="movie-play-outline" size={24} color={(activeTab === 'reels' || activeTab === 'community') ? C.green : C.textMuted} />
+          <View style={[styles.iconFrame, activeTab === 'reels' ? styles.iconFrameActive : null]}>
+            <MaterialCommunityIcons name="movie-play-outline" size={24} color={activeTab === 'reels' ? C.green : C.textMuted} />
           </View>
-          <Text style={[styles.navLabel, (activeTab === 'reels' || activeTab === 'community') ? styles.navLabelActive : null]} numberOfLines={1} allowFontScaling={false}>{t('Reels')}</Text>
+          <Text style={[styles.navLabel, activeTab === 'reels' ? styles.navLabelActive : null]} numberOfLines={1} allowFontScaling={false}>{t('Reels')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

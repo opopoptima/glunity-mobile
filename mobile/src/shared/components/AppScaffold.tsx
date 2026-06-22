@@ -59,7 +59,7 @@ export function AppScaffold({
   const handleHome = onPressHome || (() => navigation.navigate('Home'));
   const handleEvents = onPressEvents || (() => navigation.navigate('Events'));
   const handleCenter = onPressCenter || (() => navigation.navigate('Map'));
-  const handleReels = onPressReels || (() => navigation.navigate('Community'));
+  const handleReels = onPressReels || (() => navigation.navigate('ReelsFeed'));
   const handleProfile = onPressProfile || (() => {
     if (user?.profileType === 'pro_commerce') {
       navigation.navigate('SellerProProfile');

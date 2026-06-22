@@ -33,6 +33,8 @@ import CommunityChatScreen from '../modules/community/ui/screens/CommunityChatSc
 import MessagingHome from '../modules/community/ui/screens/MessagingHome';
 import CreateGroupScreen from '../modules/community/ui/screens/CreateGroupScreen';
 import CommunityMembersList from '../modules/community/ui/screens/CommunityMembersList';
+import ReelsFeedScreen from '../modules/reels/ui/screens/ReelsFeedScreen';
+import ReelCameraScreen from '../modules/reels/ui/screens/ReelCameraScreen';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -123,7 +125,7 @@ function HomeScreenContainer() {
       onPressNotification={() => navigation.navigate('Notifications')}
       onPressNavHome={() => navigation.navigate('Home')}
       onPressNavEvents={() => navigation.navigate('Events')}
-      onPressNavReels={() => navigation.navigate('Community')}
+      onPressNavReels={() => navigation.navigate('ReelsFeed')}
       onPressNavProfile={handleProfileNavigation}
     />
   );
@@ -165,7 +167,7 @@ export function AppNavigator() {
               userAvatarUri={user?.avatarUrl || null}
               onPressNavHome={() => navigation.navigate('Home')}
               onPressNavEvents={() => navigation.navigate('Events')}
-              onPressNavReels={() => {}}
+              onPressNavReels={() => navigation.navigate('ReelsFeed')}
               onPressNavProfile={handleProfileNavigation}
               onPressProfilePhoto={handleProfileNavigation}
             />
@@ -183,6 +185,8 @@ export function AppNavigator() {
       <Stack.Screen name="AddEvent" component={AddEventScreen} options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ animation: 'slide_from_right' }} />
       <Stack.Screen name="PatientResources" component={PatientResourcesScreen} options={{ animation: 'slide_from_right' }} />
+      <Stack.Screen name="ReelsFeed" component={ReelsFeedScreen} options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="ReelCamera" component={ReelCameraScreen} options={{ animation: 'slide_from_bottom' }} />
     </Stack.Navigator>
   );
 }

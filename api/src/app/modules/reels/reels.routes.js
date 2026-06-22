@@ -1,0 +1,42 @@
+'use strict';
+
+const { Router } = require('express');
+const controller = require('./reels.controller');
+const validate = require('../../common/middleware/validation.middleware');
+const authMiddleware = require('../../common/middleware/auth.middleware');
+const env = require('../../config/env');
+const { reelIdSchema, createReelSchema, createCommentSchema } = require('./reels.schema');
+const multer = require('multer');
+
+// Configure multer for memory uploads (local fallback)
+const upload = multer({
+	storage: multer.memoryStorage(),
+	limits: {
+		fileSize: env.media?.maxVideoSize || 50 * 1024 * 1024, // Default 50MB
+	}
+});
+
+const router = Router();
+
+// ── Upload ───────────────────────────────────────────────────────────────────
+// Signatures for direct upload to Cloudinary
+router.get('/signature', authMiddleware, controller.getUploadSignature);
+
+// Local fallback endpoint (in case Cloudinary is not configured in dev)
+router.post('/upload', authMiddleware, upload.single('video'), controller.uploadVideoLocal);
+
+// ── Reels CRUD ───────────────────────────────────────────────────────────────
+router.get('/', authMiddleware, controller.list);
+router.post('/', authMiddleware, createReelSchema, validate, controller.create);
+router.delete('/:id', authMiddleware, reelIdSchema, validate, controller.remove);
+
+// ── Interactions ─────────────────────────────────────────────────────────────
+router.post('/:id/like', authMiddleware, reelIdSchema, validate, controller.toggleLike);
+router.post('/:id/view', authMiddleware, reelIdSchema, validate, controller.recordView);
+router.post('/:id/share', authMiddleware, reelIdSchema, validate, controller.recordShare);
+
+// ── Comments ─────────────────────────────────────────────────────────────────
+router.get('/:id/comments', authMiddleware, reelIdSchema, validate, controller.listComments);
+router.post('/:id/comments', authMiddleware, createCommentSchema, validate, controller.postComment);
+
+module.exports = router;

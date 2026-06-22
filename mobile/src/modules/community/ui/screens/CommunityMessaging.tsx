@@ -453,6 +453,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
     const isVideo = firstAtt?.type === 'video';
     const isMedia = isImage || isVideo;
     const isDeleted = Boolean(item.deletedAt);
+    const isReel = item.type === 'reel' || !!item.reelRef;
 
     // Grouping / bubble tail calculations
     const currentMsgDate = new Date(item.createdAt || item.created_at);
@@ -477,7 +478,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
             ? [styles.bubbleRight, { backgroundColor: isDark ? '#196F3D' : '#27AE60', transform: [{ scale: 1.02 }] }]
             : styles.bubbleRight,
           { borderBottomRightRadius: shouldGroup ? 18 : 4 },
-          isMedia && { paddingVertical: 0, paddingHorizontal: 0 },
+          (isMedia || isReel) && { paddingVertical: 0, paddingHorizontal: 0 },
           isAudio && { minWidth: 208 },
           isDeleted && {
             backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
@@ -493,7 +494,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
             ? [styles.bubbleLeft, { backgroundColor: isDark ? '#2E4053' : '#D5F5E3', transform: [{ scale: 1.02 }] }]
             : styles.bubbleLeft,
           { borderBottomLeftRadius: shouldGroup ? 18 : 4 },
-          isMedia && { paddingVertical: 0, paddingHorizontal: 0 },
+          (isMedia || isReel) && { paddingVertical: 0, paddingHorizontal: 0 },
           isAudio && { minWidth: 208 },
           isDeleted && {
             backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
@@ -685,6 +686,33 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                 <Text style={[styles.msgText, { color: isMe ? '#fff' : T.text }]}>{item.content}</Text>
               </View>
             )}
+          </TouchableOpacity>
+        );
+      }
+
+      if (isReel) {
+        const title = item.reelRef?.title || 'Shared Reel';
+        const thumb = item.reelRef?.thumbnailUrl;
+        return (
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => navigation.navigate('ReelsFeed', { reelId: item.reelRef?.reelId })}
+            style={{ width: 200, borderRadius: 12, overflow: 'hidden', backgroundColor: isMe ? 'rgba(0,0,0,0.15)' : T.surfaceAlt }}
+          >
+            {thumb ? (
+              <Image source={{ uri: thumb }} style={{ width: '100%', height: 120, backgroundColor: '#333' }} resizeMode="cover" />
+            ) : (
+              <View style={{ width: '100%', height: 120, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }}>
+                <Ionicons name="film" size={32} color="#8A8A8E" />
+              </View>
+            )}
+            <View style={{ padding: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                <Ionicons name="play-circle-outline" size={14} color={isMe ? '#FFF' : T.green || '#2ECC71'} style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? '#FFF' : T.text }}>Reel</Text>
+              </View>
+              <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? '#EEE' : T.textMuted }}>{title}</Text>
+            </View>
           </TouchableOpacity>
         );
       }
