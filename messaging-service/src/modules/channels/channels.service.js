@@ -19,11 +19,19 @@ function createError(message, status, code) {
 }
 
 function assertParticipant(channel, userId, errorMsg = 'Forbidden') {
-  const isMember = channel.participants.some(
-    (p) => p.userId.toString() === userId.toString()
-  );
+  if (!channel || !channel.participants) throw createError(errorMsg, 403, 'FORBIDDEN');
+  const reqIdStr = String(userId);
+  const isMember = channel.participants.some((p) => {
+    if (!p) return false;
+    const pId = p.userId ? String(p.userId) : String(p);
+    return pId === reqIdStr;
+  });
   if (!isMember) throw createError(errorMsg, 403, 'FORBIDDEN');
-  return channel.participants.find((p) => p.userId.toString() === userId.toString());
+  return channel.participants.find((p) => {
+    if (!p) return false;
+    const pId = p.userId ? String(p.userId) : String(p);
+    return pId === reqIdStr;
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,10 +122,14 @@ const channelsService = {
     const channel = await repository.findById(channelId);
     if (!channel) throw createError('Channel not found', 404, 'NOT_FOUND');
     
-    const isMember = channel.participants && channel.participants.some(
-      (p) => p.userId.toString() === requesterId.toString()
-    );
-    if (!isMember && channel.type !== 'channel') {
+    const reqIdStr = String(requesterId);
+    const isMember = channel.participants && channel.participants.some((p) => {
+      if (!p) return false;
+      const pId = p.userId ? String(p.userId) : String(p);
+      return pId === reqIdStr;
+    });
+    const isPublic = channel.isPrivate === false || channel.type === 'channel' || channel.type === 'social';
+    if (!isMember && !isPublic) {
       throw createError('You are not a participant of this channel', 403, 'FORBIDDEN');
     }
     return channel;

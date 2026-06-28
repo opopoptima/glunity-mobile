@@ -5,7 +5,7 @@ const controller = require('./reels.controller');
 const validate = require('../../common/middleware/validation.middleware');
 const authMiddleware = require('../../common/middleware/auth.middleware');
 const env = require('../../config/env');
-const { reelIdSchema, createReelSchema, createCommentSchema, updateReelSchema } = require('./reels.schema');
+const { reelIdSchema, createReelSchema, createCommentSchema, updateCommentSchema, updateReelSchema } = require('./reels.schema');
 const multer = require('multer');
 
 // Configure multer for memory uploads (local fallback)
@@ -39,5 +39,9 @@ router.post('/:id/share', authMiddleware, reelIdSchema, validate, controller.rec
 // ── Comments ─────────────────────────────────────────────────────────────────
 router.get('/:id/comments', authMiddleware, reelIdSchema, validate, controller.listComments);
 router.post('/:id/comments', authMiddleware, createCommentSchema, validate, controller.postComment);
+router.put('/:id/comments/:commentId', authMiddleware, updateCommentSchema, validate, controller.updateComment);
+router.delete('/:id/comments/:commentId', authMiddleware, controller.deleteComment);
+router.post('/:id/comments/:commentId/like', authMiddleware, controller.toggleCommentLike);
+router.get('/:id/comments/:commentId/replies', authMiddleware, controller.listReplies);
 
 module.exports = router;

@@ -1084,7 +1084,7 @@ export default function MessagingHome({ navigation }: any) {
         onPressHome={() => navigation.navigate('Home')}
         onPressEvents={() => navigation.navigate('Events')}
         onPressCenter={() => navigation.navigate('Map')}
-        onPressReels={() => navigation.navigate('Community')}
+        onPressReels={() => navigation.navigate('ReelsFeed')}
         onPressProfile={() => navigation.navigate('Profile')}
       />
 

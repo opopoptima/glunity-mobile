@@ -94,16 +94,18 @@ const reelShareService = {
 
     const ReelModel = await getReelModel();
     const reel = await ReelModel.findById(reelId)
-      .select('thumbnailUrl caption duration')
+      .select('videoUrl thumbnailUrl caption duration')
       .lean();
 
     if (!reel) {
       throw createError('Reel not found or has been deleted', 404, 'NOT_FOUND');
     }
 
+    const thumb = reel.thumbnailUrl || (reel.videoUrl ? reel.videoUrl.replace(/\.[a-z0-9]+$/i, '.jpg') : null);
+
     return {
       reelId:       reel._id,
-      thumbnailUrl: reel.thumbnailUrl ?? null,
+      thumbnailUrl: thumb,
       title:        reel.caption      ?? '',   // caption is used as the display title
       duration:     reel.duration     ?? 0,
     };

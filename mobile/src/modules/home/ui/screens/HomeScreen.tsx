@@ -297,6 +297,24 @@ export function HomeScreen({
       gap: 12,
       flexDirection: isRTL ? "row-reverse" : "row",
     },
+    emptyStateWrap: {
+      marginTop: 12,
+      padding: 18,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: T.border,
+      backgroundColor: T.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 108,
+    },
+    emptyStateText: {
+      textAlign: isRTL ? 'right' : 'left',
+      color: T.textSub,
+      fontSize: 13,
+      lineHeight: 20,
+      fontWeight: '500',
+    },
     eventsList: {
       marginTop: 12,
       paddingBottom: 6,
@@ -677,20 +695,28 @@ export function HomeScreen({
           </TouchableOpacity>
         </View>
 
-        <FlatList
-          horizontal
-          data={filteredRecipes}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.recipesList}
-          showsHorizontalScrollIndicator={false}
-          initialNumToRender={3}
-          maxToRenderPerBatch={3}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS !== 'web'}
-          renderItem={({ item }) => (
-            <HomeRecipeCard item={item} T={T} styles={styles} />
-          )}
-        />
+        {filteredRecipes.length > 0 ? (
+          <FlatList
+            horizontal
+            data={filteredRecipes}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.recipesList}
+            showsHorizontalScrollIndicator={false}
+            initialNumToRender={3}
+            maxToRenderPerBatch={3}
+            windowSize={5}
+            removeClippedSubviews={Platform.OS !== 'web'}
+            renderItem={({ item }) => (
+              <HomeRecipeCard item={item} T={T} styles={styles} />
+            )}
+          />
+        ) : (
+          <View style={styles.emptyStateWrap}>
+            <Text style={styles.emptyStateText}>
+              {t(normalizedQuery ? 'No recipes match your search.' : 'No recipes available yet.')}
+            </Text>
+          </View>
+        )}
 
         <View style={[styles.sectionRow, styles.eventsHeader]}>
           <Text style={[styles.sectionTitleSecondary, { color: T.text }]}>{t(homeScreenText.checkEventsTitle)}</Text>
@@ -699,22 +725,30 @@ export function HomeScreen({
           </TouchableOpacity>
         </View>
 
-        <FlatList
-          horizontal
-          data={filteredEvents}
-          keyExtractor={(item) => item.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.eventsList}
-          initialNumToRender={2}
-          maxToRenderPerBatch={2}
-          windowSize={5}
-          removeClippedSubviews={Platform.OS !== 'web'}
-          renderItem={({ item }) => (
-            <View style={[styles.eventCard, { marginRight: 12 }]}> 
-              <HomeEventCard event={item} onPress={item.onPress} />
-            </View>
-          )}
-        />
+        {filteredEvents.length > 0 ? (
+          <FlatList
+            horizontal
+            data={filteredEvents}
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.eventsList}
+            initialNumToRender={2}
+            maxToRenderPerBatch={2}
+            windowSize={5}
+            removeClippedSubviews={Platform.OS !== 'web'}
+            renderItem={({ item }) => (
+              <View style={[styles.eventCard, { marginRight: 12 }]}> 
+                <HomeEventCard event={item} onPress={item.onPress} />
+              </View>
+            )}
+          />
+        ) : (
+          <View style={styles.emptyStateWrap}>
+            <Text style={styles.emptyStateText}>
+              {t(normalizedQuery ? 'No events match your search.' : 'No events available yet.')}
+            </Text>
+          </View>
+        )}
 
         <View style={{ height: 116 + insets.bottom }} />
       </ScrollView>

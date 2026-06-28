@@ -12,7 +12,9 @@ import {
 	KeyboardAvoidingView,
 	Platform,
 	ActivityIndicator,
-	Alert
+	Alert,
+	Keyboard,
+	Clipboard
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
@@ -28,6 +30,25 @@ import Animated, {
 	withTiming
 } from 'react-native-reanimated';
 import { Reel, ReelComment, ReelsService } from '../../services/reels.service';
+import { useReelComments } from '../../hooks/useReelComments';
+import { useAuth } from '../../../auth/state/auth.context';
+
+function formatRelativeTime(dateString: string): string {
+	const now = new Date();
+	const date = new Date(dateString);
+	const diffMs = now.getTime() - date.getTime();
+	if (isNaN(diffMs) || diffMs < 0) return '1s';
+	
+	const diffSec = Math.floor(diffMs / 1000);
+	const diffMin = Math.floor(diffSec / 60);
+	const diffHour = Math.floor(diffMin / 60);
+	const diffDay = Math.floor(diffHour / 24);
+
+	if (diffSec < 60) return `${diffSec || 1}s`;
+	if (diffMin < 60) return `${diffMin}m`;
+	if (diffHour < 24) return `${diffHour}h`;
+	return `${diffDay}d`;
+}
 
 const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
 
@@ -65,10 +86,52 @@ export function ReelPlayerItem({
 	
 	// Comments state
 	const [commentsVisible, setCommentsVisible] = useState(false);
-	const [comments, setComments] = useState<ReelComment[]>([]);
-	const [loadingComments, setLoadingComments] = useState(false);
-	const [newCommentText, setNewCommentText] = useState('');
-	const [postingComment, setPostingComment] = useState(false);
+	const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+	const [actionSheetVisible, setActionSheetVisible] = useState(false);
+	const [selectedCommentForActions, setSelectedCommentForActions] = useState<ReelComment | null>(null);
+	const [text, setText] = useState('');
+	const inputRef = useRef<TextInput>(null);
+
+	const { user } = useAuth();
+
+	const {
+		comments,
+		loading: loadingComments,
+		loadingMore,
+		hasMore,
+		replies,
+		loadingReplies,
+		repliesHasMore,
+		replyingTo,
+		editingComment,
+		toastMessage,
+		setReplyingTo,
+		setEditingComment,
+		loadComments,
+		loadReplies,
+		postComment,
+		updateComment,
+		deleteComment,
+		toggleCommentLike,
+	} = useReelComments(reel.id);
+
+	useEffect(() => {
+		if (commentsVisible) {
+			loadComments(true);
+		}
+	}, [commentsVisible, loadComments]);
+
+	// Sync editingComment text into input
+	useEffect(() => {
+		if (editingComment) {
+			setText(editingComment.text);
+			setTimeout(() => {
+				inputRef.current?.focus();
+			}, 100);
+		} else {
+			setText('');
+		}
+	}, [editingComment]);
 	
 	// Double tap / Heart animation
 	const lastTapRef = useRef<number | null>(null);
@@ -138,37 +201,63 @@ export function ReelPlayerItem({
 		heartOpacity.value = withTiming(0, { duration: 700 });
 	};
 
-	const openComments = async () => {
+	const openComments = () => {
 		setCommentsVisible(true);
-		setLoadingComments(true);
-		try {
-			const res = await ReelsService.getComments(reel.id);
-			if (res.success) {
-				setComments(res.data);
-			}
-		} catch (err) {
-			console.warn('Failed to load comments:', err);
-		} finally {
-			setLoadingComments(false);
+	};
+
+	const handleSubmitComment = async () => {
+		if (!text.trim()) return;
+		if (editingComment) {
+			await updateComment(editingComment.id, text);
+		} else {
+			await postComment(text);
+			onIncrementCommentsCount(reel.id);
+		}
+		setText('');
+		Keyboard.dismiss();
+	};
+
+	const handleEmojiPress = async (emoji: string) => {
+		await postComment(emoji);
+		onIncrementCommentsCount(reel.id);
+	};
+
+	const toggleReplies = async (commentId: string) => {
+		const isCurrentlyExpanded = !!expandedComments[commentId];
+		if (!isCurrentlyExpanded) {
+			setExpandedComments(prev => ({ ...prev, [commentId]: true }));
+			await loadReplies(commentId, true);
+		} else {
+			setExpandedComments(prev => ({ ...prev, [commentId]: false }));
 		}
 	};
 
-	const handlePostComment = async () => {
-		if (!newCommentText.trim() || postingComment) return;
-		setPostingComment(true);
-		try {
-			const res = await ReelsService.postComment(reel.id, newCommentText.trim());
-			if (res.success) {
-				setComments(prev => [res.data, ...prev]);
-				setNewCommentText('');
-				// Increment local comments count for UI responsiveness
-				onIncrementCommentsCount(reel.id);
-			}
-		} catch (err) {
-			console.warn('Failed to post comment:', err);
-		} finally {
-			setPostingComment(false);
+	const handleCommentPress = (comment: ReelComment) => {
+		const isOwner = comment.authorId === (user?._id || user?.id);
+		if (isOwner) {
+			setSelectedCommentForActions(comment);
+			setActionSheetVisible(true);
+		} else {
+			setReplyingTo(comment);
+			setTimeout(() => {
+				inputRef.current?.focus();
+			}, 100);
 		}
+	};
+
+	const handleCopyText = (comment: ReelComment) => {
+		Clipboard.setString(comment.text);
+		setActionSheetVisible(false);
+	};
+
+	const handleStartEdit = (comment: ReelComment) => {
+		setEditingComment(comment);
+		setActionSheetVisible(false);
+	};
+
+	const handleDelete = async (comment: ReelComment) => {
+		setActionSheetVisible(false);
+		await deleteComment(comment.id);
 	};
 
 	// Get navigation
@@ -299,7 +388,7 @@ export function ReelPlayerItem({
 				</TouchableOpacity>
 			</View>
 
-			{/* Comments Modal Bottom Sheet */}
+			{/* Redesigned Comments Modal */}
 			<Modal
 				visible={commentsVisible}
 				animationType="slide"
@@ -315,62 +404,317 @@ export function ReelPlayerItem({
 						behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
 						style={styles.commentsContainer}
 					>
+						{/* Toast notification for failures */}
+						{toastMessage && (
+							<View style={styles.toastContainer}>
+								<Text style={styles.toastText}>{toastMessage}</Text>
+							</View>
+						)}
+
 						<View style={styles.commentsHeader}>
-							<Text style={styles.commentsTitle}>Comments ({reel.commentsCount})</Text>
-							<TouchableOpacity onPress={() => setCommentsVisible(false)}>
-								<Ionicons name="close" size={24} color="#333" />
-							</TouchableOpacity>
+							<View style={styles.commentsHeaderIndicator} />
+							<View style={styles.commentsHeaderTitleRow}>
+								<Text style={styles.commentsTitle}>Comments</Text>
+								<TouchableOpacity onPress={() => setCommentsVisible(false)} style={styles.commentsCloseBtn}>
+									<Ionicons name="close" size={24} color="#FFF" />
+								</TouchableOpacity>
+							</View>
 						</View>
 
-						{loadingComments ? (
+						{loadingComments && comments.length === 0 ? (
 							<View style={styles.centerSpinner}>
-								<ActivityIndicator size="large" color="#6DAE3F" />
+								<ActivityIndicator size="large" color="#FFF" />
 							</View>
 						) : (
 							<FlatList
 								data={comments}
 								keyExtractor={(item) => item.id}
-								renderItem={({ item }) => (
-									<View style={styles.commentItem}>
-										<Image
-											source={{ uri: item.author.avatarUrl || DEFAULT_AVATAR_URL }}
-											style={styles.commentAvatar}
-										/>
-										<View style={styles.commentTextContainer}>
-											<Text style={styles.commentAuthor}>@{item.author.fullName.replace(/\s+/g, '').toLowerCase()}</Text>
-											<Text style={styles.commentText}>{item.text}</Text>
+								renderItem={({ item }) => {
+									const isOwner = item.authorId === (user?._id || user?.id);
+									const relativeTime = formatRelativeTime(item.createdAt);
+									const isLikedByMe = item.likedBy.includes(user?._id || user?.id);
+									const isExpanded = !!expandedComments[item.id];
+									const commentReplies = replies[item.id] || [];
+									const loadingRepliesForComment = !!loadingReplies[item.id];
+
+									return (
+										<View style={styles.commentRowContainer}>
+											{/* Parent Comment */}
+											<TouchableOpacity
+												activeOpacity={0.9}
+												onPress={() => handleCommentPress(item)}
+												style={styles.commentItem}
+											>
+												<Image
+													source={{ uri: item.authorAvatar || item.author.avatarUrl || DEFAULT_AVATAR_URL }}
+													style={styles.commentAvatar}
+												/>
+												<View style={styles.commentTextContainer}>
+													<View style={styles.commentAuthorHeader}>
+														<Text style={styles.commentAuthor}>
+															{item.authorUsername}
+														</Text>
+														<Text style={styles.commentTime}>
+															{relativeTime}{item.edited ? ' • Edited' : ''}
+														</Text>
+													</View>
+													<Text style={styles.commentText}>{item.text}</Text>
+													
+													<View style={styles.commentActionsRow}>
+														{!isOwner && (
+															<TouchableOpacity style={styles.commentActionButton} onPress={() => {
+																setReplyingTo(item);
+																inputRef.current?.focus();
+															}}>
+																<Text style={styles.commentActionText}>Reply</Text>
+															</TouchableOpacity>
+														)}
+														{isOwner && (
+															<>
+																<TouchableOpacity style={styles.commentActionButton} onPress={() => handleStartEdit(item)}>
+																	<Text style={styles.commentActionText}>Edit</Text>
+																</TouchableOpacity>
+																<TouchableOpacity style={styles.commentActionButton} onPress={() => deleteComment(item.id)}>
+																	<Text style={styles.commentActionText}>Delete</Text>
+																</TouchableOpacity>
+															</>
+														)}
+													</View>
+												</View>
+
+												{/* Heart Like icon & count */}
+												<View style={styles.likeIconContainer}>
+													<TouchableOpacity onPress={() => toggleCommentLike(item.id)}>
+														<Ionicons
+															name={isLikedByMe ? "heart" : "heart-outline"}
+															size={16}
+															color={isLikedByMe ? "#FF2D55" : "#8A8A8E"}
+														/>
+													</TouchableOpacity>
+													{item.likeCount > 0 && (
+														<Text style={styles.commentLikeCount}>
+															{item.likeCount.toLocaleString()}
+														</Text>
+													)}
+												</View>
+											</TouchableOpacity>
+
+											{/* Collapsible Nested Replies */}
+											{(item.replyCount > 0 || commentReplies.length > 0) && (
+												<View style={styles.repliesWrapper}>
+													<TouchableOpacity
+														style={styles.viewRepliesButton}
+														onPress={() => toggleReplies(item.id)}
+													>
+														<View style={styles.viewRepliesLine} />
+														<Text style={styles.viewRepliesText}>
+															{isExpanded ? 'Hide replies' : `View ${item.replyCount} more repl${item.replyCount > 1 ? 'ies' : 'y'}`}
+														</Text>
+													</TouchableOpacity>
+
+													{isExpanded && (
+														<View style={styles.repliesList}>
+															{loadingRepliesForComment && commentReplies.length === 0 ? (
+																<ActivityIndicator size="small" color="#FFF" style={{ marginVertical: 8, alignSelf: 'flex-start' }} />
+															) : (
+																commentReplies.map((reply) => {
+																	const replyIsOwner = reply.authorId === (user?._id || user?.id);
+																	const replyIsLikedByMe = reply.likedBy.includes(user?._id || user?.id);
+																	const replyRelativeTime = formatRelativeTime(reply.createdAt);
+
+																	return (
+																		<TouchableOpacity
+																			key={reply.id}
+																			activeOpacity={0.9}
+																			onPress={() => handleCommentPress(reply)}
+																			style={styles.replyItem}
+																		>
+																			<Image
+																				source={{ uri: reply.authorAvatar || reply.author.avatarUrl || DEFAULT_AVATAR_URL }}
+																				style={styles.replyAvatar}
+																			/>
+																			<View style={styles.commentTextContainer}>
+																				<View style={styles.commentAuthorHeader}>
+																					<Text style={styles.commentAuthor}>
+																						{reply.authorUsername}
+																					</Text>
+																					<Text style={styles.commentTime}>
+																						{replyRelativeTime}{reply.edited ? ' • Edited' : ''}
+																					</Text>
+																				</View>
+																				<Text style={styles.commentText}>{reply.text}</Text>
+																				
+																				<View style={styles.commentActionsRow}>
+																					{!replyIsOwner && (
+																						<TouchableOpacity style={styles.commentActionButton} onPress={() => {
+																							setReplyingTo(item);
+																							inputRef.current?.focus();
+																						}}>
+																							<Text style={styles.commentActionText}>Reply</Text>
+																						</TouchableOpacity>
+																					)}
+																					{replyIsOwner && (
+																						<>
+																							<TouchableOpacity style={styles.commentActionButton} onPress={() => handleStartEdit(reply)}>
+																								<Text style={styles.commentActionText}>Edit</Text>
+																							</TouchableOpacity>
+																							<TouchableOpacity style={styles.commentActionButton} onPress={() => deleteComment(reply.id)}>
+																								<Text style={styles.commentActionText}>Delete</Text>
+																							</TouchableOpacity>
+																						</>
+																					)}
+																				</View>
+																			</View>
+
+																			{/* Reply Like */}
+																			<View style={styles.likeIconContainer}>
+																				<TouchableOpacity onPress={() => toggleCommentLike(reply.id)}>
+																					<Ionicons
+																						name={replyIsLikedByMe ? "heart" : "heart-outline"}
+																						size={14}
+																						color={replyIsLikedByMe ? "#FF2D55" : "#8A8A8E"}
+																					/>
+																				</TouchableOpacity>
+																				{reply.likeCount > 0 && (
+																					<Text style={styles.replyLikeCount}>
+																						{reply.likeCount.toLocaleString()}
+																					</Text>
+																				)}
+																			</View>
+																		</TouchableOpacity>
+																	);
+																})
+															)}
+														</View>
+													)}
+												</View>
+											)}
 										</View>
-									</View>
-								)}
+									);
+								}}
 								ListEmptyComponent={
 									<Text style={styles.emptyComments}>No comments yet. Start the conversation!</Text>
 								}
 								contentContainerStyle={styles.commentList}
+								onEndReached={() => {
+									if (hasMore && !loadingComments && !loadingMore) {
+										loadComments(false);
+									}
+								}}
+								onEndReachedThreshold={0.3}
+								ListFooterComponent={
+									loadingMore ? (
+										<ActivityIndicator size="small" color="#FFF" style={{ marginVertical: 12 }} />
+									) : null
+								}
 							/>
+						)}
+
+						{/* Quick Emojis reaction bar */}
+						<View style={styles.emojiBar}>
+							{['❤️', '🙌', '🔥', '👏', '😢', '😍', '😮', '😂'].map((emoji) => (
+								<TouchableOpacity key={emoji} onPress={() => handleEmojiPress(emoji)}>
+									<Text style={styles.emojiText}>{emoji}</Text>
+								</TouchableOpacity>
+							))}
+						</View>
+
+						{/* Replying/Editing Banner indicator */}
+						{replyingTo && (
+							<View style={styles.inputBanner}>
+								<Text style={styles.inputBannerText}>Replying to @{replyingTo.authorUsername}</Text>
+								<TouchableOpacity onPress={() => setReplyingTo(null)}>
+									<Ionicons name="close-circle" size={18} color="#8A8A8E" />
+								</TouchableOpacity>
+							</View>
+						)}
+						{editingComment && (
+							<View style={styles.inputBanner}>
+								<Text style={styles.inputBannerText}>Editing comment</Text>
+								<TouchableOpacity onPress={() => setEditingComment(null)}>
+									<Ionicons name="close-circle" size={18} color="#8A8A8E" />
+								</TouchableOpacity>
+							</View>
 						)}
 
 						{/* Comment input area */}
 						<View style={styles.commentInputRow}>
-							<TextInput
-								value={newCommentText}
-								onChangeText={setNewCommentText}
-								placeholder="Add a comment..."
-								placeholderTextColor="#999"
-								style={styles.commentInput}
+							<Image
+								source={{ uri: user?.avatarUrl || user?.avatar?.url || DEFAULT_AVATAR_URL }}
+								style={styles.inputAvatar}
 							/>
-							<TouchableOpacity
-								onPress={handlePostComment}
-								disabled={!newCommentText.trim() || postingComment}
-							>
-								{postingComment ? (
-									<ActivityIndicator size="small" color="#6DAE3F" />
-								) : (
-									<Ionicons name="send" size={24} color={newCommentText.trim() ? "#6DAE3F" : "#CCC"} />
-								)}
-							</TouchableOpacity>
+							<View style={styles.commentInputContainer}>
+								<TextInput
+									ref={inputRef}
+									value={text}
+									onChangeText={setText}
+									placeholder={replyingTo ? `Reply to @${replyingTo.authorUsername}...` : "Join the conversation..."}
+									placeholderTextColor="#8A8A8E"
+									style={styles.commentInput}
+									multiline
+								/>
+								<TouchableOpacity style={styles.inputIconButton} onPress={() => showToast("Image comments are coming soon!")}>
+									<Ionicons name="image-outline" size={20} color="#FFF" />
+								</TouchableOpacity>
+								<TouchableOpacity style={styles.gifButton} onPress={() => showToast("GIF comments are coming soon!")}>
+									<Text style={styles.gifButtonText}>GIF</Text>
+								</TouchableOpacity>
+							</View>
+							
+							{text.trim() ? (
+								<TouchableOpacity onPress={handleSubmitComment} style={styles.postButton}>
+									<Ionicons name="send" size={22} color="#6DAE3F" />
+								</TouchableOpacity>
+							) : (
+								<TouchableOpacity style={styles.giftButtonIcon} onPress={() => showToast("Reels Gifts are not available in this region.")}>
+									<Ionicons name="gift-outline" size={22} color="#FFF" />
+								</TouchableOpacity>
+							)}
 						</View>
 					</KeyboardAvoidingView>
 				</View>
+			</Modal>
+
+			{/* Custom Owner Action Sheet Modal */}
+			<Modal
+				visible={actionSheetVisible}
+				animationType="fade"
+				transparent
+				onRequestClose={() => setActionSheetVisible(false)}
+			>
+				<TouchableOpacity
+					style={styles.actionSheetOverlay}
+					activeOpacity={1}
+					onPress={() => setActionSheetVisible(false)}
+				>
+					<View style={styles.actionSheetContainer}>
+						<View style={styles.actionSheetHeaderIndicator} />
+						<TouchableOpacity
+							style={styles.actionSheetButton}
+							onPress={() => selectedCommentForActions && handleCopyText(selectedCommentForActions)}
+						>
+							<Text style={styles.actionSheetButtonText}>Copy Text</Text>
+						</TouchableOpacity>
+						<TouchableOpacity
+							style={styles.actionSheetButton}
+							onPress={() => selectedCommentForActions && handleStartEdit(selectedCommentForActions)}
+						>
+							<Text style={styles.actionSheetButtonText}>Edit Comment</Text>
+						</TouchableOpacity>
+						<TouchableOpacity
+							style={[styles.actionSheetButton, styles.actionSheetDeleteButton]}
+							onPress={() => selectedCommentForActions && handleDelete(selectedCommentForActions)}
+						>
+							<Text style={[styles.actionSheetButtonText, styles.actionSheetDeleteText]}>Delete Comment</Text>
+						</TouchableOpacity>
+						<TouchableOpacity
+							style={[styles.actionSheetButton, styles.actionSheetCancelButton]}
+							onPress={() => setActionSheetVisible(false)}
+						>
+							<Text style={styles.actionSheetCancelText}>Cancel</Text>
+						</TouchableOpacity>
+					</View>
+				</TouchableOpacity>
 			</Modal>
 		</View>
 	);
@@ -494,32 +838,52 @@ const styles = StyleSheet.create({
 	},
 	commentsOverlay: {
 		flex: 1,
-		backgroundColor: 'rgba(0,0,0,0.5)',
+		backgroundColor: 'rgba(0,0,0,0.6)',
 		justifyContent: 'flex-end',
 	},
 	commentsCloseArea: {
 		flex: 1,
 	},
 	commentsContainer: {
-		backgroundColor: '#FFF',
-		borderTopLeftRadius: 16,
-		borderTopRightRadius: 16,
-		maxHeight: '65%',
+		backgroundColor: '#1C1C1E',
+		borderTopLeftRadius: 20,
+		borderTopRightRadius: 20,
+		maxHeight: '75%',
 		paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+		borderWidth: 1,
+		borderColor: 'rgba(255,255,255,0.08)',
 	},
 	commentsHeader: {
+		alignItems: 'center',
+		paddingVertical: 10,
+		borderBottomWidth: 1,
+		borderBottomColor: 'rgba(255,255,255,0.08)',
+	},
+	commentsHeaderIndicator: {
+		width: 40,
+		height: 4,
+		backgroundColor: 'rgba(255,255,255,0.2)',
+		borderRadius: 2,
+		marginBottom: 8,
+	},
+	commentsHeaderTitleRow: {
 		flexDirection: 'row',
-		justifyContent: 'space-between',
+		width: '100%',
+		justifyContent: 'center',
 		alignItems: 'center',
 		paddingHorizontal: 16,
-		paddingVertical: 14,
-		borderBottomWidth: 1,
-		borderBottomColor: '#EBEBEB',
+		position: 'relative',
 	},
 	commentsTitle: {
 		fontSize: 16,
 		fontWeight: '700',
-		color: '#1C1C1E',
+		color: '#FFF',
+		textAlign: 'center',
+	},
+	commentsCloseBtn: {
+		position: 'absolute',
+		right: 16,
+		padding: 4,
 	},
 	centerSpinner: {
 		height: 250,
@@ -528,31 +892,191 @@ const styles = StyleSheet.create({
 	},
 	commentList: {
 		paddingHorizontal: 16,
-		paddingTop: 12,
+		paddingTop: 16,
+	},
+	commentRowContainer: {
+		marginBottom: 16,
 	},
 	commentItem: {
 		flexDirection: 'row',
-		marginBottom: 16,
+		alignItems: 'flex-start',
 	},
 	commentAvatar: {
-		width: 36,
-		height: 36,
-		borderRadius: 18,
-		marginRight: 10,
+		width: 38,
+		height: 38,
+		borderRadius: 19,
+		marginRight: 12,
 	},
 	commentTextContainer: {
 		flex: 1,
+		paddingRight: 10,
+	},
+	commentAuthorHeader: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginBottom: 4,
 	},
 	commentAuthor: {
 		fontSize: 13,
 		fontWeight: '600',
-		color: '#555',
-		marginBottom: 2,
+		color: '#FFF',
+	},
+	commentTime: {
+		fontSize: 11,
+		color: '#8A8A8E',
+		marginLeft: 8,
 	},
 	commentText: {
 		fontSize: 14,
-		color: '#1C1C1E',
+		color: '#FFF',
 		lineHeight: 18,
+	},
+	commentActionsRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginTop: 6,
+	},
+	commentActionButton: {
+		marginRight: 16,
+		paddingVertical: 2,
+	},
+	commentActionText: {
+		fontSize: 12,
+		fontWeight: '600',
+		color: '#8A8A8E',
+	},
+	likeIconContainer: {
+		alignItems: 'center',
+		justifyContent: 'center',
+		minWidth: 30,
+		marginTop: 4,
+	},
+	commentLikeCount: {
+		color: '#8A8A8E',
+		fontSize: 11,
+		marginTop: 2,
+	},
+	repliesWrapper: {
+		paddingLeft: 50,
+		marginTop: 10,
+	},
+	viewRepliesButton: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		paddingVertical: 6,
+	},
+	viewRepliesLine: {
+		width: 24,
+		height: 1,
+		backgroundColor: '#8A8A8E',
+		marginRight: 12,
+	},
+	viewRepliesText: {
+		fontSize: 12,
+		fontWeight: '600',
+		color: '#8A8A8E',
+	},
+	repliesList: {
+		marginTop: 8,
+	},
+	replyItem: {
+		flexDirection: 'row',
+		alignItems: 'flex-start',
+		marginBottom: 12,
+	},
+	replyAvatar: {
+		width: 24,
+		height: 24,
+		borderRadius: 12,
+		marginRight: 10,
+	},
+	replyLikeCount: {
+		color: '#8A8A8E',
+		fontSize: 9,
+		marginTop: 2,
+	},
+	emojiBar: {
+		flexDirection: 'row',
+		justifyContent: 'space-around',
+		alignItems: 'center',
+		paddingVertical: 12,
+		borderTopWidth: 1,
+		borderTopColor: 'rgba(255,255,255,0.08)',
+		backgroundColor: '#1C1C1E',
+	},
+	emojiText: {
+		fontSize: 22,
+	},
+	inputBanner: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		backgroundColor: '#2C2C2E',
+		paddingHorizontal: 16,
+		paddingVertical: 8,
+		borderTopWidth: 1,
+		borderTopColor: 'rgba(255,255,255,0.05)',
+	},
+	inputBannerText: {
+		color: '#8A8A8E',
+		fontSize: 12,
+	},
+	commentInputRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		borderTopWidth: 1,
+		borderTopColor: 'rgba(255,255,255,0.08)',
+		paddingHorizontal: 16,
+		paddingTop: 10,
+		backgroundColor: '#1C1C1E',
+	},
+	inputAvatar: {
+		width: 34,
+		height: 34,
+		borderRadius: 17,
+		marginRight: 12,
+	},
+	commentInputContainer: {
+		flex: 1,
+		flexDirection: 'row',
+		alignItems: 'center',
+		backgroundColor: '#2C2C2E',
+		borderRadius: 20,
+		paddingHorizontal: 12,
+		minHeight: 40,
+		maxHeight: 100,
+	},
+	commentInput: {
+		flex: 1,
+		color: '#FFF',
+		fontSize: 14,
+		paddingVertical: 8,
+		marginRight: 8,
+	},
+	inputIconButton: {
+		padding: 4,
+		marginRight: 6,
+	},
+	gifButton: {
+		borderWidth: 1.5,
+		borderColor: '#FFF',
+		borderRadius: 4,
+		paddingHorizontal: 4,
+		paddingVertical: 1,
+		marginRight: 4,
+	},
+	gifButtonText: {
+		color: '#FFF',
+		fontSize: 9,
+		fontWeight: '800',
+	},
+	postButton: {
+		paddingHorizontal: 12,
+		paddingVertical: 8,
+	},
+	giftButtonIcon: {
+		paddingHorizontal: 12,
+		paddingVertical: 8,
 	},
 	emptyComments: {
 		textAlign: 'center',
@@ -560,23 +1084,74 @@ const styles = StyleSheet.create({
 		marginTop: 40,
 		fontSize: 14,
 	},
-	commentInputRow: {
-		flexDirection: 'row',
+	toastContainer: {
+		position: 'absolute',
+		top: 10,
+		left: 20,
+		right: 20,
+		backgroundColor: 'rgba(255, 45, 85, 0.9)',
+		borderRadius: 8,
+		paddingVertical: 8,
+		paddingHorizontal: 16,
 		alignItems: 'center',
-		borderTopWidth: 1,
-		borderTopColor: '#EBEBEB',
-		paddingHorizontal: 16,
-		paddingTop: 10,
-		backgroundColor: '#FFF',
+		zIndex: 9999,
+		elevation: 5,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.3,
+		shadowRadius: 4,
 	},
-	commentInput: {
+	toastText: {
+		color: '#FFF',
+		fontSize: 13,
+		fontWeight: '600',
+	},
+	actionSheetOverlay: {
 		flex: 1,
-		height: 40,
-		backgroundColor: '#F2F2F7',
-		borderRadius: 20,
-		paddingHorizontal: 16,
-		marginRight: 12,
-		color: '#1C1C1E',
+		backgroundColor: 'rgba(0,0,0,0.5)',
+		justifyContent: 'flex-end',
+	},
+	actionSheetContainer: {
+		backgroundColor: '#2C2C2E',
+		borderTopLeftRadius: 20,
+		borderTopRightRadius: 20,
+		paddingTop: 8,
+		paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+	},
+	actionSheetHeaderIndicator: {
+		width: 40,
+		height: 4,
+		backgroundColor: 'rgba(255,255,255,0.15)',
+		borderRadius: 2,
+		alignSelf: 'center',
+		marginBottom: 16,
+	},
+	actionSheetButton: {
+		paddingVertical: 16,
+		alignItems: 'center',
+		borderBottomWidth: StyleSheet.hairlineWidth,
+		borderBottomColor: 'rgba(255,255,255,0.06)',
+	},
+	actionSheetButtonText: {
+		color: '#FFF',
+		fontSize: 16,
+		fontWeight: '600',
+	},
+	actionSheetDeleteButton: {
+		borderBottomWidth: 0,
+	},
+	actionSheetDeleteText: {
+		color: '#FF2D55',
+	},
+	actionSheetCancelButton: {
+		backgroundColor: '#1C1C1E',
+		marginTop: 8,
+		borderBottomWidth: 0,
+	},
+	actionSheetCancelText: {
+		color: '#8A8A8E',
+		fontSize: 16,
+		fontWeight: '600',
 	},
 	authorRow: {
 		flexDirection: 'row',

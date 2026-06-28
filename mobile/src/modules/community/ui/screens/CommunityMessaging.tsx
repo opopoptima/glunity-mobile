@@ -27,6 +27,97 @@ import { ReactorsBottomSheet } from '../components/ReactorsBottomSheet';
 let BlurView: any = null;
 try { BlurView = require('expo-blur').BlurView; } catch (e) { BlurView = null; }
 
+const ReelMessagePreview = ({
+  thumb,
+  isDeleted,
+  isMe,
+  avatarUrl,
+  username,
+  onPress,
+  onLongPress,
+  windowWidth,
+  theme,
+  styles,
+}: {
+  thumb: string | null;
+  isDeleted: boolean;
+  isMe: boolean;
+  avatarUrl?: string | null;
+  username?: string | null;
+  onPress: () => void;
+  onLongPress: () => void;
+  windowWidth: number;
+  theme: any;
+  styles: any;
+}) => {
+  const scale = React.useRef(new Animated.Value(1)).current;
+  const maxWidth = Math.min(windowWidth * 0.7, 220);
+  const desiredHeight = Math.round(maxWidth * 16 / 9);
+  const cardHeight = desiredHeight > 280 ? 280 : Math.max(desiredHeight, 220);
+  const cardWidth = desiredHeight > 280 ? Math.round(280 * 9 / 16) : maxWidth;
+
+  const animateScale = (toValue: number) => {
+    Animated.spring(scale, {
+      toValue,
+      friction: 9,
+      tension: 120,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const displayName = username || 'Reel';
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.92}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={300}
+      onPressIn={() => animateScale(0.97)}
+      onPressOut={() => animateScale(1)}
+      style={{ width: cardWidth, alignSelf: isMe ? 'flex-end' : 'flex-start' }}
+    >
+      <Animated.View style={[styles.reelCard, { width: cardWidth, backgroundColor: theme.surfaceAlt, transform: [{ scale }] }]}> 
+        <View style={{ width: cardWidth, height: cardHeight, overflow: 'hidden' }}>
+          {thumb ? (
+            <Image
+              source={{ uri: thumb }}
+              style={[styles.reelImage, { opacity: 1 }]}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={[styles.reelFallback, { backgroundColor: theme.surfaceAlt }]}> 
+              <Text style={[styles.reelUnavailableText, { color: theme.textMuted }]}>This content is not available</Text>
+            </View>
+          )}
+
+          <View style={styles.reelTopOverlay}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.reelAvatar} />
+            ) : (
+              <View style={[styles.reelAvatar, { backgroundColor: 'rgba(255,255,255,0.20)', justifyContent: 'center', alignItems: 'center' }]}> 
+                <Text style={styles.reelAvatarInitial}>{String(displayName).charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <Text numberOfLines={1} style={styles.reelUsername}>{displayName}</Text>
+          </View>
+
+          <View style={styles.reelCenterIcon}>
+            <View style={styles.reelPlayButton}>
+              <Ionicons name="play" size={26} color="#fff" />
+            </View>
+          </View>
+
+          <View style={styles.reelBottomBadge}>
+            <Text style={styles.reelBadgeText}>Reel</Text>
+          </View>
+        </View>
+
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
 export default function CommunityMessaging({ initialChannel, initialChannelId, navigation }: any) {
   const { user } = useAuth();
   const { theme: T, isDark } = useTheme();
@@ -327,6 +418,102 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
       color: T.text, fontSize: 14.5, lineHeight: 20,
       flexShrink: 1,
       ...(Platform.OS === 'web' ? { wordBreak: 'break-word', overflowWrap: 'break-word' } as any : {}),
+    },
+    reelCard: {
+      borderRadius: 22,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: 'rgba(0,0,0,0.08)',
+      shadowColor: '#000',
+      shadowOpacity: 0.08,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 3,
+    },
+    reelImage: {
+      width: '100%',
+      height: '100%',
+    },
+    reelFallback: {
+      width: '100%',
+      height: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    reelPlaceholder: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.08)',
+    },
+    reelUnavailableText: {
+      fontSize: 12,
+      textAlign: 'center',
+      maxWidth: '100%',
+      marginTop: 12,
+    },
+    reelTopOverlay: {
+      position: 'absolute',
+      top: 10,
+      left: 10,
+      right: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'transparent',
+      paddingHorizontal: 4,
+      paddingVertical: 4,
+    },
+    reelAvatar: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.85)',
+    },
+    reelAvatarInitial: {
+      color: '#fff',
+      fontWeight: '700',
+      fontSize: 13,
+    },
+    reelUsername: {
+      color: '#fff',
+      marginLeft: 8,
+      fontSize: 13,
+      fontWeight: '700',
+      maxWidth: 140,
+    },
+    reelCenterIcon: {
+      position: 'absolute',
+      top: '45%',
+      left: 0,
+      right: 0,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    reelPlayButton: {
+      width: 58,
+      height: 58,
+      borderRadius: 29,
+      backgroundColor: 'rgba(0,0,0,0.30)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    reelBottomBadge: {
+      position: 'absolute',
+      left: 10,
+      bottom: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.28)',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 16,
+    },
+    reelBadgeText: {
+      color: '#fff',
+      marginLeft: 6,
+      fontSize: 12,
+      fontWeight: '700',
     },
     timeText: { fontSize: 10, color: T.textMuted, marginTop: 2 },
     messageBlock: { flexDirection: 'column', maxWidth: '75%', flexShrink: 1 },
@@ -684,43 +871,31 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
 
       if (isReel) {
         const isDeleted = !!item.reelRef?.isDeleted;
-        const title = isDeleted ? 'Reel not available' : (item.reelRef?.title || 'Shared Reel');
-        const thumb = isDeleted ? null : item.reelRef?.thumbnailUrl;
+        const rawThumb = isDeleted ? null : (item.reelRef?.thumbnailUrl || item.reelRef?.thumbnail);
+        const thumb = rawThumb || (item.reelRef?.videoUrl ? item.reelRef.videoUrl.replace(/\.[a-z0-9]+$/i, '.jpg') : null);
+
         return (
-          <TouchableOpacity
-            activeOpacity={isDeleted ? 1 : 0.9}
-            onPress={() => {
-              if (isDeleted) {
-                Alert.alert('Not Available', 'This reel has been deleted by the owner.');
-              } else {
-                navigation.navigate('ReelsFeed', { reelId: item.reelRef?.reelId });
-              }
-            }}
-            style={{ 
-              width: 200, 
-              borderRadius: 12, 
-              overflow: 'hidden', 
-              backgroundColor: isMe ? 'rgba(0,0,0,0.15)' : T.surfaceAlt,
-              opacity: isDeleted ? 0.65 : 1
-            }}
-          >
-            {thumb ? (
-              <Image source={{ uri: thumb }} style={{ width: '100%', height: 120, backgroundColor: '#333' }} resizeMode="cover" />
-            ) : (
-              <View style={{ width: '100%', height: 120, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name={isDeleted ? "alert-circle-outline" : "film"} size={32} color={isDeleted ? "#FF2D55" : "#8A8A8E"} />
-              </View>
-            )}
-            <View style={{ padding: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                <Ionicons name={isDeleted ? "close-circle-outline" : "play-circle-outline"} size={14} color={isDeleted ? "#FF2D55" : (isMe ? '#FFF' : T.green || '#2ECC71')} style={{ marginRight: 4 }} />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: isDeleted ? "#FF2D55" : (isMe ? '#FFF' : T.text) }}>
-                  {isDeleted ? 'Deleted Reel' : 'Reel'}
-                </Text>
-              </View>
-              <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? '#EEE' : T.textMuted }}>{title}</Text>
-            </View>
-          </TouchableOpacity>
+          <View>
+            {replyPreview}
+            <ReelMessagePreview
+              thumb={thumb}
+              isDeleted={isDeleted}
+              isMe={isMe}
+              avatarUrl={avatarUrl}
+              username={item.senderName || 'Reel'}
+                onPress={() => {
+                if (isDeleted) {
+                  Alert.alert('Not Available', 'This reel has been deleted by the owner.');
+                } else {
+                  navigation.navigate('ReelsFeed', { reelId: item.reelRef?.reelId });
+                }
+              }}
+              onLongPress={longPressHandler}
+              windowWidth={windowWidth}
+              theme={T}
+              styles={styles}
+            />
+          </View>
         );
       }
 
@@ -789,15 +964,36 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
               </Text>
             )}
 
-            <TouchableOpacity
-              activeOpacity={0.92}
-              onLongPress={longPressHandler}
-              onPress={pressHandler}
-              style={bubbleStyle}
-            >
-              {replyPreview}
-              {renderBubbleContent()}
-            </TouchableOpacity>
+            {isReel ? (
+              <View>
+                {replyPreview}
+                {renderBubbleContent()}
+              </View>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.92}
+                onLongPress={longPressHandler}
+                onPress={pressHandler}
+                style={bubbleStyle}
+              >
+                {replyPreview}
+                {renderBubbleContent()}
+              </TouchableOpacity>
+            )}
+
+            {/* If reel, render the message as a separate bubble below the reel preview */}
+            {isReel && !!item.content && (
+              <View style={{ marginTop: 8 }}>
+                <TouchableOpacity
+                  activeOpacity={0.92}
+                  onLongPress={longPressHandler}
+                  onPress={pressHandler}
+                  style={isMe ? styles.bubbleRight : styles.bubbleLeft}
+                >
+                  <Text style={[styles.msgText, isMe ? { color: '#fff' } : { color: T.text }]}>{item.content}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Reaction pills — rendered OUTSIDE the bubble touchable to prevent
                 event bubbling from pill taps triggering the bubble's onPress handler */}

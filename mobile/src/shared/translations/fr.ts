@@ -175,6 +175,8 @@ const fr = {
   'Gluten-Free Recipes': 'Recettes sans gluten',
   'Healthy and nutritious food recipes': 'Recettes saines et nutritives',
   'Popular recipes': 'Recettes populaires',
+  'No recipes available yet.': 'Aucune recette disponible pour le moment.',
+  'No recipes match your search.': 'Aucune recette ne correspond à votre recherche.',
   Popular: 'Populaire',
   recipes: 'recettes',
 
@@ -188,6 +190,8 @@ const fr = {
 
   // Events Screen Text
   All: 'Tout',
+  'No events available yet.': 'Aucun événement disponible pour le moment.',
+  'No events match your search.': 'Aucun événement ne correspond à votre recherche.',
   Meetups: 'Rencontres',
   Classes: 'Cours',
   Markets: 'Marchés',

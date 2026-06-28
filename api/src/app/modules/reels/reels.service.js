@@ -227,20 +227,115 @@ const reelsService = {
 		return reelsMapper.toCommentListResponse(comments);
 	},
 
-	async postComment(reelId, userId, text) {
+	async getReplies(reelId, parentCommentId, { page = 0, limit = 50 } = {}) {
+		const reel = await reelsRepository.findById(reelId);
+		if (!reel) {
+			throw AppError.notFound('Reel');
+		}
+		const skip = page * limit;
+		const replies = await reelsRepository.findReplies(reelId, parentCommentId, { limit, skip });
+		return reelsMapper.toCommentListResponse(replies);
+	},
+
+	async postComment(reelId, userId, text, parentCommentId = null) {
 		const reel = await reelsRepository.findById(reelId);
 		if (!reel) {
 			throw AppError.notFound('Reel');
 		}
 
-		const comment = await reelsRepository.createComment(reelId, userId, text);
+		const comment = await reelsRepository.createComment(reelId, userId, text, parentCommentId);
 		await reelsRepository.incrementComments(reelId, 1);
+
+		if (parentCommentId) {
+			// Increment replyCount on the parent comment
+			await ReelComment.findByIdAndUpdate(parentCommentId, { $inc: { replyCount: 1 } });
+		}
 		
 		// Fetch populated comment to build a complete response
-		const populatedComments = await reelsRepository.findComments(reelId, { limit: 1, skip: 0 });
-		const createdComment = populatedComments.find(c => c._id.toString() === comment._id.toString()) || comment;
+		const createdComment = await ReelComment.findById(comment._id)
+			.populate('userId', 'fullName avatar')
+			.lean();
 		
 		return reelsMapper.toCommentResponse(createdComment);
+	},
+
+	async updateComment(reelId, commentId, userId, text) {
+		const comment = await ReelComment.findById(commentId);
+		if (!comment) {
+			throw AppError.notFound('Comment');
+		}
+		if (comment.userId.toString() !== userId.toString()) {
+			throw AppError.forbidden('You are not authorized to edit this comment');
+		}
+
+		const updatedComment = await ReelComment.findByIdAndUpdate(
+			commentId,
+			{ $set: { text, edited: true } },
+			{ new: true }
+		).populate('userId', 'fullName avatar').lean();
+
+		return reelsMapper.toCommentResponse(updatedComment);
+	},
+
+	async deleteComment(reelId, commentId, userId) {
+		const comment = await ReelComment.findById(commentId);
+		if (!comment) {
+			throw AppError.notFound('Comment');
+		}
+		if (comment.userId.toString() !== userId.toString()) {
+			throw AppError.forbidden('You are not authorized to delete this comment');
+		}
+
+		await ReelComment.findByIdAndDelete(commentId);
+		await reelsRepository.incrementComments(reelId, -1);
+
+		if (comment.parentCommentId) {
+			// Decrement replyCount on parent
+			await ReelComment.findByIdAndUpdate(comment.parentCommentId, { $inc: { replyCount: -1 } });
+		} else {
+			// Delete all replies if this is a parent comment
+			const repliesCount = await ReelComment.countDocuments({ parentCommentId: commentId });
+			if (repliesCount > 0) {
+				await ReelComment.deleteMany({ parentCommentId: commentId });
+				await reelsRepository.incrementComments(reelId, -repliesCount);
+			}
+		}
+
+		return { success: true };
+	},
+
+	async toggleCommentLike(reelId, commentId, userId) {
+		const comment = await ReelComment.findById(commentId);
+		if (!comment) {
+			throw AppError.notFound('Comment');
+		}
+
+		const isLiked = comment.likedBy.some(id => id.toString() === userId.toString());
+		let updatedComment;
+
+		if (isLiked) {
+			// Unlike
+			updatedComment = await ReelComment.findByIdAndUpdate(
+				commentId,
+				{
+					$pull: { likedBy: userId },
+					$inc: { likeCount: -1 }
+				},
+				{ new: true }
+			).populate('userId', 'fullName avatar').lean();
+		} else {
+			// Like
+			updatedComment = await ReelComment.findByIdAndUpdate(
+				commentId,
+				{
+					$addToSet: { likedBy: userId },
+					$inc: { likeCount: 1 }
+				},
+				{ new: true }
+			).populate('userId', 'fullName avatar').lean();
+		}
+
+		return reelsMapper.toCommentResponse(updatedComment);
 	},
 
 	getUploadSignature() {

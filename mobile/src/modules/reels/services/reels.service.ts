@@ -32,9 +32,18 @@ export interface Reel {
 export interface ReelComment {
 	id: string;
 	reelId: string;
+	authorId: string;
+	authorUsername: string;
+	authorAvatar?: string | null;
 	author: ReelAuthor;
 	text: string;
 	createdAt: string;
+	updatedAt: string;
+	edited: boolean;
+	likeCount: number;
+	likedBy: string[];
+	replyCount: number;
+	parentCommentId: string | null;
 }
 
 export interface UploadSignatureResponse {
@@ -105,8 +114,32 @@ export const ReelsService = {
 		return response.data;
 	},
 
-	async postComment(reelId: string, text: string): Promise<{ success: boolean; data: ReelComment }> {
-		const response = await http.post<{ success: boolean; data: ReelComment }>(`/reels/${reelId}/comments`, { text });
+	async postComment(reelId: string, text: string, parentCommentId?: string | null): Promise<{ success: boolean; data: ReelComment }> {
+		const payload: { text: string; parentCommentId?: string } = { text };
+		if (parentCommentId) {
+			payload.parentCommentId = parentCommentId;
+		}
+		const response = await http.post<{ success: boolean; data: ReelComment }>(`/reels/${reelId}/comments`, payload);
+		return response.data;
+	},
+
+	async updateComment(reelId: string, commentId: string, text: string): Promise<{ success: boolean; data: ReelComment }> {
+		const response = await http.put<{ success: boolean; data: ReelComment }>(`/reels/${reelId}/comments/${commentId}`, { text });
+		return response.data;
+	},
+
+	async deleteComment(reelId: string, commentId: string): Promise<{ success: boolean }> {
+		const response = await http.delete<{ success: boolean }>(`/reels/${reelId}/comments/${commentId}`);
+		return response.data;
+	},
+
+	async toggleCommentLike(reelId: string, commentId: string): Promise<{ success: boolean; data: ReelComment }> {
+		const response = await http.post<{ success: boolean; data: ReelComment }>(`/reels/${reelId}/comments/${commentId}/like`, {});
+		return response.data;
+	},
+
+	async getReplies(reelId: string, commentId: string, page = 0, limit = 50): Promise<{ success: boolean; data: ReelComment[] }> {
+		const response = await http.get<{ success: boolean; data: ReelComment[] }>(`/reels/${reelId}/comments/${commentId}/replies?page=${page}&limit=${limit}`);
 		return response.data;
 	},
 

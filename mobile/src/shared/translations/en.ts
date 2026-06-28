@@ -174,6 +174,10 @@ const en = {
   'Gluten-Free Recipes': 'Gluten-Free Recipes',
   'Healthy and nutritious food recipes': 'Healthy and nutritious food recipes',
   'Popular recipes': 'Popular recipes',
+  'No recipes available yet.': 'No recipes available yet.',
+  'No recipes match your search.': 'No recipes match your search.',
+  'No events available yet.': 'No events available yet.',
+  'No events match your search.': 'No events match your search.',
   Popular: 'Popular',
   recipes: 'recipes',
 

@@ -10,6 +10,7 @@ import { ReelPlayerItem } from '../components/ReelPlayerItem';
 import { BottomNavBar } from '@/shared/components/BottomNavBar';
 import { useAuth } from '@/modules/auth/state/auth.context';
 import http from '../../../../core/network/http.client';
+import messagingHttp from '../../../../core/network/messaging-http.client';
 
 const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 const AnimatedText = Animated.createAnimatedComponent(Text);
@@ -47,6 +48,48 @@ function CategoryPill({ cat, isActive, onPress }: CategoryPillProps) {
 	);
 }
 
+interface ContactAvatarProps {
+	item: any;
+	selected: boolean;
+	onToggle: (id: string) => void;
+}
+
+const ContactAvatar = React.memo(({ item, selected, onToggle }: ContactAvatarProps) => {
+	const avatarSize = 80;
+	const badgeScale = useSharedValue(selected ? 1 : 0);
+
+	useEffect(() => {
+		badgeScale.value = withTiming(selected ? 1 : 0, { duration: 220 });
+	}, [selected]);
+
+	const animatedBadgeStyle = useAnimatedStyle(() => ({
+		transform: [{ scale: badgeScale.value }],
+		opacity: badgeScale.value,
+	}));
+
+	return (
+		<TouchableOpacity
+			style={{ flex: 1 / 3, padding: 12, alignItems: 'center' }}
+			activeOpacity={0.8}
+			onPress={() => onToggle(item.id)}
+		>
+			<View style={{ width: avatarSize, height: avatarSize }}>
+				<Image
+					source={{ uri: item.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=fff&color=8A8A8E` }}
+					style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)' }}
+					resizeMode="cover"
+				/>
+				<Animated.View style={[styles.checkBadge, animatedBadgeStyle]} pointerEvents="none">
+					<View style={styles.checkBadgeInner}>
+						<Ionicons name="checkmark" size={14} color="#fff" />
+					</View>
+				</Animated.View>
+			</View>
+			<Text numberOfLines={1} style={styles.contactName}>{item.name}</Text>
+		</TouchableOpacity>
+	);
+});
+
 export default function ReelsFeedScreen() {
 	const { 
 		reels, 
@@ -75,6 +118,7 @@ export default function ReelsFeedScreen() {
 
 	// Transition Opacity
 	const feedOpacity = useSharedValue(1);
+
 
 	const animatedFeedStyle = useAnimatedStyle(() => ({
 		opacity: feedOpacity.value,
@@ -138,28 +182,63 @@ export default function ReelsFeedScreen() {
 	const [shareSearchQuery, setShareSearchQuery] = useState('');
 	const [channels, setChannels] = useState<any[]>([]);
 	const [users, setUsers] = useState<any[]>([]);
+	const [userPage, setUserPage] = useState(0);
+	const [hasMoreUsers, setHasMoreUsers] = useState(true);
 	const [loadingShareData, setLoadingShareData] = useState(false);
+	const [loadingUsersPage, setLoadingUsersPage] = useState(false);
 	const [sendingToId, setSendingToId] = useState<string | null>(null);
 	const [sentRecipients, setSentRecipients] = useState<Set<string>>(new Set());
+	const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set());
+	const [messageText, setMessageText] = useState<string>('');
+
+	// Composer slide animation (starts hidden)
+	const composerY = useSharedValue(200);
+
+	useEffect(() => {
+		composerY.value = withTiming(selectedRecipients.size > 0 ? 0 : 200, { duration: 240 });
+	}, [selectedRecipients]);
+
+	const composerAnimatedStyle = useAnimatedStyle(() => ({
+		transform: [{ translateY: composerY.value }],
+	}));
 
 	const openShareSheet = async (reel: any) => {
 		setSharingReel(reel);
 		setShareModalVisible(true);
 		setShareSearchQuery('');
 		setSentRecipients(new Set());
-		
+		setSelectedRecipients(new Set());
+		setMessageText('');
+		setUserPage(0);
+		setHasMoreUsers(true);
+        
 		setLoadingShareData(true);
 		try {
-			const [channelsRes, usersRes] = await Promise.all([
-				http.get('/channels'),
-				http.get('/users')
-			]);
-			
-			const channelsList = channelsRes.data?.data || channelsRes.data || [];
-			const usersList = usersRes.data?.data || usersRes.data || [];
-			
-			setChannels(channelsList);
-			setUsers(usersList);
+			const channelsPromise = messagingHttp.get('/channels').catch(() => http.get('/channels'));
+			const usersPromise = http.get('/users', { params: { limit: 30, skip: 0 } });
+
+			const results = await Promise.allSettled([channelsPromise, usersPromise]);
+
+			const channelsRes = results[0].status === 'fulfilled' ? results[0].value : null;
+			const usersRes = results[1].status === 'fulfilled' ? results[1].value : null;
+			const channelsError = results[0].status === 'rejected' ? results[0].reason : null;
+			const usersError = results[1].status === 'rejected' ? results[1].reason : null;
+
+			if (channelsRes) {
+				const channelsList = channelsRes.data?.data || channelsRes.data || [];
+				setChannels(channelsList);
+			} else {
+				console.warn('Failed to load channels for share sheet:', channelsError);
+			}
+
+			if (usersRes) {
+				const usersList = usersRes.data?.data || usersRes.data || [];
+				setUsers(usersList);
+				setHasMoreUsers((usersList || []).length === 30);
+				setUserPage(1);
+			} else {
+				console.warn('Failed to load users for share sheet:', results[1].reason);
+			}
 		} catch (err) {
 			console.warn('Failed to load share targets:', err);
 		} finally {
@@ -167,7 +246,28 @@ export default function ReelsFeedScreen() {
 		}
 	};
 
-	const sendReelToTarget = async (target: any, isChannel: boolean) => {
+	const loadMoreShareUsers = async () => {
+		if (!hasMoreUsers || loadingUsersPage) return;
+		setLoadingUsersPage(true);
+		try {
+			const res = await http.get('/users', { params: { limit: 30, skip: userPage * 30 } });
+			const usersList = res.data?.data || res.data || [];
+			if (usersList.length > 0) {
+				setUsers((prev) => [...prev, ...usersList]);
+				setUserPage((page) => page + 1);
+			}
+			if (usersList.length < 30) {
+				setHasMoreUsers(false);
+			}
+		} catch (err) {
+			console.warn('Failed to load more share users:', err);
+			setHasMoreUsers(false);
+		} finally {
+			setLoadingUsersPage(false);
+		}
+	};
+
+	const sendReelToTarget = async (target: any, isChannel: boolean, message?: string) => {
 		if (!sharingReel) return;
 		const targetId = target._id || target.id;
 		setSendingToId(targetId);
@@ -176,24 +276,40 @@ export default function ReelsFeedScreen() {
 			let destChannelId = targetId;
 			
 			if (!isChannel) {
-				const dmRes = await http.post('/channels/direct', { userId: targetId });
+				let dmRes;
+				try {
+					dmRes = await messagingHttp.post('/channels/dm', { targetUserId: targetId });
+				} catch (e) {
+					dmRes = await http.post('/channels/direct', { userId: targetId });
+				}
 				const dmChannel = dmRes.data?.data || dmRes.data;
 				destChannelId = dmChannel._id || dmChannel.id;
 			}
-			
-			await http.post(`/channels/${destChannelId}/messages`, {
-				content: `Shared a reel: "${sharingReel.caption || ''}"`,
-				type: 'reel',
-				reelRef: {
-					reelId: sharingReel.id || sharingReel._id,
-					thumbnailUrl: sharingReel.thumbnailUrl || '',
-					title: sharingReel.caption || 'Shared Reel'
-				}
-			});
-			
+			const trimmedMessage = message && message.trim() ? message.trim() : '';
+			const reelId = sharingReel.id || sharingReel._id;
+			const thumbUrl = sharingReel.thumbnailUrl || sharingReel.thumbnail || (sharingReel.videoUrl ? sharingReel.videoUrl.replace(/\.[a-z0-9]+$/i, '.jpg') : '');
+
+			try {
+				await messagingHttp.post(`/channels/${destChannelId}/reels`, {
+					reelId,
+					caption: trimmedMessage || undefined,
+				});
+			} catch (e) {
+				await http.post(`/channels/${destChannelId}/messages`, {
+					content: trimmedMessage || undefined,
+					text: trimmedMessage || undefined,
+					type: 'reel',
+					reelRef: {
+						reelId,
+						thumbnailUrl: thumbUrl,
+						title: sharingReel.caption || 'Shared Reel',
+					},
+				});
+			}
+
 			// Increment share counter in database and local UI state
 			recordShare(sharingReel.id);
-			
+
 			setSentRecipients(prev => {
 				const next = new Set(prev);
 				next.add(targetId);
@@ -238,6 +354,42 @@ export default function ReelsFeedScreen() {
 			item.subtitle.toLowerCase().includes(query)
 		);
 	}, [channels, users, shareSearchQuery]);
+
+	// Batch send to all selected recipients using existing sendReelToTarget logic
+	const sendToSelected = async () => {
+		if (!sharingReel) return;
+		const ids = Array.from(selectedRecipients);
+		for (const id of ids) {
+			const target = filteredTargets.find(t => t.id === id);
+			if (!target) continue;
+			// await each send to preserve order and reuse existing API handling
+			// pass optional messageText if provided
+			// eslint-disable-next-line no-await-in-loop
+			await sendReelToTarget(target, !!target.isChannel, messageText || undefined);
+		}
+		// Clear selections after sending
+		setSelectedRecipients(new Set());
+		setMessageText('');
+		setShareModalVisible(false);
+	};
+
+	// Small helper to toggle selection
+	const toggleSelection = useCallback((id: string) => {
+		setSelectedRecipients(prev => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}, []);
+
+	const renderContactAvatar = useCallback(({ item }: { item: any }) => (
+		<ContactAvatar
+			item={item}
+			selected={selectedRecipients.has(item.id)}
+			onToggle={toggleSelection}
+		/>
+	), [selectedRecipients, toggleSelection]);
 
 	const handleScroll = (event: any) => {
 		const yOffset = event.nativeEvent.contentOffset.y;
@@ -386,87 +538,69 @@ export default function ReelsFeedScreen() {
 				}}
 			/>
 
-			{/* Share bottom sheet Modal */}
 			<Modal
 				visible={shareModalVisible}
-				animationType="slide"
 				transparent
+				animationType="slide"
 				onRequestClose={() => setShareModalVisible(false)}
 			>
 				<View style={styles.shareOverlay}>
-					<TouchableOpacity
-						style={{ flex: 1 }}
-						activeOpacity={1}
-						onPress={() => setShareModalVisible(false)}
-					/>
 					<View style={styles.shareContainer}>
 						<View style={styles.shareHeader}>
-							<Text style={styles.shareTitle}>Send Reel</Text>
+							<Text style={styles.shareTitle}>Share Reel</Text>
 							<TouchableOpacity onPress={() => setShareModalVisible(false)}>
-								<Ionicons name="close" size={24} color="#FFF" />
+								<Ionicons name="close" size={22} color="#1C1C1E" />
 							</TouchableOpacity>
 						</View>
-						
-						<View style={styles.shareSearchContainer}>
-							<Ionicons name="search" size={18} color="#8A8A8E" />
-							<TextInput
-								style={styles.shareSearchInput}
-								placeholder="Search friends or groups..."
-								placeholderTextColor="#8A8A8E"
-								value={shareSearchQuery}
-								onChangeText={setShareSearchQuery}
-								autoCorrect={false}
-							/>
+							<View style={styles.searchRow}>
+							<View style={styles.shareSearchContainer}>
+								<Ionicons name="search" size={18} color="#8A8A8E" />
+								<TextInput
+									style={styles.shareSearchInput}
+									placeholder="Search"
+									placeholderTextColor="#8A8A8E"
+									value={shareSearchQuery}
+									onChangeText={setShareSearchQuery}
+									returnKeyType="search"
+								/>
+							</View>
 						</View>
-
 						{loadingShareData ? (
-							<ActivityIndicator size="large" color="#6DAE3F" style={{ marginVertical: 40 }} />
+							<ActivityIndicator size="large" color="#6DAE3F" style={{ marginTop: 24 }} />
 						) : filteredTargets.length === 0 ? (
-							<Text style={styles.emptyShareText}>No matches found</Text>
+							<Text style={styles.emptyShareText}>No recipients found</Text>
 						) : (
 							<FlatList
 								data={filteredTargets}
-								keyExtractor={(item) => item.id}
-								renderItem={({ item }) => {
-									const isSent = sentRecipients.has(item.id);
-									const isSending = sendingToId === item.id;
-									return (
-										<View style={styles.shareItem}>
-											<View style={styles.shareItemLeft}>
-												<Image
-													source={{ uri: item.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=8BC34A&color=fff` }}
-													style={styles.shareAvatar}
-												/>
-												<View>
-													<Text style={styles.shareItemName} numberOfLines={1}>{item.name}</Text>
-													<Text style={styles.shareItemSubtitle}>{item.subtitle}</Text>
-												</View>
-											</View>
-											<TouchableOpacity
-												style={[styles.sendBtn, isSent && styles.sendBtnSent]}
-												disabled={isSent || isSending}
-												onPress={() => sendReelToTarget(item, item.isChannel)}
-											>
-												{isSending ? (
-													<ActivityIndicator size="small" color="#FFF" />
-												) : (
-													<Text style={[styles.sendBtnText, isSent && styles.sendBtnTextSent]}>
-														{isSent ? 'Sent ✓' : 'Send'}
-													</Text>
-												)}
-											</TouchableOpacity>
-										</View>
-									);
-								}}
-								style={styles.shareList}
-								showsVerticalScrollIndicator={false}
-								contentContainerStyle={{ paddingBottom: 24 }}
+								keyExtractor={(i) => i.id}
+								renderItem={renderContactAvatar}
+								numColumns={3}
+								contentContainerStyle={styles.gridList}
+						onEndReached={loadMoreShareUsers}
+						onEndReachedThreshold={0.5}
+						ListFooterComponent={loadingUsersPage ? <ActivityIndicator size="small" color="#6DAE3F" style={{ marginTop: 16 }} /> : null}
 							/>
 						)}
+						<Animated.View style={[styles.composerContainer, composerAnimatedStyle]}>
+							<TextInput
+								style={styles.composerInput}
+								placeholder="Add a message (optional)"
+								placeholderTextColor="#8A8A8E"
+								value={messageText}
+								onChangeText={setMessageText}
+							/>
+							<TouchableOpacity
+								style={[styles.sendButton, selectedRecipients.size === 0 && styles.sendButtonDisabled]}
+								disabled={selectedRecipients.size === 0}
+								onPress={sendToSelected}
+							>
+								<Text style={styles.sendButtonText}>{sendingToId ? 'Sending...' : 'Send'}</Text>
+							</TouchableOpacity>
+						</Animated.View>
 					</View>
 				</View>
 			</Modal>
-		</View>
+			</View>
 	);
 }
 
@@ -559,41 +693,49 @@ const styles = StyleSheet.create({
 		backgroundColor: 'rgba(0,0,0,0.6)',
 		justifyContent: 'flex-end',
 	},
-	shareContainer: {
-		backgroundColor: '#1C1C1E',
-		borderTopLeftRadius: 24,
-		borderTopRightRadius: 24,
-		maxHeight: '75%',
-		paddingBottom: Platform.OS === 'ios' ? 34 : 24,
-		borderWidth: 1,
-		borderColor: 'rgba(255,255,255,0.08)',
-	},
-	shareHeader: {
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		paddingHorizontal: 20,
-		paddingVertical: 18,
-		borderBottomWidth: 1,
-		borderBottomColor: 'rgba(255,255,255,0.08)',
-	},
-	shareTitle: {
-		color: '#FFF',
-		fontSize: 18,
-		fontWeight: '700',
-	},
+			shareContainer: {
+				backgroundColor: '#FFFFFF',
+				borderTopLeftRadius: 24,
+				borderTopRightRadius: 24,
+				maxHeight: '75%',
+				paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+				borderWidth: 1,
+				borderColor: 'rgba(0,0,0,0.06)',
+				shadowColor: '#000',
+				shadowOpacity: 0.06,
+				shadowRadius: 12,
+				shadowOffset: { width: 0, height: -6 },
+			},
+		shareHeader: {
+			flexDirection: 'row',
+			justifyContent: 'space-between',
+			alignItems: 'center',
+			paddingHorizontal: 20,
+			paddingVertical: 18,
+			borderBottomWidth: 1,
+			borderBottomColor: 'rgba(0,0,0,0.06)',
+		},
+		shareTitle: {
+			color: '#1C1C1E',
+			fontSize: 18,
+			fontWeight: '700',
+		},
 	shareSearchContainer: {
+		flex: 1,
 		flexDirection: 'row',
 		alignItems: 'center',
-		backgroundColor: '#2C2C2E',
-		margin: 16,
+		backgroundColor: '#F2F2F4',
 		paddingHorizontal: 12,
-		borderRadius: 10,
-		height: 40,
+		borderRadius: 12,
+		height: 44,
+		shadowColor: '#000',
+		shadowOpacity: 0.06,
+		shadowRadius: 6,
+		shadowOffset: { width: 0, height: 2 },
 	},
 	shareSearchInput: {
 		flex: 1,
-		color: '#FFF',
+		color: '#1C1C1E',
 		fontSize: 14,
 		marginLeft: 8,
 		padding: 0,
@@ -601,6 +743,112 @@ const styles = StyleSheet.create({
 	shareList: {
 		paddingHorizontal: 16,
 	},
+
+		// New grid styles
+		gridList: {
+			paddingHorizontal: 6,
+		},
+		searchRow: {
+			flexDirection: 'row',
+			alignItems: 'center',
+			paddingHorizontal: 12,
+			paddingTop: 12,
+			paddingBottom: 8,
+		},
+		searchBar: {
+			flex: 1,
+			flexDirection: 'row',
+			alignItems: 'center',
+			backgroundColor: '#F2F2F4',
+			paddingHorizontal: 12,
+			borderRadius: 24,
+			height: 44,
+			marginRight: 8,
+		},
+		searchInput: {
+			flex: 1,
+			marginLeft: 8,
+			color: '#1C1C1E',
+			fontSize: 14,
+		},
+		groupButton: {
+			width: 44,
+			height: 44,
+			borderRadius: 22,
+			backgroundColor: '#fff',
+			alignItems: 'center',
+			justifyContent: 'center',
+			shadowColor: '#000',
+			shadowOpacity: 0.06,
+			shadowRadius: 6,
+			shadowOffset: { width: 0, height: 2 },
+		},
+		contactName: {
+			marginTop: 8,
+			fontSize: 13,
+			color: '#1C1C1E',
+			textAlign: 'center',
+			maxWidth: 84,
+		},
+		checkBadge: {
+			position: 'absolute',
+			right: -6,
+			bottom: -6,
+		},
+		checkBadgeInner: {
+			width: 26,
+			height: 26,
+			borderRadius: 13,
+			backgroundColor: '#2E74FF',
+			alignItems: 'center',
+			justifyContent: 'center',
+			shadowColor: '#2E74FF',
+			shadowOpacity: 0.16,
+			shadowRadius: 6,
+			shadowOffset: { width: 0, height: 2 },
+		},
+
+		// Composer styles
+		composerContainer: {
+			position: 'absolute',
+			left: 12,
+			right: 12,
+			bottom: Platform.OS === 'ios' ? 12 : 12,
+			backgroundColor: '#FFFFFF',
+			borderRadius: 14,
+			padding: 12,
+			alignItems: 'center',
+			justifyContent: 'center',
+			shadowColor: '#000',
+			shadowOpacity: 0.08,
+			shadowRadius: 12,
+			shadowOffset: { width: 0, height: 6 },
+		},
+		composerInput: {
+			width: '100%',
+			height: 44,
+			borderRadius: 10,
+			backgroundColor: '#F6F7FB',
+			paddingHorizontal: 12,
+			marginBottom: 10,
+			color: '#1C1C1E',
+		},
+		sendButton: {
+			width: '100%',
+			height: 44,
+			borderRadius: 12,
+			backgroundColor: '#2E74FF',
+			alignItems: 'center',
+			justifyContent: 'center',
+		},
+		sendButtonDisabled: {
+			backgroundColor: '#A3C1FF',
+		},
+		sendButtonText: {
+			color: '#FFF',
+			fontWeight: '700',
+			fontSize: 15,
+		},
 	shareItem: {
 		flexDirection: 'row',
 		alignItems: 'center',

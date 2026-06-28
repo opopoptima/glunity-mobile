@@ -84,7 +84,13 @@ const reelsRepository = {
 	},
 
 	findComments(reelId, { limit = 50, skip = 0 } = {}) {
-		return ReelComment.find({ reelId })
+		return ReelComment.find({
+			reelId,
+			$or: [
+				{ parentCommentId: null },
+				{ parentCommentId: { $exists: false } }
+			]
+		})
 			.populate('userId', 'fullName avatar')
 			.sort({ createdAt: -1 })
 			.skip(skip)
@@ -92,8 +98,20 @@ const reelsRepository = {
 			.lean();
 	},
 
-	createComment(reelId, userId, text) {
-		return ReelComment.create({ reelId, userId, text });
+	findReplies(reelId, parentCommentId, { limit = 50, skip = 0 } = {}) {
+		return ReelComment.find({
+			reelId,
+			parentCommentId
+		})
+			.populate('userId', 'fullName avatar')
+			.sort({ createdAt: 1 })
+			.skip(skip)
+			.limit(limit)
+			.lean();
+	},
+
+	createComment(reelId, userId, text, parentCommentId = null) {
+		return ReelComment.create({ reelId, userId, text, parentCommentId });
 	},
 
 	incrementComments(reelId, amount) {

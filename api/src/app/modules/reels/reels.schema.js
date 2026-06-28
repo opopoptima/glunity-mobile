@@ -18,6 +18,13 @@ const createReelSchema = [
 const createCommentSchema = [
 	param('id').isMongoId().withMessage('Invalid reel ID'),
 	body('text').isString().trim().isLength({ min: 1, max: 1000 }).withMessage('Comment must be between 1 and 1000 characters'),
+	body('parentCommentId').optional({ nullable: true }).isMongoId().withMessage('Invalid parent comment ID'),
+];
+
+const updateCommentSchema = [
+	param('id').isMongoId().withMessage('Invalid reel ID'),
+	param('commentId').isMongoId().withMessage('Invalid comment ID'),
+	body('text').isString().trim().isLength({ min: 1, max: 1000 }).withMessage('Comment must be between 1 and 1000 characters'),
 ];
 
 const updateReelSchema = [
@@ -32,5 +39,6 @@ module.exports = {
 	reelIdSchema,
 	createReelSchema,
 	createCommentSchema,
+	updateCommentSchema,
 	updateReelSchema,
 };

@@ -175,6 +175,8 @@ const ar = {
   'Gluten-Free Recipes': 'وصفات خالية من الغلوتين',
   'Healthy and nutritious food recipes': 'وصفات طعام صحية ومغذية',
   'Popular recipes': 'الوصفات الشائعة',
+  'No recipes available yet.': 'لا توجد وصفات متاحة بعد.',
+  'No recipes match your search.': 'لا توجد وصفات تطابق بحثك.',
   Popular: 'شائع',
   recipes: 'وصفات',
 
@@ -188,6 +190,8 @@ const ar = {
 
   // Events Screen Text
   All: 'الكل',
+  'No events available yet.': 'لا توجد فعاليات متاحة بعد.',
+  'No events match your search.': 'لا توجد فعاليات تطابق بحثك.',
   Meetups: 'تجمعات',
   Classes: 'دروس',
   Markets: 'أسواق',

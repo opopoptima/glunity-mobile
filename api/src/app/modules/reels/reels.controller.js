@@ -100,10 +100,64 @@ async function postComment(req, res, next) {
 	try {
 		const reelId = req.params.id;
 		const userId = req.user._id;
-		const { text } = req.body;
+		const { text, parentCommentId } = req.body;
 		
-		const result = await reelsService.postComment(reelId, userId, text);
+		const result = await reelsService.postComment(reelId, userId, text, parentCommentId);
 		res.status(201).json({ success: true, data: result });
+	} catch (err) {
+		next(err);
+	}
+}
+
+async function updateComment(req, res, next) {
+	try {
+		const reelId = req.params.id;
+		const commentId = req.params.commentId;
+		const userId = req.user._id;
+		const { text } = req.body;
+
+		const result = await reelsService.updateComment(reelId, commentId, userId, text);
+		res.status(200).json({ success: true, data: result });
+	} catch (err) {
+		next(err);
+	}
+}
+
+async function removeComment(req, res, next) {
+	try {
+		const reelId = req.params.id;
+		const commentId = req.params.commentId;
+		const userId = req.user._id;
+
+		const result = await reelsService.deleteComment(reelId, commentId, userId);
+		res.status(200).json(result);
+	} catch (err) {
+		next(err);
+	}
+}
+
+async function toggleCommentLike(req, res, next) {
+	try {
+		const reelId = req.params.id;
+		const commentId = req.params.commentId;
+		const userId = req.user._id;
+
+		const result = await reelsService.toggleCommentLike(reelId, commentId, userId);
+		res.status(200).json({ success: true, data: result });
+	} catch (err) {
+		next(err);
+	}
+}
+
+async function listReplies(req, res, next) {
+	try {
+		const reelId = req.params.id;
+		const commentId = req.params.commentId;
+		const page = parseInt(req.query.page, 10) || 0;
+		const limit = parseInt(req.query.limit, 10) || 50;
+
+		const result = await reelsService.getReplies(reelId, commentId, { page, limit });
+		res.status(200).json(result);
 	} catch (err) {
 		next(err);
 	}
@@ -137,6 +191,10 @@ module.exports = {
 	recordShare,
 	listComments,
 	postComment,
+	updateComment,
+	deleteComment: removeComment,
+	toggleCommentLike,
+	listReplies,
 	getUploadSignature,
 	uploadVideoLocal,
 };

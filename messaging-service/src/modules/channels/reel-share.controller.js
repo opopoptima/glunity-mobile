@@ -3,6 +3,8 @@
 const asyncHandler      = require('../../common/utils/async-handler');
 const reelShareService  = require('./reel-share.service');
 const messageMapper     = require('../messages/messages.mapper');
+const Channel           = require('../../database/models/channel.model');
+const Message           = require('../../database/models/message.model');
 
 const reelShareController = {
 
@@ -11,14 +13,6 @@ const reelShareController = {
    * Share a reel into a channel.
    *
    * Body: { reelId: ObjectId, caption?: string }
-   *
-   * Steps (delegated to service):
-   *  1. Assert sender is a participant of the channel.
-   *  2. Validate reelId exists and fetch metadata.
-   *  3. Persist a Message with type='reel' and populated reelRef.
-   *  4. Update Channel.lastMessage + messageCount.
-   *
-   * Response: 201 with the new message shape (consistent with GET messages).
    */
   shareReel: asyncHandler(async (req, res) => {
     const { id: channelId } = req.params;
@@ -37,6 +31,44 @@ const reelShareController = {
       reelId,
       caption
     );
+
+    const io = req.app.get('io');
+    if (io) {
+      try {
+        const populated = messageMapper.toMessageResponse(message);
+        populated.senderName = req.user.fullName || 'User';
+        populated.senderAvatarUrl = req.user.avatar?.url || null;
+
+        io.to(`channel:${channelId}`).emit('message:new', { message: populated });
+
+        const updatedChannel = await Channel.findById(channelId).lean();
+        if (updatedChannel && updatedChannel.participants) {
+          for (const p of updatedChannel.participants) {
+            const pId = (p.userId || p).toString();
+            const startFrom = [p.lastReadAt, p.clearedAt].filter(Boolean).sort((a, b) => b - a)[0] || new Date(0);
+            const unreadCount = await Message.countDocuments({
+              channelId,
+              deletedAt: { $in: [null, undefined] },
+              createdAt: { $gt: startFrom },
+            });
+
+            io.to(pId).emit('conversation:updated', {
+              channelId,
+              lastMessage: {
+                messageId:  message._id.toString(),
+                senderId:   message.senderId.toString(),
+                senderName: req.user.fullName || 'User',
+                content:    '[reel]',
+                createdAt:  message.createdAt,
+              },
+              unreadCount,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[reel-share] Socket broadcast error:', err);
+      }
+    }
 
     res.status(201).json({
       success: true,

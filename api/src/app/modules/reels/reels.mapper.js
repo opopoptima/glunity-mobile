@@ -42,16 +42,28 @@ const toCommentResponse = (comment) => {
 	if (!comment) return null;
 	
 	const user = comment.userId || {};
+	const authorAvatar = user.avatar?.url || null;
+	const authorUsername = user.fullName ? user.fullName.replace(/\s+/g, '').toLowerCase() : 'anonymous';
+
 	return {
 		id: comment._id || comment.id,
 		reelId: comment.reelId,
+		authorId: user._id || user.id || null,
+		authorUsername,
+		authorAvatar,
 		author: {
 			id: user._id || user.id || null,
 			fullName: user.fullName || 'Anonymous',
-			avatarUrl: user.avatar?.url || null,
+			avatarUrl: authorAvatar,
 		},
 		text: comment.text,
 		createdAt: comment.createdAt,
+		updatedAt: comment.updatedAt,
+		edited: !!comment.edited,
+		likeCount: comment.likeCount || 0,
+		likedBy: comment.likedBy ? comment.likedBy.map(id => id.toString()) : [],
+		replyCount: comment.replyCount || 0,
+		parentCommentId: comment.parentCommentId || null,
 	};
 };
 
