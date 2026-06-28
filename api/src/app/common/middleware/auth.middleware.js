@@ -34,4 +34,22 @@ async function authMiddleware(req, _res, next) {
   }
 }
 
+async function optionalAuth(req, _res, next) {
+  try {
+    const header = req.headers.authorization;
+    if (header && header.startsWith('Bearer ')) {
+      const token = header.split(' ')[1];
+      const decoded = verifyAccessToken(token);
+      const user = await User.findActiveById(decoded.id);
+      if (user && user.emailVerified) {
+        req.user = user;
+      }
+    }
+    return next();
+  } catch (err) {
+    return next();
+  }
+}
+
+authMiddleware.optional = optionalAuth;
 module.exports = authMiddleware;

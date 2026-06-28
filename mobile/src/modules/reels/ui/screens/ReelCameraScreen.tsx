@@ -12,7 +12,7 @@ import {
 	Alert,
 	Modal
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Video, ResizeMode, Audio } from 'expo-av';
@@ -30,6 +30,7 @@ const MOCK_MUSIC_LIBRARY = [
 export default function ReelCameraScreen() {
 	const navigation = useNavigation<any>();
 	const { theme: T } = useTheme();
+	const isFocused = useIsFocused();
 
 	const [videoUri, setVideoUri] = useState<string | null>(null);
 	const [caption, setCaption] = useState('');
@@ -53,28 +54,29 @@ export default function ReelCameraScreen() {
 	// Load & play background music during preview
 	React.useEffect(() => {
 		let isMounted = true;
+		const shouldPlayMusic = !!(videoUri && selectedMusic?.url && isFocused && !uploading && !showSuccessModal);
+
 		const loadAndPlayMusic = async () => {
-			if (videoUri && selectedMusic?.url) {
-				try {
-					if (soundRef.current) {
-						await soundRef.current.unloadAsync();
-					}
-					const { sound } = await Audio.Sound.createAsync(
-						{ uri: selectedMusic.url },
-						{ shouldPlay: true, isLooping: true, volume: musicVolume }
-					);
-					if (isMounted) {
-						soundRef.current = sound;
-					} else {
-						await sound.unloadAsync();
-					}
-				} catch (err) {
-					console.warn('Failed to load preview music:', err);
+			if (!selectedMusic?.url) return;
+			try {
+				if (soundRef.current) {
+					await soundRef.current.unloadAsync();
 				}
+				const { sound } = await Audio.Sound.createAsync(
+					{ uri: selectedMusic.url },
+					{ shouldPlay: true, isLooping: true, volume: musicVolume }
+				);
+				if (isMounted) {
+					soundRef.current = sound;
+				} else {
+					await sound.unloadAsync();
+				}
+			} catch (err) {
+				console.warn('Failed to load preview music:', err);
 			}
 		};
 
-		if (videoUri && selectedMusic?.url) {
+		if (shouldPlayMusic) {
 			loadAndPlayMusic();
 		} else {
 			if (soundRef.current) {
@@ -89,7 +91,7 @@ export default function ReelCameraScreen() {
 				soundRef.current = null;
 			}
 		};
-	}, [videoUri, selectedMusic, musicVolume]);
+	}, [videoUri, selectedMusic, musicVolume, isFocused, uploading, showSuccessModal]);
 
 	const pickVideo = async () => {
 		const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -101,7 +103,9 @@ export default function ReelCameraScreen() {
 		const result = await ImagePicker.launchImageLibraryAsync({
 			mediaTypes: ImagePicker.MediaTypeOptions.Videos,
 			allowsEditing: true,
-			quality: 1,
+			quality: 0.8,
+			videoMaxDuration: 60,
+			videoExportPreset: ImagePicker.VideoExportPreset.MediumQuality,
 		});
 
 		if (!result.canceled && result.assets?.[0]) {
@@ -121,7 +125,9 @@ export default function ReelCameraScreen() {
 		const result = await ImagePicker.launchCameraAsync({
 			mediaTypes: ImagePicker.MediaTypeOptions.Videos,
 			allowsEditing: true,
-			quality: 1,
+			quality: 0.8,
+			videoMaxDuration: 60,
+			videoExportPreset: ImagePicker.VideoExportPreset.MediumQuality,
 		});
 
 		if (!result.canceled && result.assets?.[0]) {
@@ -135,6 +141,9 @@ export default function ReelCameraScreen() {
 		setProgress('Preparing video...');
 
 		try {
+			// Video Compression Step (Bypassed)
+			let uploadUri = videoUri;
+
 			// 1. Get signed signature from backend
 			setProgress('Requesting upload credentials...');
 			const sigRes = await ReelsService.getUploadSignature();
@@ -148,24 +157,24 @@ export default function ReelCameraScreen() {
 			let finalThumbnailUrl = '';
 
 			let videoFile: any;
-			const filename = videoUri.split('/').pop() || 'reel_upload.mp4';
+			const filename = uploadUri.split('/').pop() || 'reel_upload.mp4';
 
-			if (Platform.OS === 'web' || (typeof videoUri === 'string' && videoUri.startsWith('blob:'))) {
+			if (Platform.OS === 'web' || (typeof uploadUri === 'string' && uploadUri.startsWith('blob:'))) {
 				try {
-					const blobResp = await fetch(videoUri);
+					const blobResp = await fetch(uploadUri);
 					const blob = await blobResp.blob();
 					videoFile = typeof File !== 'undefined' ? new File([blob], filename, { type: blob.type || 'video/mp4' }) : blob;
 				} catch (e) {
 					console.warn('Failed to convert blob', e);
 					videoFile = {
-						uri: videoUri,
+						uri: uploadUri,
 						type: 'video/mp4',
 						name: filename,
 					};
 				}
 			} else {
 				videoFile = {
-					uri: videoUri,
+					uri: uploadUri,
 					type: 'video/mp4',
 					name: filename,
 				};
@@ -267,19 +276,23 @@ export default function ReelCameraScreen() {
 			<ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
 				{videoUri ? (
 					<View style={styles.previewContainer}>
-						<Video
-							source={{ uri: videoUri }}
-							resizeMode={ResizeMode.CONTAIN}
-							shouldPlay
-							isLooping
-							isMuted={isMuted}
-							volume={videoVolume}
-							style={styles.previewVideo}
-						/>
-						<TouchableOpacity style={styles.changeBtn} onPress={() => setVideoUri(null)}>
-							<Ionicons name="trash-outline" size={20} color="#FFF" />
-							<Text style={styles.changeBtnText}>Remove Video</Text>
-						</TouchableOpacity>
+						{!uploading && (
+							<Video
+								source={{ uri: videoUri }}
+								resizeMode={ResizeMode.CONTAIN}
+								shouldPlay={isFocused && !uploading && !showSuccessModal}
+								isLooping
+								isMuted={isMuted}
+								volume={videoVolume}
+								style={styles.previewVideo}
+							/>
+						)}
+						{!uploading && (
+							<TouchableOpacity style={styles.changeBtn} onPress={() => setVideoUri(null)}>
+								<Ionicons name="trash-outline" size={20} color="#FFF" />
+								<Text style={styles.changeBtnText}>Remove Video</Text>
+							</TouchableOpacity>
+						)}
 					</View>
 				) : (
 					<View style={styles.selectorContainer}>
@@ -668,7 +681,7 @@ const styles = StyleSheet.create({
 	},
 	loadingOverlay: {
 		...StyleSheet.absoluteFillObject,
-		backgroundColor: 'rgba(0,0,0,0.8)',
+		backgroundColor: '#0D0D0F',
 		justifyContent: 'center',
 		alignItems: 'center',
 		zIndex: 1000,

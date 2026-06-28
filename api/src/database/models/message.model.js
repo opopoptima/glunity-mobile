@@ -31,6 +31,7 @@ const messageSchema = new Schema(
       reelId:       { type: Types.ObjectId },
       thumbnailUrl: String,
       title:        String,
+      isDeleted:    { type: Boolean, default: false },
     },
 
     // ── Reply threading ────────────────────────────────────────────────────

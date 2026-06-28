@@ -38,12 +38,13 @@ async function update(req, res, next) {
 	}
 }
 
+
 async function remove(req, res, next) {
 	try {
 		const reelId = req.params.id;
-		const userId = req.user._id;
+		const currentUser = req.user;
 		
-		await reelsService.deleteReel(reelId, userId);
+		await reelsService.deleteReel(reelId, currentUser);
 		res.status(200).json({ success: true });
 	} catch (err) {
 		next(err);

@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -20,7 +21,9 @@ import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
 import { ReelsService, Reel } from '@/modules/reels/services/reels.service';
+import { TokenStore } from '@/core/storage/secure-store';
 import { Video, ResizeMode } from 'expo-av';
+import { Platform } from 'react-native';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'SellerProProfile'>;
 
@@ -112,6 +115,7 @@ export default function SellerProProfileScreen({ navigation }: Props) {
   const [editCategory, setEditCategory] = React.useState<'all' | 'recipes' | 'tips' | 'products' | 'lifestyle'>('all');
   const [updatingReel, setUpdatingReel] = React.useState(false);
   const [deletingReel, setDeletingReel] = React.useState(false);
+  const [pendingDeleteReelId, setPendingDeleteReelId] = React.useState<string | null>(null);
   const [activeVideoUrl, setActiveVideoUrl] = React.useState<string | null>(null);
 
   const fetchUserReels = async () => {
@@ -156,34 +160,47 @@ export default function SellerProProfileScreen({ navigation }: Props) {
     }
   };
 
-  const handleDeleteReel = async (reelId: string) => {
-    Alert.alert(
-      t('Delete Reel'),
-      t('Are you sure you want to permanently delete this reel?'),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Delete'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setDeletingReel(true);
-              const res = await ReelsService.deleteReel(reelId);
-              if (res.success) {
-                Alert.alert(t('Success'), t('Reel deleted successfully'));
-                setIsStatsModalOpen(false);
-                setSelectedReel(null);
-                fetchUserReels();
-              }
-            } catch (err: any) {
-              Alert.alert(t('Error'), err?.message || t('Failed to delete reel'));
-            } finally {
-              setDeletingReel(false);
-            }
-          }
-        }
-      ]
-    );
+  const [pendingDeleteReelIdMessage, setPendingDeleteReelIdMessage] = React.useState<string | null>(null);
+
+  const requestDeleteReel = async (reelId: string) => {
+    try {
+      const token = await TokenStore.getAccessToken();
+      if (!token) {
+        Alert.alert(t('Error'), t('Please log in to delete reels'));
+        return;
+      }
+    } catch (e) {
+      Alert.alert(t('Error'), t('Unable to verify authentication. Please log in.'));
+      return;
+    }
+
+    setPendingDeleteReelIdMessage(t('This action cannot be undone. The reel will no longer be available.'));
+    setPendingDeleteReelId(reelId);
+  };
+
+  const performDeleteReel = async (reelId: string | null) => {
+    if (!reelId) return;
+    try {
+      setDeletingReel(true);
+      const res = await ReelsService.deleteReel(reelId);
+      if (res.success) {
+        setIsStatsModalOpen(false);
+        setSelectedReel(null);
+        Alert.alert(t('Success'), t('Reel deleted successfully.'));
+        DeviceEventEmitter.emit('reelDeleted', { reelId });
+        fetchUserReels();
+      }
+    } catch (err: any) {
+      if (err && err.code === 'NO_ACCESS_TOKEN') {
+        Alert.alert(t('Error'), t('No access token available. Please log in.'));
+      } else {
+        Alert.alert(t('Error'), err?.message || t('Failed to delete reel'));
+      }
+    } finally {
+      setDeletingReel(false);
+      setPendingDeleteReelId(null);
+      setPendingDeleteReelIdMessage(null);
+    }
   };
 
   const s = React.useMemo(() => StyleSheet.create({
@@ -474,6 +491,13 @@ export default function SellerProProfileScreen({ navigation }: Props) {
       fontSize: 14,
       fontWeight: '600',
       fontFamily: F.semibold,
+    },
+    confirmMessage: {
+      fontSize: 14,
+      color: T.text,
+      textAlign: 'center',
+      marginBottom: 18,
+      fontFamily: F.regular,
     },
     inputLabel: {
       fontSize: 12,
@@ -768,7 +792,7 @@ export default function SellerProProfileScreen({ navigation }: Props) {
       onPressHome={() => navigation.navigate('Home')}
       onPressEvents={() => navigation.navigate('Events')}
       onPressCenter={() => {}}
-      onPressReels={() => {}}
+      onPressReels={() => navigation.navigate('ReelsFeed')}
       onPressProfile={() => navigation.navigate('SellerProProfile')}
       contentStyle={{ backgroundColor: T.bg }}
     >
@@ -1155,6 +1179,7 @@ export default function SellerProProfileScreen({ navigation }: Props) {
                       setIsStatsModalOpen(false);
                       setActiveVideoUrl(selectedReel.videoUrl);
                     }}
+                    disabled={deletingReel}
                   >
                     <Feather name="play" size={16} color="#FFFFFF" />
                     <Text style={[s.modalActionBtnText, { color: '#FFFFFF' }]}>{t('Play Reel')}</Text>
@@ -1168,6 +1193,7 @@ export default function SellerProProfileScreen({ navigation }: Props) {
                       setIsStatsModalOpen(false);
                       setIsEditModalOpen(true);
                     }}
+                    disabled={deletingReel}
                   >
                     <Feather name="edit-2" size={16} color={T.text} />
                     <Text style={[s.modalActionBtnText, { color: T.text }]}>{t('Edit Caption & Category')}</Text>
@@ -1175,7 +1201,7 @@ export default function SellerProProfileScreen({ navigation }: Props) {
 
                   <TouchableOpacity
                     style={[s.modalActionBtn, s.modalActionBtnDanger]}
-                    onPress={() => handleDeleteReel(selectedReel.id)}
+                    onPress={() => requestDeleteReel(selectedReel.id)}
                     disabled={deletingReel}
                   >
                     {deletingReel ? (
@@ -1194,12 +1220,46 @@ export default function SellerProProfileScreen({ navigation }: Props) {
                       setIsStatsModalOpen(false);
                       setSelectedReel(null);
                     }}
+                    disabled={deletingReel}
                   >
                     <Text style={[s.modalActionBtnText, { color: T.text }]}>{t('Close')}</Text>
                   </TouchableOpacity>
                 </View>
               </ScrollView>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- DELETE CONFIRMATION MODAL --- */}
+      <Modal
+        visible={!!pendingDeleteReelId}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingDeleteReelId(null)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={[s.statsModalContent, { width: 320, padding: 20 }]}>
+            <Text style={[s.statsModalTitle, { marginBottom: 8 }]}>{t('Delete Reel?')}</Text>
+            <Text style={s.confirmMessage}>{pendingDeleteReelIdMessage}</Text>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+              <TouchableOpacity
+                style={[s.modalActionBtn, { flex: 1, marginRight: 12 }]}
+                onPress={() => setPendingDeleteReelId(null)}
+                disabled={deletingReel}
+              >
+                <Text style={s.modalActionBtnText}>{t('Cancel')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[s.modalActionBtn, s.modalActionBtnDanger, { flex: 1 }]}
+                onPress={() => performDeleteReel(pendingDeleteReelId)}
+                disabled={deletingReel}
+              >
+                {deletingReel ? <ActivityIndicator size="small" color={T.red} /> : <Text style={[s.modalActionBtnText, { color: T.red }]}>{t('Delete')}</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

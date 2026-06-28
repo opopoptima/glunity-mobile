@@ -34,6 +34,8 @@ const reelsRepository = {
 			const extraReels = await Reel.find(filter)
 				.populate('authorId', 'fullName avatar profileType')
 				.sort({ createdAt: -1 })
+				.limit(limit)
+				.lean();
 				
 			const existingIds = new Set(reels.map(r => r._id.toString()));
 			for (const extra of extraReels) {
@@ -61,7 +63,6 @@ const reelsRepository = {
 			.populate('authorId', 'fullName avatar profileType')
 			.lean();
 	},
-
 	deleteReel(id) {
 		return Reel.findByIdAndDelete(id);
 	},

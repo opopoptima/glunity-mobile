@@ -31,6 +31,7 @@ const reelSchema = new Schema(
 
 // Index compound for performant paginated feed queries
 reelSchema.index({ status: 1, createdAt: -1 });
+reelSchema.index({ status: 1, category: 1, createdAt: -1 });
 
 const Reel = model('Reel', reelSchema);
 module.exports = Reel;

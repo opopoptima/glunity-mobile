@@ -683,25 +683,40 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
       }
 
       if (isReel) {
-        const title = item.reelRef?.title || 'Shared Reel';
-        const thumb = item.reelRef?.thumbnailUrl;
+        const isDeleted = !!item.reelRef?.isDeleted;
+        const title = isDeleted ? 'Reel not available' : (item.reelRef?.title || 'Shared Reel');
+        const thumb = isDeleted ? null : item.reelRef?.thumbnailUrl;
         return (
           <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('ReelsFeed', { reelId: item.reelRef?.reelId })}
-            style={{ width: 200, borderRadius: 12, overflow: 'hidden', backgroundColor: isMe ? 'rgba(0,0,0,0.15)' : T.surfaceAlt }}
+            activeOpacity={isDeleted ? 1 : 0.9}
+            onPress={() => {
+              if (isDeleted) {
+                Alert.alert('Not Available', 'This reel has been deleted by the owner.');
+              } else {
+                navigation.navigate('ReelsFeed', { reelId: item.reelRef?.reelId });
+              }
+            }}
+            style={{ 
+              width: 200, 
+              borderRadius: 12, 
+              overflow: 'hidden', 
+              backgroundColor: isMe ? 'rgba(0,0,0,0.15)' : T.surfaceAlt,
+              opacity: isDeleted ? 0.65 : 1
+            }}
           >
             {thumb ? (
               <Image source={{ uri: thumb }} style={{ width: '100%', height: 120, backgroundColor: '#333' }} resizeMode="cover" />
             ) : (
               <View style={{ width: '100%', height: 120, backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="film" size={32} color="#8A8A8E" />
+                <Ionicons name={isDeleted ? "alert-circle-outline" : "film"} size={32} color={isDeleted ? "#FF2D55" : "#8A8A8E"} />
               </View>
             )}
             <View style={{ padding: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
-                <Ionicons name="play-circle-outline" size={14} color={isMe ? '#FFF' : T.green || '#2ECC71'} style={{ marginRight: 4 }} />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? '#FFF' : T.text }}>Reel</Text>
+                <Ionicons name={isDeleted ? "close-circle-outline" : "play-circle-outline"} size={14} color={isDeleted ? "#FF2D55" : (isMe ? '#FFF' : T.green || '#2ECC71')} style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: isDeleted ? "#FF2D55" : (isMe ? '#FFF' : T.text) }}>
+                  {isDeleted ? 'Deleted Reel' : 'Reel'}
+                </Text>
               </View>
               <Text numberOfLines={2} style={{ fontSize: 12, color: isMe ? '#EEE' : T.textMuted }}>{title}</Text>
             </View>

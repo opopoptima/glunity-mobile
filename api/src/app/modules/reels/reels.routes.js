@@ -26,7 +26,7 @@ router.get('/signature', authMiddleware, controller.getUploadSignature);
 router.post('/upload', authMiddleware, upload.single('video'), controller.uploadVideoLocal);
 
 // ── Reels CRUD ───────────────────────────────────────────────────────────────
-router.get('/', authMiddleware, controller.list);
+router.get('/', authMiddleware.optional, controller.list);
 router.post('/', authMiddleware, createReelSchema, validate, controller.create);
 router.put('/:id', authMiddleware, updateReelSchema, validate, controller.update);
 router.delete('/:id', authMiddleware, reelIdSchema, validate, controller.remove);

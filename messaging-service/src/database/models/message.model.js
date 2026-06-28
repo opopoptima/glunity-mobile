@@ -27,6 +27,7 @@ const reelRefSchema = new Schema(
     reelId:       { type: Schema.Types.ObjectId },
     thumbnailUrl: { type: String },
     title:        { type: String, maxlength: 200 },
+    isDeleted:    { type: Boolean, default: false },
   },
   { _id: false }
 );

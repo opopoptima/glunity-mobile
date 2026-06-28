@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import axios from 'axios';
 import { ReelsService, Reel } from '../services/reels.service';
 
@@ -44,6 +45,30 @@ export function useReelsFeed(initialCategory = 'all') {
 	useEffect(() => {
 		feedsRef.current = feeds;
 	}, [feeds]);
+
+	// Listen to reelDeleted events to instantly clean up feeds in real-time
+	useEffect(() => {
+		const sub = DeviceEventEmitter.addListener('reelDeleted', ({ reelId }) => {
+			setFeeds(prev => {
+				const updated = { ...prev };
+				let changed = false;
+				for (const cat of Object.keys(updated)) {
+					const feed = updated[cat];
+					if (feed.reels.some(r => r.id === reelId)) {
+						changed = true;
+						const filtered = feed.reels.filter(r => r.id !== reelId);
+						updated[cat] = {
+							...feed,
+							reels: filtered,
+							activeIndex: Math.max(0, Math.min(feed.activeIndex, filtered.length - 1))
+						};
+					}
+				}
+				return changed ? updated : prev;
+			});
+		});
+		return () => sub.remove();
+	}, []);
 
 	const loadFeed = useCallback(async (cat: string, isRefresh = false, forceFetch = false) => {
 		const currentFeed = feedsRef.current[cat] || INITIAL_CATEGORY_FEED;

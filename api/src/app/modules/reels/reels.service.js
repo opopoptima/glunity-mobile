@@ -1,5 +1,14 @@
 'use strict';
 
+const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
+const Reel = require('../../../database/models/reel.model');
+const ReelLike = require('../../../database/models/reel-like.model');
+const ReelComment = require('../../../database/models/reel-comment.model');
+const Notification = require('../../../database/models/notification.model');
+const Message = require('../../../database/models/message.model');
+
 const reelsRepository = require('./reels.repository');
 const reelsMapper = require('./reels.mapper');
 const AppError = require('../../common/errors/app-error');
@@ -14,6 +23,41 @@ if (env.cloudinary && env.cloudinary.cloudName && env.cloudinary.apiKey && env.c
 		api_key: env.cloudinary.apiKey,
 		api_secret: env.cloudinary.apiSecret,
 	});
+}
+
+function getCloudinaryPublicId(url) {
+	if (!url || !url.includes('cloudinary.com')) return null;
+	try {
+		const parts = url.split(/\/upload\/(?:v\d+\/)?/);
+		if (parts.length < 2) return null;
+		const pathAndExt = parts[1];
+		const publicIdWithExt = pathAndExt.split('?')[0];
+		const lastDotIndex = publicIdWithExt.lastIndexOf('.');
+		if (lastDotIndex === -1) return publicIdWithExt;
+		return publicIdWithExt.substring(0, lastDotIndex);
+	} catch (err) {
+		console.error('Failed to extract Cloudinary publicId:', err);
+		return null;
+	}
+}
+
+function deleteLocalFile(url) {
+	if (!url) return;
+	try {
+		if (url.includes('/uploads/')) {
+			const filename = url.split('/uploads/')[1];
+			if (filename) {
+				const uploadDir = path.join(__dirname, '..', '..', '..', '..', 'uploads');
+				const filePath = path.join(uploadDir, filename);
+				if (fs.existsSync(filePath)) {
+					fs.unlinkSync(filePath);
+					console.log('[Cleanup] Deleted local file:', filePath);
+				}
+			}
+		}
+	} catch (err) {
+		console.error('[Cleanup Error] Failed to delete local file:', err);
+	}
 }
 
 const reelsService = {
@@ -54,18 +98,86 @@ const reelsService = {
 		return reelsMapper.toReelResponse(updatedReel, liked);
 	},
 
-	async deleteReel(reelId, userId) {
-		const reel = await reelsRepository.findById(reelId);
+	async deleteReel(reelId, currentUser) {
+		const reel = await Reel.findById(reelId);
 		if (!reel) {
 			throw AppError.notFound('Reel');
 		}
 		
 		const authorIdStr = reel.authorId?._id?.toString() || reel.authorId?.toString();
-		if (authorIdStr !== userId.toString()) {
+		const isAdmin = currentUser.profileType === 'admin';
+		if (authorIdStr !== currentUser._id.toString() && !isAdmin) {
 			throw AppError.forbidden('You are not authorized to delete this reel');
 		}
-		
-		await reelsRepository.deleteReel(reelId);
+
+		// Cloudinary / local file cleanup
+		if (reel.videoUrl) {
+			if (reel.videoUrl.includes('cloudinary.com')) {
+				try {
+					const publicId = getCloudinaryPublicId(reel.videoUrl);
+					if (publicId) {
+						console.log('[Cloudinary Cleanup] Deleting video:', publicId);
+						await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+					}
+				} catch (cloudErr) {
+					console.error('[Cloudinary Cleanup Error] Failed to delete from Cloudinary:', cloudErr);
+				}
+			} else {
+				deleteLocalFile(reel.videoUrl);
+			}
+		}
+
+		// Transaction logic to ensure database consistency
+		let session = null;
+		try {
+			session = await mongoose.startSession();
+			session.startTransaction();
+		} catch (e) {
+			session = null; // Fallback for standalone Mongo instance without Replica Set
+		}
+
+		try {
+			const options = session ? { session } : {};
+
+			// Delete reel
+			await Reel.findByIdAndDelete(reelId, options);
+
+			// Delete associated likes
+			await ReelLike.deleteMany({ reelId }, options);
+
+			// Delete associated comments
+			await ReelComment.deleteMany({ reelId }, options);
+
+			// Delete notifications
+			await Notification.deleteMany({
+				$or: [
+					{ 'metadata.reelId': reelId },
+					{ 'metadata.id': reelId }
+				]
+			}, options);
+
+			// Update shared references in messages
+			await Message.updateMany(
+				{ 'reelRef.reelId': reelId },
+				{ $set: { 'reelRef.isDeleted': true } },
+				options
+			);
+
+			if (session) {
+				await session.commitTransaction();
+			}
+		} catch (dbErr) {
+			if (session) {
+				await session.abortTransaction();
+			}
+			console.error('[Database Delete Error] Rollback executed:', dbErr);
+			throw dbErr;
+		} finally {
+			if (session) {
+				session.endSession();
+			}
+		}
+
 		return { success: true };
 	},
 
