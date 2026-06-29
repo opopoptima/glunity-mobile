@@ -193,7 +193,7 @@ export default function PrivacyScreen({ navigation }: Props) {
         onPressHome={() => navigation.navigate('Home')}
         onPressEvents={() => navigation.navigate('Map')}
         onPressCenter={() => {}}
-        onPressReels={() => {}}
+        onPressReels={() => navigation.navigate('ReelsFeed')}
         onPressProfile={() => {
           if (user?.profileType === 'pro_commerce') {
             navigation.navigate('SellerProProfile');

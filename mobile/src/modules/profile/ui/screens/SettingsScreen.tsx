@@ -391,7 +391,7 @@ export default function SettingsScreen({ navigation }: Props) {
       onPressHome={() => navigation.navigate('Home')}
       onPressEvents={() => navigation.navigate('Events')}
       onPressCenter={() => {}}
-      onPressReels={() => {}}
+      onPressReels={() => navigation.navigate('ReelsFeed')}
       onPressProfile={() => {
         if (user?.profileType === 'pro_commerce') {
           navigation.navigate('SellerProProfile');
