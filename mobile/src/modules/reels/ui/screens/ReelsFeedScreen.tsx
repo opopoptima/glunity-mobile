@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Text, ViewToken, Modal, TextInput, ActivityIndicator, Alert, Platform, Image, Dimensions, StatusBar } from 'react-native';
+import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Text, ViewToken, Modal, TextInput, ActivityIndicator, Alert, Platform, Image, StatusBar, useWindowDimensions, Dimensions } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -111,8 +111,7 @@ export default function ReelsFeedScreen() {
 		activeIndex,
 		setActiveIndex
 	} = useReelsFeed();
-	const [layoutHeight, setLayoutHeight] = useState(Dimensions.get('window').height);
-	const [layoutWidth, setLayoutWidth] = useState(Dimensions.get('window').width);
+	const { height: layoutHeight, width: layoutWidth } = useWindowDimensions();
 	const navigation = useNavigation<any>();
 	const route = useRoute<any>();
 	const flatListRef = useRef<FlatList>(null);
@@ -394,90 +393,104 @@ export default function ReelsFeedScreen() {
 		/>
 	), [selectedRecipients, toggleSelection]);
 
-	const handleScroll = (event: any) => {
-		const yOffset = event.nativeEvent.contentOffset.y;
-		const index = Math.round(yOffset / layoutHeight);
-		if (index !== activeIndex && index >= 0 && index < reels.length) {
-			setActiveIndex(index);
+	// Sync refs during render (NOT in useEffect!) so that renderItem
+	// always reads the latest value. useEffect runs AFTER render, which
+	// causes a 1-frame delay where the previous video still thinks it's active.
+	const activeIndexRef = useRef(activeIndex);
+	activeIndexRef.current = activeIndex;
+
+	const setActiveIndexRef = useRef(setActiveIndex);
+	setActiveIndexRef.current = setActiveIndex;
+
+	const handleScroll = useCallback((event: any) => {
+		const y = event.nativeEvent.contentOffset.y;
+		const index = Math.round(y / layoutHeight);
+		if (index >= 0 && index < reels.length) {
+			if (index !== activeIndexRef.current) {
+				setActiveIndexRef.current(index);
+			}
 		}
-	};
+	}, [layoutHeight, reels.length]);
+
+	// Use onMomentumScrollEnd as the primary, reliable index change trigger.
+	// With pagingEnabled=true the scroll always lands on an exact multiple
+	// of layoutHeight, so this fires once per settled swipe.
+	const handleMomentumEnd = useCallback((event: any) => {
+		const y = event.nativeEvent.contentOffset.y;
+		const index = Math.round(y / layoutHeight);
+		if (index >= 0 && index < reels.length && index !== activeIndexRef.current) {
+			setActiveIndexRef.current(index);
+		}
+	}, [layoutHeight, reels.length]);
+
+	// renderItem wrapped in useCallback — MUST NOT depend on activeIndex.
+	// Including activeIndex in deps causes the FlatList to receive a new
+	// renderItem reference on every swipe, which invalidates all cells and
+	// re-renders only initialNumToRender items (= 3).
+	// Instead, we pass the index and activeIndex separately so FlatList
+	// keeps all mounted cells alive across swipes.
+	const renderItem = useCallback(({ item, index }: { item: any; index: number }) => (
+		<ReelPlayerItem
+			reel={item}
+			isActive={index === activeIndexRef.current}
+			isPreloading={
+				Math.abs(index - activeIndexRef.current) <= 3 && index !== activeIndexRef.current
+			}
+			onToggleLike={toggleLike}
+			onRecordView={recordView}
+			onRecordShare={recordShare}
+			onIncrementCommentsCount={incrementCommentsCount}
+			onOpenShareSheet={openShareSheet}
+			containerHeight={layoutHeight}
+			containerWidth={layoutWidth}
+		/>
+	), [toggleLike, recordView, recordShare, incrementCommentsCount, openShareSheet, layoutHeight, layoutWidth]);
 
 	return (
 		<View style={styles.container}>
 			<StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 			
-			<Animated.View style={[{ flex: 1 }, animatedFeedStyle]}>
-				<FlatList
-					key={category}
-					ref={flatListRef}
-					data={reels}
-					keyExtractor={(item) => item.id}
-					renderItem={({ item, index }) => (
-						<ReelPlayerItem
-							reel={item}
-							isActive={index === activeIndex}
-							onToggleLike={toggleLike}
-							onRecordView={recordView}
-							onRecordShare={recordShare}
-							onIncrementCommentsCount={incrementCommentsCount}
-							onOpenShareSheet={openShareSheet}
-							containerHeight={layoutHeight}
-							containerWidth={layoutWidth}
-						/>
-					)}
-					pagingEnabled
-					snapToInterval={layoutHeight}
-					snapToAlignment="start"
-					showsVerticalScrollIndicator={false}
-					onScroll={handleScroll}
-					onMomentumScrollEnd={handleScroll}
-					scrollEventThrottle={16}
-					onEndReached={loadMore}
-					onEndReachedThreshold={0.5}
-					refreshing={refreshing}
-					onRefresh={refresh}
-					decelerationRate="fast"
-					onLayout={(event) => {
-						const { height, width } = event.nativeEvent.layout;
-						if (height > 0) setLayoutHeight(height);
-						if (width > 0) setLayoutWidth(width);
-					}}
-					windowSize={5}
-					initialNumToRender={10}
-					maxToRenderPerBatch={10}
-					removeClippedSubviews={false}
-					getItemLayout={getItemLayout}
-					initialScrollIndex={reels.length > 0 && activeIndex < reels.length ? activeIndex : undefined}
-				/>
-
-				{/* Loading State */}
-				{loading && reels.length === 0 && (
-					<View style={styles.loadingContainer}>
-						<ActivityIndicator size="large" color="#6DAE3F" />
-					</View>
+			<Animated.View style={[styles.feedContainer, animatedFeedStyle]}>
+				{/* Only mount FlatList when data is available.
+				 *  Mounting it with data=[] then transitioning to data=[items]
+				 *  causes FlatList to apply initialNumToRender limits and
+				 *  break scrolling. By mounting only with data, the FlatList
+				 *  always starts with the full dataset. */}
+				{reels.length > 0 && (
+					<FlatList
+						key={category}
+						ref={flatListRef}
+						data={reels}
+						extraData={activeIndex}
+						keyExtractor={(item) => item.id}
+						renderItem={renderItem}
+						pagingEnabled
+						decelerationRate="fast"
+						bounces={false}
+						overScrollMode="never"
+						showsVerticalScrollIndicator={false}
+						onScroll={handleScroll}
+						onMomentumScrollEnd={handleMomentumEnd}
+						onScrollEndDrag={handleScroll}
+						scrollEventThrottle={16}
+						getItemLayout={getItemLayout}
+						windowSize={15}
+						initialNumToRender={3}
+						maxToRenderPerBatch={5}
+						updateCellsBatchingPeriod={50}
+						removeClippedSubviews={false}
+						onEndReached={loadMore}
+						onEndReachedThreshold={0.5}
+						refreshing={refreshing}
+						onRefresh={refresh}
+						initialScrollIndex={
+							reels.length > 0 && activeIndex > 0 && activeIndex < reels.length
+								? activeIndex
+								: undefined
+						}
+					/>
 				)}
 
-				{/* Error State */}
-				{error && reels.length === 0 && !refreshing && (
-					<View style={styles.emptyContainer}>
-						<Ionicons name="alert-circle-outline" size={60} color="#FF2D55" />
-						<Text style={[styles.emptyText, { color: '#FF2D55', textAlign: 'center' }]}>{error}</Text>
-						<TouchableOpacity style={styles.createButton} onPress={refresh}>
-							<Text style={styles.createButtonText}>Retry</Text>
-						</TouchableOpacity>
-					</View>
-				)}
-
-				{/* Empty Feed Placeholder */}
-				{!loading && !error && reels.length === 0 && !refreshing && (
-					<View style={styles.emptyContainer}>
-						<Ionicons name="film-outline" size={60} color="#8A8A8E" />
-						<Text style={styles.emptyText}>No reels available yet</Text>
-						<TouchableOpacity style={styles.createButton} onPress={() => navigation.navigate('ReelCamera')}>
-							<Text style={styles.createButtonText}>Create a Reel</Text>
-						</TouchableOpacity>
-					</View>
-				)}
 			</Animated.View>
 
 			{/* Top Category Filter Bar */}
@@ -614,6 +627,13 @@ const styles = StyleSheet.create({
 		flex: 1,
 		backgroundColor: '#000',
 		position: 'relative',
+	},
+	feedContainer: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		bottom: 0,
 	},
 	loadingContainer: {
 		position: 'absolute',

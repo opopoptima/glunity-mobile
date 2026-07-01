@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, memo, useCallback } from 'react';
 import {
 	View,
 	Text,
@@ -16,6 +16,7 @@ import {
 	Keyboard,
 	Clipboard
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import { Image } from 'expo-image';
@@ -51,13 +52,20 @@ function formatRelativeTime(dateString: string): string {
 	return `${diffDay}d`;
 }
 
-const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
+// Screen aspect ratio used to classify video orientation at runtime.
+// Videos wider than the screen ratio are "landscape" and get the blurred
+// background treatment; everything else uses ResizeMode.COVER.
+const SCREEN_RATIO = Dimensions.get('window').width / Dimensions.get('window').height;
 
 const DEFAULT_AVATAR_URL = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop';
 
-interface ReelPlayerItemProps {
+export interface ReelPlayerItemProps {
 	reel: Reel;
 	isActive: boolean;
+	/** True for the item immediately before or after the active one.
+	 *  The Video component stays mounted and buffers in the background
+	 *  so the user sees no black gap when they swipe to it. */
+	isPreloading?: boolean;
 	onToggleLike: (reelId: string) => void;
 	onRecordView: (reelId: string) => void;
 	onRecordShare: (reelId: string) => void;
@@ -67,9 +75,29 @@ interface ReelPlayerItemProps {
 	containerWidth: number;
 }
 
-export function ReelPlayerItem({
+/**
+ * Custom comparator for React.memo — only re-render when props that
+ * affect the visual output actually change.
+ */
+function arePropsEqual(prev: ReelPlayerItemProps, next: ReelPlayerItemProps): boolean {
+	return (
+		prev.reel.id === next.reel.id &&
+		prev.reel.isLiked === next.reel.isLiked &&
+		prev.reel.likesCount === next.reel.likesCount &&
+		prev.reel.commentsCount === next.reel.commentsCount &&
+		prev.reel.sharesCount === next.reel.sharesCount &&
+		prev.reel.viewsCount === next.reel.viewsCount &&
+		prev.isActive === next.isActive &&
+		prev.isPreloading === next.isPreloading &&
+		prev.containerHeight === next.containerHeight &&
+		prev.containerWidth === next.containerWidth
+	);
+}
+
+function ReelPlayerItemComponent({
 	reel,
 	isActive,
+	isPreloading = false,
 	onToggleLike,
 	onRecordView,
 	onRecordShare,
@@ -82,8 +110,90 @@ export function ReelPlayerItem({
 	const isFocused = useIsFocused();
 	const [status, setStatus] = useState<AVPlaybackStatus | null>(null);
 	const [isMuted, setIsMuted] = useState(false);
-	const [isPlaying, setIsPlaying] = useState(true);
+	// userPaused: true when the user manually tapped to pause THIS reel.
+	// Resets automatically when the reel becomes active (swipe).
+	const [userPaused, setUserPaused] = useState(false);
 	const hasRecordedView = useRef(false);
+	const insets = useSafeAreaInsets();
+
+	// Calculate dynamic offsets so layout elements float perfectly above the bottom navigation bar and gesture area.
+	const navBarHeight = 60 + Math.max(insets.bottom, 12);
+	const bottomInfoBottom = navBarHeight + 12;
+	const rightOverlayBottom = navBarHeight + 24;
+
+	// ── Aspect ratio & ResizeMode detection ─────────────────────────────
+	// We default to COVER since 95%+ of reels are portrait. If the video
+	// is landscape or square, we dynamically switch to CONTAIN when its
+	// natural size is loaded to avoid cropping the content.
+	const [videoResizeMode, setVideoResizeMode] = useState<ResizeMode>(ResizeMode.COVER);
+
+	// ── First-frame readiness ─────────────────────────────────────────
+	// isVideoReady becomes true only when onReadyForDisplay fires, which
+	// means the decoder has produced the first pixel — the video is truly
+	// visible. We keep a permanent thumbnail overlay with animated opacity
+	// underneath the video so there's ALWAYS a visual fallback.
+	const [isVideoReady, setIsVideoReady] = useState(false);
+
+	// ── Thumbnail crossfade animation ────────────────────────────────
+	// The thumbnail opacity transitions smoothly from 1→0 when the
+	// video's first frame is ready, creating a crossfade instead of a
+	// hard cut. The thumbnail NEVER unmounts — only becomes transparent.
+	const thumbnailOpacity = useSharedValue(1);
+
+	const thumbnailAnimatedStyle = useAnimatedStyle(() => ({
+		opacity: thumbnailOpacity.value,
+	}));
+
+	// Reset readiness whenever a different video is mounted in this slot.
+	useEffect(() => {
+		setIsVideoReady(false);
+		setVideoResizeMode(ResizeMode.COVER); // default to COVER
+		thumbnailOpacity.value = 1;
+	}, [reel.id]);
+
+	// When the item becomes active again and the video is already
+	// loaded (e.g. scrolling back up to a previously viewed reel),
+	// immediately mark it as ready so the thumbnail fades out.
+	// Without this, audio plays but the thumbnail stays visible
+	// because onReadyForDisplay doesn't re-fire for already-decoded video.
+	useEffect(() => {
+		if (isActive && status && (status as any).isLoaded) {
+			setIsVideoReady(true);
+		}
+	}, [isActive, status]);
+
+	// Drive crossfade: when video is ready, fade the thumbnail out.
+	// When not ready, ensure thumbnail is fully opaque.
+	useEffect(() => {
+		thumbnailOpacity.value = withTiming(isVideoReady ? 0 : 1, { duration: 200 });
+	}, [isVideoReady]);
+
+	// onReadyForDisplay fires when the first frame is decoded.
+	const handleReadyForDisplay = useCallback((event: any) => {
+		setIsVideoReady(true);
+		const ns = event?.naturalSize;
+		if (ns && ns.width > 0 && ns.height > 0) {
+			const aspectRatio = ns.width / ns.height;
+			// Portrait (aspectRatio < 0.85) -> COVER (fill container naturally)
+			// Landscape/Square (aspectRatio >= 0.85) -> CONTAIN (avoid cropping)
+			const mode = aspectRatio < 0.85 ? ResizeMode.COVER : ResizeMode.CONTAIN;
+			setVideoResizeMode(mode);
+		}
+	}, []);
+
+	// Handle thumbnail loaded dimensions to set resizeMode before video play
+	const handleThumbnailLoad = useCallback((event: any) => {
+		const source = event?.source;
+		if (source && source.width > 0 && source.height > 0) {
+			const aspectRatio = source.width / source.height;
+			const mode = aspectRatio < 0.85 ? ResizeMode.COVER : ResizeMode.CONTAIN;
+			setVideoResizeMode(mode);
+		}
+	}, []);
+
+	const handlePlaybackStatusUpdate = useCallback((s: AVPlaybackStatus) => {
+		setStatus(s);
+	}, []);
 	
 	// Comments state
 	const [commentsVisible, setCommentsVisible] = useState(false);
@@ -146,17 +256,39 @@ export function ReelPlayerItem({
 		opacity: heartOpacity.value,
 	}));
 
+	// ── Video lifecycle ──────────────────────────────────────────────
+	// Hybrid approach: `shouldPlay` prop handles initial mount state,
+	// while imperative playAsync/pauseAsync ensures reliable toggling
+	// when isActive changes during FlatList recycling.
+	const shouldPlay = isActive && isFocused && !userPaused;
+
+	// Imperative play/pause — fires when activation state changes.
+	// This is necessary because expo-av's `shouldPlay` prop doesn't
+	// always re-evaluate reliably during FlatList cell recycling.
+	// • Active + playing: playAsync
+	// • Active + user paused: pauseAsync (keeps position, no native overlay)
+	// • Not active at all: pauseAsync (gentle stop, avoids native play icon)
 	useEffect(() => {
-		if (isActive && isFocused) {
-			videoRef.current?.playAsync().catch(() => {});
+		const video = videoRef.current;
+		if (!video) return;
+
+		if (shouldPlay) {
+			video.playAsync().catch(() => {});
+		} else {
+			video.pauseAsync().catch(() => {});
+		}
+	}, [shouldPlay]);
+
+	// Reset user-pause when this reel becomes active (user swiped to it).
+	useEffect(() => {
+		if (isActive) {
+			setUserPaused(false);
 			if (!hasRecordedView.current) {
 				onRecordView(reel.id);
 				hasRecordedView.current = true;
 			}
-		} else {
-			videoRef.current?.stopAsync().catch(() => {});
 		}
-	}, [isActive, isFocused, onRecordView, reel.id]);
+	}, [isActive]);
 
 	// Handle single/double tap on the screen
 	const handlePress = () => {
@@ -175,15 +307,8 @@ export function ReelPlayerItem({
 		}
 	};
 
-	const togglePlayPause = async () => {
-		if (!videoRef.current) return;
-		if (isPlaying) {
-			await videoRef.current.pauseAsync();
-			setIsPlaying(false);
-		} else {
-			await videoRef.current.playAsync();
-			setIsPlaying(true);
-		}
+	const togglePlayPause = () => {
+		setUserPaused(prev => !prev);
 	};
 
 	const handleDoubleTap = () => {
@@ -270,44 +395,92 @@ export function ReelPlayerItem({
 		<View style={[styles.container, { width: containerWidth, height: containerHeight }]}>
 			<TouchableWithoutFeedback onPress={handlePress}>
 				<View style={StyleSheet.absoluteFill}>
-					<Video
-						ref={videoRef}
-					source={{ uri: reel.videoUrl }}
-						isLooping
-						isMuted={isMuted}
-						style={StyleSheet.absoluteFillObject}
-						onPlaybackStatusUpdate={(statusObj) => setStatus(statusObj)}
-					/>
+					{/*
+					 * ── Cinematic video display ────────────────────────
+					 *
+					 * All videos (portrait, landscape, square) use the
+					 * same layout:
+					 *
+					 *   Layer 1: Blurred thumbnail filling the entire
+					 *            screen — eliminates pure black bars and
+					 *            gives a rich, immersive background.
+					 *
+					 *   Layer 2: Video inside a 90%-height centered
+					 *            container with ResizeMode.CONTAIN.
+					 *            Full width, vertically centered, with
+					 *            ~5% padding at top and bottom.
+					 *
+					 *   Layer 3: Sharp thumbnail overlay (crossfades
+					 *            out when the first video frame renders).
+					 */}
 
-					{(!(isActive && isFocused) || !status || !status.isLoaded) && (
+					{/* Blurred background — always fills entire screen */}
+					<Image
+						source={{ uri: reel.thumbnailUrl }}
+						style={StyleSheet.absoluteFillObject}
+						contentFit="cover"
+						blurRadius={30}
+					/>
+					{/* Darken overlay on blurred bg for cinematic look */}
+					<View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
+
+					{/* Video container — 90% height, centered vertically */}
+					<View style={styles.videoContainer}>
+						<Video
+							ref={videoRef}
+							source={{ uri: reel.videoUrl }}
+							shouldPlay={shouldPlay}
+							resizeMode={videoResizeMode}
+							isLooping
+							isMuted={isMuted}
+							style={styles.videoPlayer}
+							onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+							onReadyForDisplay={handleReadyForDisplay}
+						/>
+					</View>
+
+					{/* PERMANENT thumbnail layer — always rendered on top.
+					 *  Uses animated opacity to crossfade out when the video's
+					 *  first frame is decoded (onReadyForDisplay). NEVER unmounts,
+					 *  so there is always a visual fallback — eliminates black
+					 *  frames during swipe transitions completely. */}
+					<Animated.View style={[StyleSheet.absoluteFillObject, thumbnailAnimatedStyle]} pointerEvents="none">
 						<Image
 							source={{ uri: reel.thumbnailUrl }}
 							style={StyleSheet.absoluteFillObject}
-							contentFit="cover"
+							contentFit={videoResizeMode === ResizeMode.CONTAIN ? 'contain' : 'cover'}
+							onLoad={handleThumbnailLoad}
 						/>
+					</Animated.View>
+
+					{/* Centered Loading Spinner — shown only when active & not yet frame-ready */}
+					{isActive && isFocused && !isVideoReady && (
+						<View style={styles.loadingOverlay}>
+							<ActivityIndicator size="large" color="#FFFFFF" />
+						</View>
 					)}
 
-					{/* Top Gradient Overlay */}
+					{/* Top gradient */}
 					<LinearGradient
 						colors={['rgba(0,0,0,0.6)', 'transparent']}
 						style={styles.topGradient}
 					/>
 
-					{/* Bottom Gradient Overlay */}
+					{/* Bottom gradient */}
 					<LinearGradient
 						colors={['transparent', 'rgba(0,0,0,0.8)']}
 						style={styles.bottomGradient}
 					/>
 
-					{/* Double Tap Heart Indicator Overlay */}
+					{/* Double-tap heart */}
 					<View style={styles.heartOverlay}>
 						<Animated.View style={heartStyle}>
 							<Ionicons name="heart" size={100} color="#FF2D55" />
 						</Animated.View>
 					</View>
 
-					{/* Play/Pause state HUD indicator */}
-					{!isPlaying && (
+					{/* Play icon HUD — shown when user manually paused */}
+					{isActive && userPaused && (
 						<View style={styles.hudOverlay}>
 							<Ionicons name="play" size={50} color="rgba(255,255,255,0.7)" />
 						</View>
@@ -316,7 +489,7 @@ export function ReelPlayerItem({
 			</TouchableWithoutFeedback>
 
 			{/* Bottom info section */}
-			<View style={styles.bottomInfo}>
+			<View style={[styles.bottomInfo, { bottom: bottomInfoBottom }]}>
 				<View style={styles.authorRow}>
 					<Image
 						source={{ uri: reel.author.avatarUrl || DEFAULT_AVATAR_URL }}
@@ -339,7 +512,7 @@ export function ReelPlayerItem({
 			</View>
 
 			{/* Right-side button overlay */}
-			<View style={styles.rightOverlay}>
+			<View style={[styles.rightOverlay, { bottom: rightOverlayBottom }]}>
 				{/* Avatar */}
 				<View style={styles.avatarContainer}>
 					<Image
@@ -726,6 +899,27 @@ export function ReelPlayerItem({
 const styles = StyleSheet.create({
 	container: {
 		backgroundColor: '#000',
+		// Clip any overflow from the native Video wrapper so its black
+		// background can never bleed outside the item bounds.
+		overflow: 'hidden',
+	},
+	videoContainer: {
+		// Centered video area — accounts for overlapping UI:
+		// top: category pills + status bar (~8%)
+		// bottom: nav bar + safe area (~8%)
+		// Equal padding creates a visually centered video.
+		position: 'absolute',
+		top: '6%',
+		left: 0,
+		right: 0,
+		bottom: '6%',
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+	videoPlayer: {
+		width: '100%',
+		height: '100%',
+		backgroundColor: 'transparent',
 	},
 	topGradient: {
 		position: 'absolute',
@@ -755,6 +949,13 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		zIndex: 5,
 		backgroundColor: 'rgba(0,0,0,0.1)',
+	},
+	loadingOverlay: {
+		...StyleSheet.absoluteFillObject,
+		justifyContent: 'center',
+		alignItems: 'center',
+		zIndex: 4,
+		backgroundColor: 'rgba(0,0,0,0.35)',
 	},
 	rightOverlay: {
 		position: 'absolute',
@@ -1203,3 +1404,10 @@ const styles = StyleSheet.create({
 		backgroundColor: 'rgba(0,0,0,0.4)',
 	},
 });
+
+/**
+ * Exported as a memoized component. The custom comparator prevents
+ * re-renders triggered by parent state changes (share modal, category
+ * filter, etc.) that don't affect this item's output.
+ */
+export const ReelPlayerItem = memo(ReelPlayerItemComponent, arePropsEqual);

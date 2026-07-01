@@ -25,6 +25,16 @@ import {
 } from '@expo-google-fonts/poppins';
 import { Feather, MaterialCommunityIcons, Ionicons, FontAwesome } from '@expo/vector-icons';
 
+if (Platform.OS === 'web') {
+  const style = document.createElement('style');
+  style.textContent = `
+    video {
+      width: 100% !important;
+      height: 100% !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 // Deep-link / URL mapping
 const linking = {

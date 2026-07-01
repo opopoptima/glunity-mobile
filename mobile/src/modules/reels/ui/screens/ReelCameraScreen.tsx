@@ -10,11 +10,13 @@ import {
 	Platform,
 	ScrollView,
 	Alert,
-	Modal
+	Modal,
+	useWindowDimensions,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import { Video, ResizeMode, Audio } from 'expo-av';
 import axios from 'axios';
 import { ReelsService } from '../../services/reels.service';
@@ -31,6 +33,37 @@ export default function ReelCameraScreen() {
 	const navigation = useNavigation<any>();
 	const { theme: T } = useTheme();
 	const isFocused = useIsFocused();
+	const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+	// Available width for the preview (16px padding each side)
+	const previewWidth = screenWidth - 32;
+
+	// ── Video dimensions (read from ImagePicker asset metadata) ──────
+	// We store the original pixel dimensions so we can:
+	//  a) compute the container height that matches the video's ratio
+	//  b) choose the best ResizeMode (no guessing)
+	const [videoDimensions, setVideoDimensions] = useState<{ width: number; height: number } | null>(null);
+
+	// Compute container height for the preview.
+	// Use a 9:16 portrait aspect ratio (standard reel), capped so the form stays visible.
+	const previewHeight = React.useMemo(() => {
+		const portraitHeight = previewWidth * (16 / 9);
+		const maxHeight = screenHeight * 0.65;
+		return Math.min(portraitHeight, maxHeight);
+	}, [previewWidth, screenHeight]);
+
+	// ALWAYS use CONTAIN for the camera preview.
+	// This guarantees 100% of the video content is visible — no cropping, no zoom.
+	// The blurred background fills any letterbox areas.
+	// On web, expo-av’s COVER mode renders the <video> at native pixel dimensions
+	// causing a massive zoom/crop bug. CONTAIN avoids this entirely.
+	const videoResizeMode = ResizeMode.CONTAIN;
+
+	const handleReadyForDisplay = React.useCallback((event: any) => {
+		const ns = event?.naturalSize;
+		if (ns && ns.width > 0 && ns.height > 0) {
+			setVideoDimensions({ width: ns.width, height: ns.height });
+		}
+	}, []);
 
 	const [videoUri, setVideoUri] = useState<string | null>(null);
 	const [caption, setCaption] = useState('');
@@ -109,7 +142,15 @@ export default function ReelCameraScreen() {
 		});
 
 		if (!result.canceled && result.assets?.[0]) {
-			setVideoUri(result.assets[0].uri);
+			const asset = result.assets[0];
+			setVideoUri(asset.uri);
+			// Store real pixel dimensions so we compute the correct container
+			// height and resizeMode without guessing.
+			if (asset.width && asset.height) {
+				setVideoDimensions({ width: asset.width, height: asset.height });
+			} else {
+				setVideoDimensions(null); // fall back to 9:16 default
+			}
 		}
 	};
 
@@ -131,7 +172,13 @@ export default function ReelCameraScreen() {
 		});
 
 		if (!result.canceled && result.assets?.[0]) {
-			setVideoUri(result.assets[0].uri);
+			const asset = result.assets[0];
+			setVideoUri(asset.uri);
+			if (asset.width && asset.height) {
+				setVideoDimensions({ width: asset.width, height: asset.height });
+			} else {
+				setVideoDimensions(null);
+			}
 		}
 	};
 
@@ -275,20 +322,32 @@ export default function ReelCameraScreen() {
 
 			<ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
 				{videoUri ? (
-					<View style={styles.previewContainer}>
+					<View style={[styles.previewContainer, { height: previewHeight }]}>
+						{/* Blurred background fills any letterbox areas */}
+						<Image
+							source={{ uri: videoUri }}
+							style={StyleSheet.absoluteFillObject}
+							contentFit="cover"
+							blurRadius={30}
+						/>
+						<View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
+
 						{!uploading && (
-							<Video
-								source={{ uri: videoUri }}
-								resizeMode={ResizeMode.CONTAIN}
-								shouldPlay={isFocused && !uploading && !showSuccessModal}
-								isLooping
-								isMuted={isMuted}
-								volume={videoVolume}
-								style={styles.previewVideo}
-							/>
+							<View style={styles.videoWrapper}>
+								<Video
+									source={{ uri: videoUri }}
+									resizeMode={videoResizeMode}
+									shouldPlay={isFocused && !uploading && !showSuccessModal}
+									isLooping
+									isMuted={isMuted}
+									volume={videoVolume}
+									style={styles.previewVideo}
+									onReadyForDisplay={handleReadyForDisplay}
+								/>
+							</View>
 						)}
 						{!uploading && (
-							<TouchableOpacity style={styles.changeBtn} onPress={() => setVideoUri(null)}>
+							<TouchableOpacity style={styles.changeBtn} onPress={() => { setVideoUri(null); setVideoDimensions(null); }}>
 								<Ionicons name="trash-outline" size={20} color="#FFF" />
 								<Text style={styles.changeBtnText}>Remove Video</Text>
 							</TouchableOpacity>
@@ -603,15 +662,30 @@ const styles = StyleSheet.create({
 		fontWeight: '600',
 	},
 	previewContainer: {
-		height: 380,
+		// Height is set dynamically via inline style.
+		width: '100%',
 		backgroundColor: '#000',
-		borderRadius: 12,
+		borderRadius: 16,
 		overflow: 'hidden',
 		position: 'relative',
 		marginBottom: 20,
 	},
+	videoWrapper: {
+		// Constraining wrapper: absoluteFillObject anchors it to the container,
+		// and the Video inside uses width/height 100% to fill this wrapper.
+		// This prevents expo-av’s web <video> from rendering at native pixel size.
+		...StyleSheet.absoluteFillObject,
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
 	previewVideo: {
-		flex: 1,
+		// width: '100%' and height: '100%' fills the wrapper View. On web, this forces
+		// the expo-av wrapper <div> to have real dimensions, so the inner <video> tag
+		// respects object-fit (from resizeMode) instead of rendering at
+		// its native pixel size.
+		width: '100%',
+		height: '100%',
+		backgroundColor: 'transparent',
 	},
 	changeBtn: {
 		position: 'absolute',

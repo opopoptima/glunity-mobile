@@ -112,6 +112,21 @@ export default function ProfileScreen({ navigation, route }: Props) {
   const [deletingReel, setDeletingReel] = React.useState(false);
   const [pendingDeleteReelId, setPendingDeleteReelId] = React.useState<string | null>(null);
   const [activeVideoUrl, setActiveVideoUrl] = React.useState<string | null>(null);
+  const [modalVideoResizeMode, setModalVideoResizeMode] = React.useState<ResizeMode>(ResizeMode.COVER);
+
+  const handleModalVideoReady = React.useCallback((event: any) => {
+    const ns = event?.naturalSize;
+    if (ns && ns.width > 0 && ns.height > 0) {
+      const aspectRatio = ns.width / ns.height;
+      const mode = aspectRatio < 0.85 ? ResizeMode.COVER : ResizeMode.CONTAIN;
+      setModalVideoResizeMode(mode);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    setModalVideoResizeMode(ResizeMode.COVER);
+  }, [activeVideoUrl]);
+
 
   const fetchUserReels = async () => {
     if (!profileUser) return;
@@ -1941,10 +1956,11 @@ export default function ProfileScreen({ navigation, route }: Props) {
               rate={1.0}
               volume={1.0}
               isMuted={false}
-              resizeMode={ResizeMode.COVER}
+              resizeMode={modalVideoResizeMode}
               shouldPlay
               isLooping
               style={{ width: '100%', height: '100%' }}
+              onReadyForDisplay={handleModalVideoReady}
             />
             <TouchableOpacity
               style={{

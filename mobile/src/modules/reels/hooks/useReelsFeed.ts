@@ -104,8 +104,11 @@ export function useReelsFeed(initialCategory = 'all') {
 				...prev[cat],
 				loading: !isRefresh,
 				error: null,
-				reels: isRefresh || targetPage === 0 ? [] : prev[cat].reels,
-				activeIndex: isRefresh || targetPage === 0 ? 0 : prev[cat].activeIndex,
+				// IMPORTANT: Keep existing reels visible while fetching.
+				// Clearing to [] would force FlatList to treat data arrival
+				// as a fresh mount, re-applying initialNumToRender limit.
+				// The success handler replaces reels atomically with new data.
+				activeIndex: isRefresh ? 0 : prev[cat].activeIndex,
 			}
 		}));
 
