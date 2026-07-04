@@ -278,13 +278,6 @@ const reelsService = {
 		if (existingLike) {
 			await reelsRepository.deleteLike(reelId, userId);
 			const updatedReel = await reelsRepository.incrementLikes(reelId, -1);
-<<<<<<< HEAD
-			result = { liked: false, likesCount: updatedReel.likesCount };
-		} else {
-			await reelsRepository.createLike(reelId, userId);
-			const updatedReel = await reelsRepository.incrementLikes(reelId, 1);
-			result = { liked: true, likesCount: updatedReel.likesCount };
-=======
 
 			// Clean up notification on unlike
 			await Notification.findOneAndDelete({
@@ -293,7 +286,7 @@ const reelsService = {
 				type: 'REEL_LIKE'
 			});
 
-			return { liked: false, likesCount: updatedReel.likesCount };
+			result = { liked: false, likesCount: updatedReel.likesCount };
 		} else {
 			await reelsRepository.createLike(reelId, userId);
 			const updatedReel = await reelsRepository.incrementLikes(reelId, 1);
@@ -321,8 +314,7 @@ const reelsService = {
 				}
 			}
 
-			return { liked: true, likesCount: updatedReel.likesCount };
->>>>>>> d59cf1e (Upload updated + notification)
+			result = { liked: true, likesCount: updatedReel.likesCount };
 		}
 
 		// Recompute score asynchronously — fire and forget
@@ -369,11 +361,6 @@ const reelsService = {
 			throw AppError.notFound('Reel');
 		}
 		const updatedReel = await reelsRepository.incrementShares(reelId);
-<<<<<<< HEAD
-		// Recompute score asynchronously — fire and forget
-		this.recomputeScore(reelId);
-		return { sharesCount: updatedReel.sharesCount || 0 };
-=======
 
 		// Trigger share notification if not self-action.
 		// Notification failures must never fail the share action itself.
@@ -405,12 +392,13 @@ const reelsService = {
 			}
 		}
 
+		// Recompute score asynchronously — fire and forget
+		this.recomputeScore(reelId);
 		const sharesCount = typeof updatedReel?.sharesCount === 'number'
 			? updatedReel.sharesCount
 			: (typeof reel?.sharesCount === 'number' ? reel.sharesCount + 1 : 1);
 
 		return { sharesCount };
->>>>>>> d59cf1e (Upload updated + notification)
 	},
 
 	async getComments(reelId, { page = 0, limit = 50 } = {}) {
@@ -447,12 +435,8 @@ const reelsService = {
 			await ReelComment.findByIdAndUpdate(parentCommentId, { $inc: { replyCount: 1 } });
 		}
 
-<<<<<<< HEAD
 		// Recompute score asynchronously — fire and forget
 		this.recomputeScore(reelId);
-		
-=======
->>>>>>> d59cf1e (Upload updated + notification)
 		// Fetch populated comment to build a complete response
 		const createdComment = await ReelComment.findById(comment._id)
 			.populate('userId', 'fullName avatar')
