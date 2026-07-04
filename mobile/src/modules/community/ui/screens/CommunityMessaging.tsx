@@ -124,7 +124,7 @@ const ReelMessagePreview = ({
               }} />
 
               {/* Owner Info */}
-              <View style={[styles.reelTopOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.35)', borderRadius: 12, top: 8, left: 8, right: 8 }]}>
+              <View style={[styles.reelTopOverlay, { top: 8, left: 8 }]}>
                 {ownerAvatar ? (
                   <ExpoImage source={{ uri: ownerAvatar }} style={styles.reelAvatar} cachePolicy="memory-disk" />
                 ) : (
@@ -142,20 +142,15 @@ const ReelMessagePreview = ({
                 </View>
               </View>
 
-              {/* Bottom Badge Info */}
+              {/* Bottom Badge Info (caption removed; transparent background) */}
               <View style={{
                 position: 'absolute',
                 bottom: 0,
                 left: 0,
                 right: 0,
                 padding: 8,
-                backgroundColor: 'rgba(0,0,0,0.5)',
+                backgroundColor: 'transparent',
               }}>
-                {!!caption && (
-                  <Text numberOfLines={2} style={{ color: '#FFFFFF', fontSize: 11, marginBottom: 4, fontWeight: '500' }}>
-                    {caption}
-                  </Text>
-                )}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                     <Ionicons name="film" size={10} color="#FFFFFF" style={{ marginRight: 4 }} />

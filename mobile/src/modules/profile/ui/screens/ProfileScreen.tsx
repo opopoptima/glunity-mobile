@@ -132,7 +132,7 @@ export default function ProfileScreen({ navigation, route }: Props) {
     if (!profileUser) return;
     try {
       setLoadingReels(true);
-      const res = await ReelsService.getUserReels(profileUser._id || profileUser.id);
+      const res = await ReelsService.getUserReels(profileUser._id || profileUser.id, 0, 50, { timeout: 20000 });
       if (res.success && res.data) {
         setReels(res.data);
       }

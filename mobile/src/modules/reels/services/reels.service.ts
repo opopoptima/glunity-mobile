@@ -154,8 +154,8 @@ export const ReelsService = {
 		return response.data;
 	},
 
-	async getUserReels(authorId: string, page = 0, limit = 50): Promise<{ success: boolean; data: Reel[] }> {
-		const response = await http.get<{ success: boolean; data: Reel[] }>(`/reels?authorId=${authorId}&page=${page}&limit=${limit}`);
+	async getUserReels(authorId: string, page = 0, limit = 50, config?: AxiosRequestConfig): Promise<{ success: boolean; data: Reel[] }> {
+		const response = await http.get<{ success: boolean; data: Reel[] }>(`/reels?authorId=${authorId}&page=${page}&limit=${limit}`, config);
 		return response.data;
 	},
 

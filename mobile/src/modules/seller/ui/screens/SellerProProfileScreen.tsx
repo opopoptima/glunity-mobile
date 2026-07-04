@@ -137,7 +137,7 @@ export default function SellerProProfileScreen({ navigation }: Props) {
     if (!user) return;
     try {
       setLoadingReels(true);
-      const res = await ReelsService.getUserReels(user._id);
+      const res = await ReelsService.getUserReels(user._id, 0, 50, { timeout: 20000 });
       if (res.success && res.data) {
         setReels(res.data);
       }
