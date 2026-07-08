@@ -31,10 +31,16 @@ const toMessageResponse = (msg) => {
   };
 };
 
-const toMessageListResponse = (items, { cursor, hasMore } = {}) => ({
-  success: true,
-  data:    items.map(toMessageResponse),
-  meta:    { cursor: cursor ?? null, hasMore: hasMore ?? false },
-});
+const toMessageListResponse = (items, { cursor, hasMore } = {}) => {
+  const mapped = items.map(toMessageResponse);
+  return {
+    success: true,
+    data:    mapped,
+    messages: mapped,
+    hasMore: hasMore ?? false,
+    nextCursor: cursor ?? null,
+    meta:    { cursor: cursor ?? null, hasMore: hasMore ?? false },
+  };
+};
 
 module.exports = { toMessageResponse, toMessageListResponse };

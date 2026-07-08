@@ -418,26 +418,18 @@ export default function ReelsFeedScreen() {
 	const setActiveIndexRef = useRef(setActiveIndex);
 	setActiveIndexRef.current = setActiveIndex;
 
-	const handleScroll = useCallback((event: any) => {
-		const y = event.nativeEvent.contentOffset.y;
-		const index = Math.round(y / layoutHeight);
-		if (index >= 0 && index < reels.length) {
-			if (index !== activeIndexRef.current) {
-				setActiveIndexRef.current(index);
+	const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+		const visible = viewableItems.find(item => item.isViewable && item.index !== null);
+		if (visible && visible.index !== null) {
+			if (visible.index !== activeIndexRef.current) {
+				setActiveIndexRef.current(visible.index);
 			}
 		}
-	}, [layoutHeight, reels.length]);
+	}).current;
 
-	// Use onMomentumScrollEnd as the primary, reliable index change trigger.
-	// With pagingEnabled=true the scroll always lands on an exact multiple
-	// of layoutHeight, so this fires once per settled swipe.
-	const handleMomentumEnd = useCallback((event: any) => {
-		const y = event.nativeEvent.contentOffset.y;
-		const index = Math.round(y / layoutHeight);
-		if (index >= 0 && index < reels.length && index !== activeIndexRef.current) {
-			setActiveIndexRef.current(index);
-		}
-	}, [layoutHeight, reels.length]);
+	const viewabilityConfig = useRef({
+		itemVisiblePercentThreshold: 80,
+	}).current;
 
 	// renderItem wrapped in useCallback — MUST NOT depend on activeIndex.
 	// Including activeIndex in deps causes the FlatList to receive a new
@@ -487,9 +479,8 @@ export default function ReelsFeedScreen() {
 						bounces={false}
 						overScrollMode="never"
 						showsVerticalScrollIndicator={false}
-						onScroll={handleScroll}
-						onMomentumScrollEnd={handleMomentumEnd}
-						onScrollEndDrag={handleScroll}
+						onViewableItemsChanged={onViewableItemsChanged}
+						viewabilityConfig={viewabilityConfig}
 						scrollEventThrottle={16}
 						getItemLayout={getItemLayout}
 						windowSize={15}

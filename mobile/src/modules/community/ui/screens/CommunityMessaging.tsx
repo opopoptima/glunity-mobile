@@ -171,6 +171,570 @@ const ReelMessagePreview = ({
   );
 };
 
+const MessageItem = React.memo(({
+  item,
+  index,
+  prevMsg,
+  nextMsg,
+  shouldGroup,
+  isContinuation,
+  channelParticipants,
+  user,
+  T,
+  isDark,
+  isRTL,
+  dmPartnerId,
+  isDMChannel,
+  highlightedMsgId,
+  windowWidth,
+  playingId,
+  audioProgress,
+  onPress,
+  onLongPress,
+  onRetrySend,
+  onToggleReaction,
+  onUserProfilePress,
+  onReactorsPress,
+  onTogglePin,
+  navigation,
+  t,
+  styles,
+  reducedMotion
+}: any) => {
+  const senderId = typeof item.senderId === 'object' && item.senderId ? (item.senderId._id || item.senderId.id) : item.senderId;
+  const isMe = String(senderId) === String(user?._id || user?.id);
+  const isTemp = String(item.id || '').startsWith('temp-');
+  const avatarUrl = item.senderAvatarUrl || (typeof item.senderId === 'object' && item.senderId ? item.senderId.avatar?.url : null);
+  const itemId = String(item.id || item._id);
+
+  const firstAtt = item.attachments && item.attachments.length > 0 ? item.attachments[0] : null;
+  const isAudio = firstAtt?.type === 'audio';
+  const isImage = firstAtt?.type === 'image';
+  const isVideo = firstAtt?.type === 'video';
+  const isMedia = isImage || isVideo;
+  const isDeleted = Boolean(item.deletedAt);
+  const isReel = item.type === 'reel' || !!item.reelRef;
+
+  const highlighted = itemId === highlightedMsgId;
+  const isPlaying = playingId === itemId;
+
+  const bubbleStyle = isMe
+    ? [
+        highlighted
+          ? [styles.bubbleRight, { backgroundColor: isDark ? '#196F3D' : '#27AE60', transform: [{ scale: 1.02 }] }]
+          : styles.bubbleRight,
+        { borderBottomRightRadius: shouldGroup ? 18 : 4 },
+        (isMedia || isReel) && { paddingVertical: 0, paddingHorizontal: 0 },
+        isAudio && { minWidth: 208 },
+        isDeleted && {
+          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
+          borderStyle: 'dashed' as const,
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+        }
+      ]
+    : [
+        highlighted
+          ? [styles.bubbleLeft, { backgroundColor: isDark ? '#2E4053' : '#D5F5E3', transform: [{ scale: 1.02 }] }]
+          : styles.bubbleLeft,
+        { borderBottomLeftRadius: shouldGroup ? 18 : 4 },
+        (isMedia || isReel) && { paddingVertical: 0, paddingHorizontal: 0 },
+        isAudio && { minWidth: 208 },
+        isDeleted && {
+          backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
+          borderWidth: 1,
+          borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
+          borderStyle: 'dashed' as const,
+          paddingVertical: 8,
+          paddingHorizontal: 12,
+        }
+      ];
+
+  const formatMessageTime = (dateString: string) => {
+    const date = new Date(dateString || Date.now());
+    const now = new Date();
+    const isToday = date.getDate() === now.getDate() &&
+      date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear();
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (isToday) return timeStr;
+    const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    return `${dateStr}, ${timeStr}`;
+  };
+
+  const formatDuration = (sec?: number) => {
+    if (sec === undefined || isNaN(sec)) return '0:00';
+    const roundedSec = Math.round(sec);
+    const mins = Math.floor(roundedSec / 60);
+    const secs = roundedSec % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const renderDateSeparator = (currentMsg: any, prevMsg: any) => {
+    if (!currentMsg) return null;
+    const currentDate = new Date(currentMsg.createdAt || currentMsg.created_at);
+    if (isNaN(currentDate.getTime())) return null;
+
+    if (prevMsg) {
+      const prevDate = new Date(prevMsg.createdAt || prevMsg.created_at);
+      if (!isNaN(prevDate.getTime())) {
+        if (
+          currentDate.getDate() === prevDate.getDate() &&
+          currentDate.getMonth() === prevDate.getMonth() &&
+          currentDate.getFullYear() === prevDate.getFullYear()
+        ) {
+          return null;
+        }
+      }
+    }
+
+    const now = new Date();
+    const isToday =
+      currentDate.getDate() === now.getDate() &&
+      currentDate.getMonth() === now.getMonth() &&
+      currentDate.getFullYear() === now.getFullYear();
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday =
+      currentDate.getDate() === yesterday.getDate() &&
+      currentDate.getMonth() === yesterday.getMonth() &&
+      currentDate.getFullYear() === yesterday.getFullYear();
+
+    let dateLabel = '';
+    if (isToday) {
+      dateLabel = t('Today') || 'Today';
+    } else if (isYesterday) {
+      dateLabel = t('Yesterday') || 'Yesterday';
+    } else {
+      dateLabel = currentDate.toLocaleDateString([], {
+        weekday: 'long',
+        month: 'short',
+        day: 'numeric',
+        year: currentDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+      });
+    }
+
+    return (
+      <View style={{ alignItems: 'center', marginVertical: 12 }}>
+        <View style={{ backgroundColor: isDark ? '#2C3E50' : '#EAECEE', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
+          <Text style={{ fontSize: 11, fontWeight: '600', color: T.textMuted }}>{dateLabel}</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const reactionPills = !item.deletedAt && item.reactionCounts && Object.keys(item.reactionCounts).length > 0 ? (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
+      {Object.entries(item.reactionCounts).map(([emoji, count]: any) => (
+        <TouchableOpacity
+          key={emoji}
+          onPress={() => onToggleReaction(itemId, emoji)}
+          onLongPress={() => onReactorsPress(itemId, item.reactionCounts)}
+          style={{ backgroundColor: 'rgba(0,0,0,0.07)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, marginRight: 5, marginBottom: 3, flexDirection: 'row', alignItems: 'center' }}
+        >
+          <Text style={{ fontSize: 13 }}>{emoji}</Text>
+          <Text style={{ fontSize: 11, marginLeft: 3, color: isMe ? 'rgba(255,255,255,0.8)' : T.textMuted, fontWeight: '600' }}>{count}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  ) : null;
+
+  const replyPreview = item.replyTo && item.replyTo.messageId ? (
+    <View style={{
+      borderLeftWidth: 3,
+      borderLeftColor: isMe ? 'rgba(255,255,255,0.6)' : (T.green || '#2ECC71'),
+      paddingLeft: 8,
+      marginBottom: 6,
+      backgroundColor: isMe ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.04)',
+      borderRadius: 4,
+      paddingVertical: 4,
+    }}>
+      <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? 'rgba(255,255,255,0.8)' : (T.green || '#2ECC71') }}>
+        {item.replyTo.senderName || 'User'}
+      </Text>
+      <Text numberOfLines={1} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.65)' : T.textMuted }}>
+        {item.replyTo.preview || '...'}
+      </Text>
+    </View>
+  ) : null;
+
+  const renderBubbleContent = () => {
+    if (isDeleted) {
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Ionicons name="trash-outline" size={14} color={T.textMuted} style={{ opacity: 0.65 }} />
+          <Text style={{ fontStyle: 'italic', color: T.textMuted, fontSize: 13.5 }}>
+            {t('Message deleted')}
+          </Text>
+        </View>
+      );
+    }
+
+    if (item.status === 'sending') {
+      if (isImage || isVideo) {
+        return (
+          <View style={{
+            width: Math.min(windowWidth * 0.68, 250),
+            height: Math.min(windowWidth * 0.51, 188),
+            backgroundColor: T.surfaceAlt,
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <ActivityIndicator size="small" color={isMe ? '#fff' : T.textMuted} />
+          </View>
+        );
+      }
+      return (
+        <View style={{ paddingVertical: 8, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', minWidth: 100 }}>
+          <ActivityIndicator size="small" color={isMe ? '#fff' : T.textMuted} />
+        </View>
+      );
+    }
+
+    if (isAudio) {
+      return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 180 }}>
+          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: isMe ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.04)', justifyContent: 'center', alignItems: 'center' }}>
+            <Ionicons name={isPlaying ? 'pause' : 'play'} size={16} color={isMe ? '#fff' : T.text} />
+          </View>
+          <View style={{ width: 60, marginLeft: 8, marginRight: 6, justifyContent: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 26 }}>
+              {[6, 10, 14, 20, 14, 10, 8, 12].map((h, idx) => {
+                const isPlayed = isPlaying && audioProgress >= (idx / 8);
+                return (
+                  <Animated.View key={idx} style={{ width: 3.5, marginHorizontal: 1.5, backgroundColor: isMe ? '#fff' : T.text, height: h - 2, borderRadius: 1.5, opacity: isPlayed ? 1 : 0.4 }} />
+                );
+              })}
+            </View>
+          </View>
+          {isPlaying ? (
+            <Text style={{ color: isMe ? '#fff' : T.text, fontSize: 11, minWidth: 35, textAlign: 'right' }}>
+              {formatDuration(audioProgress * (firstAtt?.duration || item.duration || 0))}
+            </Text>
+          ) : (
+            <Text style={{ color: isMe ? '#fff' : T.text, fontSize: 11 }}>
+              {formatDuration(firstAtt?.duration || item.duration)}
+            </Text>
+          )}
+        </View>
+      );
+    }
+
+    if (isImage) {
+      const imgUrl = firstAtt?.url || firstAtt?.thumbnail;
+      const thumbUrl = firstAtt?.thumbnail || firstAtt?.url;
+      return (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => { if (firstAtt?.url) Linking.openURL(firstAtt.url).catch(() => { }); }}
+          onLongPress={longPressHandler}
+          delayLongPress={300}
+          style={{ overflow: 'hidden' }}
+        >
+          <ExpoImage
+            source={{ uri: imgUrl }}
+            placeholder={{ uri: thumbUrl }}
+            placeholderContentFit="cover"
+            style={{
+              width: Math.min(windowWidth * 0.68, 250),
+              height: Math.min(windowWidth * 0.51, 188),
+              backgroundColor: T.surfaceAlt,
+            }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={200}
+          />
+          {!!item.content && (
+            <View style={{ paddingHorizontal: 12, paddingBottom: 10, paddingTop: 6 }}>
+              <Text style={[styles.msgText, { color: isMe ? '#fff' : T.text }]}>{item.content}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    }
+
+    if (isVideo) {
+      const videoUrl = firstAtt?.url;
+      const thumbUrl = firstAtt?.thumbnail || (() => {
+        if (videoUrl && videoUrl.includes('cloudinary.com') && videoUrl.includes('/video/upload/')) {
+          let thumb = videoUrl.replace(/\.[a-zA-Z0-9]+$/, '.jpg');
+          thumb = thumb.replace('/video/upload/', '/video/upload/c_fill,g_center,h_400,w_400/');
+          return thumb;
+        }
+        return null;
+      })();
+      return (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => { if (videoUrl) Linking.openURL(videoUrl).catch(() => { }); }}
+          onLongPress={longPressHandler}
+          delayLongPress={300}
+          style={{ overflow: 'hidden', position: 'relative' }}
+        >
+          {thumbUrl ? (
+            <ExpoImage
+              source={{ uri: thumbUrl }}
+              style={{
+                width: Math.min(windowWidth * 0.68, 250),
+                height: Math.min(windowWidth * 0.45, 170),
+                backgroundColor: T.surfaceAlt,
+              }}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <View style={{
+              width: Math.min(windowWidth * 0.68, 250),
+              height: Math.min(windowWidth * 0.45, 170),
+              backgroundColor: isDark ? '#1a2a1a' : '#e8f5e9',
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <Ionicons name="videocam" size={32} color={T.green || '#2ECC71'} />
+            </View>
+          )}
+          {/* Play overlay */}
+          <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center' }}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
+              <Ionicons name="play" size={22} color="#fff" />
+            </View>
+          </View>
+          {!!item.content && (
+            <View style={{ paddingHorizontal: 12, paddingBottom: 10, paddingTop: 6 }}>
+              <Text style={[styles.msgText, { color: isMe ? '#fff' : T.text }]}>{item.content}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    }
+
+    if (isReel) {
+      const isDeleted = !!item.reelRef?.isDeleted;
+      const rawThumb = isDeleted ? null : (item.reelRef?.thumbnailUrl || item.reelRef?.thumbnail);
+      const thumb = rawThumb || (item.reelRef?.videoUrl ? item.reelRef.videoUrl.replace(/\.[a-z0-9]+$/i, '.jpg') : null);
+
+      return (
+        <View>
+          {replyPreview}
+          <ReelMessagePreview
+            thumb={thumb}
+            isDeleted={isDeleted}
+            isMe={isMe}
+            ownerName={item.reelRef?.ownerName || item.senderName || 'Anonymous'}
+            ownerAvatar={item.reelRef?.ownerAvatar || avatarUrl || null}
+            caption={item.reelRef?.title || ''}
+            duration={item.reelRef?.duration || 0}
+            onPress={() => {
+              if (isDeleted) {
+                Alert.alert('Not Available', 'This reel is no longer available.');
+              } else {
+                navigation.navigate('ReelsFeed', { reelId: item.reelRef?.reelId });
+              }
+            }}
+            onLongPress={longPressHandler}
+            windowWidth={windowWidth}
+            theme={T}
+            styles={styles}
+          />
+        </View>
+      );
+    }
+
+    return (
+      <Text style={[styles.msgText, isMe ? { color: '#fff' } : undefined]}>{item.content}</Text>
+    );
+  };
+
+  const longPressHandler = () => {
+    if (isTemp || item.deletedAt) return;
+    onLongPress(itemId);
+  };
+
+  const pressHandler = () => {
+    if (isTemp || item.deletedAt) return;
+    onPress(item);
+  };
+
+  const showAvatar = !isMe && !dmPartnerId && !shouldGroup;
+  const showAvatarPlaceholder = !isMe && !dmPartnerId && shouldGroup;
+
+  const now = Date.now();
+  const isNew = now - new Date(item.createdAt || item.created_at).getTime() < 3000;
+  const enteringAnimation = isNew && !reducedMotion
+    ? (isMe
+      ? SlideInRight.duration(250)
+      : FadeInDown.duration(250))
+    : undefined;
+
+  return (
+    <View>
+      {renderDateSeparator(item, prevMsg)}
+      <AnimatedReanimated.View
+        entering={enteringAnimation}
+        style={[styles.row, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}
+      >
+        {showAvatar && (
+          avatarUrl ? (
+            <ExpoImage source={{ uri: avatarUrl }} style={styles.avatar} cachePolicy="memory-disk" />
+          ) : (
+            <TouchableOpacity
+              onPress={() => senderId && onUserProfilePress(senderId)}
+              activeOpacity={0.8}
+              style={[styles.avatar, { backgroundColor: T.surfaceAlt, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: T.divider }]}
+            >
+              <Text style={{ color: T.text, fontSize: 13, fontWeight: '700' }}>
+                {String(item.senderName || 'A').charAt(0).toUpperCase()}
+              </Text>
+            </TouchableOpacity>
+          )
+        )}
+        {showAvatarPlaceholder && (
+          <View style={styles.avatar} />
+        )}
+
+        {isMe && item.status === 'failed' && (
+          <TouchableOpacity onPress={() => onRetrySend(item)} style={{ marginRight: 6, alignSelf: 'center', padding: 4 }} accessibilityLabel="Retry sending">
+            <Ionicons name="alert-circle" size={20} color="#E74C3C" />
+          </TouchableOpacity>
+        )}
+        {isMe && item.status === 'sending' && (
+          <View style={{ marginRight: 6, alignSelf: 'center', padding: 4 }}>
+            <ActivityIndicator size="small" color={T.textMuted} />
+          </View>
+        )}
+
+        <View style={[styles.messageBlock, isMe ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
+          {!isMe && !dmPartnerId && !isContinuation && (
+            <Text style={{ fontSize: 11, fontWeight: '600', color: T.green || '#2ECC71', marginBottom: 3, marginLeft: 6 }}>
+              {item.senderName || 'User'}
+            </Text>
+          )}
+
+          {isReel ? (
+            <View>
+              {replyPreview}
+              {renderBubbleContent()}
+            </View>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.92}
+              onLongPress={longPressHandler}
+              onPress={pressHandler}
+              style={bubbleStyle}
+            >
+              {replyPreview}
+              {renderBubbleContent()}
+            </TouchableOpacity>
+          )}
+
+          {isReel && !!item.content && (
+            <View style={{ marginTop: 8 }}>
+              <TouchableOpacity
+                activeOpacity={0.92}
+                onLongPress={longPressHandler}
+                onPress={pressHandler}
+                style={isMe ? styles.bubbleRight : styles.bubbleLeft}
+              >
+                <Text style={[styles.msgText, isMe ? { color: '#fff' } : { color: T.text }]}>{item.content}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {reactionPills}
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, marginHorizontal: 6 }}>
+            {!!item.pinned && (
+              <Ionicons name="pin" size={11} color={T.green || '#2ECC71'} style={{ marginRight: 4 }} />
+            )}
+            <Text style={{ fontSize: 10, color: T.textMuted }}>
+              {formatMessageTime(item.createdAt || item.created_at)}
+            </Text>
+            {isMe && !isTemp && !isDeleted && (() => {
+              const isRead = (() => {
+                const parts = channelParticipants || [];
+                const msgTime = new Date(item.createdAt || item.created_at).getTime();
+
+                if (isDMChannel) {
+                  const partner = parts.find((p: any) => {
+                    const pId = p.userId?._id || p.userId || p._id || p.id;
+                    return pId && String(pId) !== String(user?._id || user?.id);
+                  });
+                  if (!partner || !partner.lastReadAt) return false;
+                  return new Date(partner.lastReadAt).getTime() >= msgTime;
+                } else {
+                  return parts.some((p: any) => {
+                    const pId = p.userId?._id || p.userId || p._id || p.id;
+                    return pId && String(pId) !== String(user?._id || user?.id) && p.lastReadAt && new Date(p.lastReadAt).getTime() >= msgTime;
+                  });
+                }
+              })();
+
+              if (isRead) {
+                return (
+                  <Ionicons name="checkmark-done" size={13} color={T.green || '#2ECC71'} style={{ marginLeft: 3 }} />
+                );
+              } else {
+                return (
+                  <Ionicons name="checkmark" size={13} color={T.textMuted || '#888'} style={{ marginLeft: 3 }} />
+                );
+              }
+            })()}
+            {!!item.editedAt && !isDeleted && (
+              <Text style={{ fontSize: 9, color: T.textMuted, marginLeft: 4, fontStyle: 'italic' }}>{t('edited')}</Text>
+            )}
+          </View>
+        </View>
+      </AnimatedReanimated.View>
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  const pItem = prevProps.item;
+  const nItem = nextProps.item;
+  
+  if (pItem.id !== nItem.id || pItem._id !== nItem._id) return false;
+  if (pItem.content !== nItem.content) return false;
+  if (pItem.status !== nItem.status) return false;
+  if (pItem.deletedAt !== nItem.deletedAt) return false;
+  if (pItem.editedAt !== nItem.editedAt) return false;
+  if (pItem.pinned !== nItem.pinned) return false;
+
+  // Compare reactionCounts
+  const pReacts = pItem.reactionCounts || {};
+  const nReacts = nItem.reactionCounts || {};
+  const pKeys = Object.keys(pReacts);
+  const nKeys = Object.keys(nReacts);
+  if (pKeys.length !== nKeys.length) return false;
+  for (const k of pKeys) {
+    if (pReacts[k] !== nReacts[k]) return false;
+  }
+
+  // Compare highlight state
+  const pId = pItem.id || pItem._id;
+  const nId = nItem.id || nItem._id;
+  const prevHighlight = prevProps.highlightedMsgId === pId;
+  const nextHighlight = nextProps.highlightedMsgId === nId;
+  if (prevHighlight !== nextHighlight) return false;
+
+  // Compare audio playing state
+  const prevPlaying = prevProps.playingId === pId;
+  const nextPlaying = nextProps.playingId === nId;
+  if (prevPlaying !== nextPlaying) return false;
+
+  if (nextPlaying && prevProps.audioProgress !== nextProps.audioProgress) return false;
+
+  // Compare grouping indices
+  if (prevProps.isContinuation !== nextProps.isContinuation) return false;
+  if (prevProps.shouldGroup !== nextProps.shouldGroup) return false;
+  
+  // Compare channel participants (for read receipts)
+  if (prevProps.channelParticipants?.length !== nextProps.channelParticipants?.length) return false;
+
+  return true;
+});
+
 export default function CommunityMessaging({ initialChannel, initialChannelId, navigation }: any) {
   const { user } = useAuth();
   const { theme: T, isDark } = useTheme();
@@ -182,6 +746,13 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   const [showSearchHeader, setShowSearchHeader] = useState(false);
   const [messageSearchText, setMessageSearchText] = useState('');
 
+  const isInitialLoadRef = React.useRef(true);
+
+  // Reset initial load status when opening a different channel
+  React.useEffect(() => {
+    isInitialLoadRef.current = true;
+  }, [initialChannelId]);
+
   // Extract all states and operations from our state controller
   const chat = useCommunityChat(initialChannel, initialChannelId, navigation);
 
@@ -190,6 +761,10 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
     const q = messageSearchText.toLowerCase();
     return chat.messages.filter(m => m.content && m.content.toLowerCase().includes(q));
   }, [chat.messages, messageSearchText]);
+
+  const reversedMessages = useMemo(() => {
+    return [...filteredMessages].reverse();
+  }, [filteredMessages]);
 
   const [highlightedMsgId, setHighlightedMsgId] = React.useState<string | null>(null);
   const [showNotificationModal, setShowNotificationModal] = React.useState(false);
@@ -661,454 +1236,69 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
   };
 
   const renderItem = useCallback(({ item, index }: { item: any; index: number }) => {
+    const origIndex = filteredMessages.findIndex(m => String(m.id || m._id) === String(item.id || item._id));
+    const prevMsg = origIndex > 0 ? filteredMessages[origIndex - 1] : null;
+    const nextMsg = origIndex < filteredMessages.length - 1 ? filteredMessages[origIndex + 1] : null;
+
     const senderId = typeof item.senderId === 'object' && item.senderId ? (item.senderId._id || item.senderId.id) : item.senderId;
-    const isMe = String(senderId) === String((user as any)?._id || (user as any)?.id);
-    const isTemp = String(item.id || '').startsWith('temp-');
-    const avatarUrl = item.senderAvatarUrl || (typeof item.senderId === 'object' && item.senderId ? item.senderId.avatar?.url : null);
-
-    const itemId = String(item.id || item._id);
-    const shouldAnimate = !seenIds.current.has(itemId);
-    if (shouldAnimate) {
-      seenIds.current.add(itemId);
-    }
-
-    const delay = index * 40;
-    const enteringAnimation = !shouldAnimate || reducedMotion
-      ? undefined
-      : (isMe
-        ? SlideInRight.duration(250).delay(delay)
-        : FadeInDown.duration(250).delay(delay));
-
-    const firstAtt = item.attachments && item.attachments.length > 0 ? item.attachments[0] : null;
-    const isAudio = firstAtt?.type === 'audio';
-    const isImage = firstAtt?.type === 'image';
-    const isVideo = firstAtt?.type === 'video';
-    const isMedia = isImage || isVideo;
-    const isDeleted = Boolean(item.deletedAt);
-    const isReel = item.type === 'reel' || !!item.reelRef;
-
-    // Grouping / bubble tail calculations
     const currentMsgDate = new Date(item.createdAt || item.created_at);
 
-    const nextMsg = index < chat.messages.length - 1 ? chat.messages[index + 1] : null;
     const nextSenderId = nextMsg ? (typeof nextMsg.senderId === 'object' && nextMsg.senderId ? (nextMsg.senderId._id || nextMsg.senderId.id) : nextMsg.senderId) : null;
     const isNextFromSameSender = nextMsg && String(nextSenderId) === String(senderId);
     const nextMsgDate = nextMsg ? new Date(nextMsg.createdAt || nextMsg.created_at) : null;
     const isNextCloseInTime = nextMsgDate && !isNaN(nextMsgDate.getTime()) && !isNaN(currentMsgDate.getTime()) && (nextMsgDate.getTime() - currentMsgDate.getTime() < 60000);
     const shouldGroup = isNextFromSameSender && isNextCloseInTime;
 
-    const prevMsg = index > 0 ? chat.messages[index - 1] : null;
     const prevSenderId = prevMsg ? (typeof prevMsg.senderId === 'object' && prevMsg.senderId ? (prevMsg.senderId._id || prevMsg.senderId.id) : prevMsg.senderId) : null;
     const isPrevFromSameSender = prevMsg && String(prevSenderId) === String(senderId);
     const prevMsgDate = prevMsg ? new Date(prevMsg.createdAt || prevMsg.created_at) : null;
     const isPrevCloseInTime = prevMsgDate && !isNaN(prevMsgDate.getTime()) && !isNaN(currentMsgDate.getTime()) && (currentMsgDate.getTime() - prevMsgDate.getTime() < 60000);
     const isContinuation = isPrevFromSameSender && isPrevCloseInTime;
 
-    const bubbleStyle = isMe
-      ? [
-          (item.id || item._id) === highlightedMsgId
-            ? [styles.bubbleRight, { backgroundColor: isDark ? '#196F3D' : '#27AE60', transform: [{ scale: 1.02 }] }]
-            : styles.bubbleRight,
-          { borderBottomRightRadius: shouldGroup ? 18 : 4 },
-          (isMedia || isReel) && { paddingVertical: 0, paddingHorizontal: 0 },
-          isAudio && { minWidth: 208 },
-          isDeleted && {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
-            borderStyle: 'dashed' as const,
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-          }
-        ]
-      : [
-          (item.id || item._id) === highlightedMsgId
-            ? [styles.bubbleLeft, { backgroundColor: isDark ? '#2E4053' : '#D5F5E3', transform: [{ scale: 1.02 }] }]
-            : styles.bubbleLeft,
-          { borderBottomLeftRadius: shouldGroup ? 18 : 4 },
-          (isMedia || isReel) && { paddingVertical: 0, paddingHorizontal: 0 },
-          isAudio && { minWidth: 208 },
-          isDeleted && {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
-            borderWidth: 1,
-            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
-            borderStyle: 'dashed' as const,
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-          }
-        ];
-
-    // Reaction pills — hidden on deleted messages
-    const reactionPills = !item.deletedAt && item.reactionCounts && Object.keys(item.reactionCounts).length > 0 ? (
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 6 }}>
-        {Object.entries(item.reactionCounts).map(([emoji, count]: any) => (
-          <TouchableOpacity
-            key={emoji}
-            onPress={() => chat.handleToggleReaction(item.id || item._id, emoji)}
-            onLongPress={() => {
-              setReactorsMsgId(item.id || item._id);
-              setReactorsCounts(item.reactionCounts);
-              setReactorsSheetVisible(true);
-            }}
-            style={{ backgroundColor: 'rgba(0,0,0,0.07)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, marginRight: 5, marginBottom: 3, flexDirection: 'row', alignItems: 'center' }}
-          >
-            <Text style={{ fontSize: 13 }}>{emoji}</Text>
-            <Text style={{ fontSize: 11, marginLeft: 3, color: isMe ? 'rgba(255,255,255,0.8)' : T.textMuted, fontWeight: '600' }}>{count}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    ) : null;
-
-    // Reply preview pill
-    const replyPreview = item.replyTo && item.replyTo.messageId ? (
-      <View style={{
-        borderLeftWidth: 3,
-        borderLeftColor: isMe ? 'rgba(255,255,255,0.6)' : (T.green || '#2ECC71'),
-        paddingLeft: 8,
-        marginBottom: 6,
-        backgroundColor: isMe ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0.04)',
-        borderRadius: 4,
-        paddingVertical: 4,
-      }}>
-        <Text style={{ fontSize: 11, fontWeight: '700', color: isMe ? 'rgba(255,255,255,0.8)' : (T.green || '#2ECC71') }}>
-          {item.replyTo.senderName || 'User'}
-        </Text>
-        <Text numberOfLines={1} style={{ fontSize: 12, color: isMe ? 'rgba(255,255,255,0.65)' : T.textMuted }}>
-          {item.replyTo.preview || '...'}
-        </Text>
-      </View>
-    ) : null;
-    const renderBubbleContent = () => {
-      if (item.deletedAt) {
-        return (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="trash-outline" size={14} color={T.textMuted} style={{ opacity: 0.65 }} />
-            <Text style={{ fontStyle: 'italic', color: T.textMuted, fontSize: 13.5 }}>
-              {t('Message deleted')}
-            </Text>
-          </View>
-        );
-      }
-
-      // Loading indicator for optimistic messages
-      if (item.status === 'sending') {
-        if (isImage || isVideo) {
-          return (
-            <View style={{
-              width: Math.min(windowWidth * 0.68, 250),
-              height: Math.min(windowWidth * 0.51, 188),
-              backgroundColor: T.surfaceAlt,
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <ActivityIndicator size="small" color={isMe ? '#fff' : T.textMuted} />
-            </View>
-          );
-        }
-        return (
-          <View style={{ paddingVertical: 8, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', minWidth: 100 }}>
-            <ActivityIndicator size="small" color={isMe ? '#fff' : T.textMuted} />
-          </View>
-        );
-      }
-      if (isAudio) {
-        const isPlaying = chat.playingId === (item.id || item._id);
-        return (
-          <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 180 }}>
-            <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: isMe ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.04)', justifyContent: 'center', alignItems: 'center' }}>
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={16} color={isMe ? '#fff' : T.text} />
-            </View>
-            <View style={{ width: 60, marginLeft: 8, marginRight: 6, justifyContent: 'center' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 26 }}>
-                {[6, 10, 14, 20, 14, 10, 8, 12].map((h, idx) => {
-                  const isPlayed = isPlaying && chat.audioProgress >= (idx / 8);
-                  return (
-                    <Animated.View key={idx} style={{ width: 3.5, marginHorizontal: 1.5, backgroundColor: isMe ? '#fff' : T.text, height: h - 2, borderRadius: 1.5, opacity: isPlayed ? 1 : 0.4 }} />
-                  );
-                })}
-              </View>
-            </View>
-            {isPlaying ? (
-              <Text style={{ color: isMe ? '#fff' : T.text, fontSize: 11, minWidth: 35, textAlign: 'right' }}>
-                {formatDuration(chat.audioProgress * (firstAtt?.duration || item.duration || 0))}
-              </Text>
-            ) : (
-              <Text style={{ color: isMe ? '#fff' : T.text, fontSize: 11 }}>
-                {formatDuration(firstAtt?.duration || item.duration)}
-              </Text>
-            )}
-          </View>
-        );
-      }
-      if (isImage) {
-        const imgUrl = firstAtt?.thumbnail || firstAtt?.url;
-        return (
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => { if (firstAtt?.url) Linking.openURL(firstAtt.url).catch(() => { }); }}
-            onLongPress={longPressHandler}
-            delayLongPress={300}
-            style={{ overflow: 'hidden' }}
-          >
-            <Image
-              source={{ uri: imgUrl }}
-              style={{
-                width: Math.min(windowWidth * 0.68, 250),
-                height: Math.min(windowWidth * 0.51, 188),
-                backgroundColor: T.surfaceAlt,
-              }}
-              resizeMode="cover"
-            />
-            {!!item.content && (
-              <View style={{ paddingHorizontal: 12, paddingBottom: 10, paddingTop: 6 }}>
-                <Text style={[styles.msgText, { color: isMe ? '#fff' : T.text }]}>{item.content}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        );
-      }
-
-      if (isVideo) {
-        const thumbUrl = firstAtt?.thumbnail || (() => {
-          const videoUrl = firstAtt?.url;
-          if (videoUrl && videoUrl.includes('cloudinary.com') && videoUrl.includes('/video/upload/')) {
-            let thumb = videoUrl.replace(/\.[a-zA-Z0-9]+$/, '.jpg');
-            thumb = thumb.replace('/video/upload/', '/video/upload/c_fill,g_center,h_400,w_400/');
-            return thumb;
-          }
-          return null;
-        })();
-        return (
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => { if (firstAtt?.url) Linking.openURL(firstAtt.url).catch(() => { }); }}
-            onLongPress={longPressHandler}
-            delayLongPress={300}
-            style={{ overflow: 'hidden', position: 'relative' }}
-          >
-            {thumbUrl ? (
-              <Image
-                source={{ uri: thumbUrl }}
-                style={{
-                  width: Math.min(windowWidth * 0.68, 250),
-                  height: Math.min(windowWidth * 0.45, 170),
-                  backgroundColor: T.surfaceAlt,
-                }}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={{
-                width: Math.min(windowWidth * 0.68, 250),
-                height: Math.min(windowWidth * 0.45, 170),
-                backgroundColor: isDark ? '#1a2a1a' : '#e8f5e9',
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}>
-                <Ionicons name="videocam" size={32} color={T.green || '#2ECC71'} />
-              </View>
-            )}
-            {/* Play overlay */}
-            <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center' }}>
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' }}>
-                <Ionicons name="play" size={22} color="#fff" />
-              </View>
-            </View>
-            {!!item.content && (
-              <View style={{ paddingHorizontal: 12, paddingBottom: 10, paddingTop: 6 }}>
-                <Text style={[styles.msgText, { color: isMe ? '#fff' : T.text }]}>{item.content}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        );
-      }
-
-      if (isReel) {
-        const isDeleted = !!item.reelRef?.isDeleted;
-        const rawThumb = isDeleted ? null : (item.reelRef?.thumbnailUrl || item.reelRef?.thumbnail);
-        const thumb = rawThumb || (item.reelRef?.videoUrl ? item.reelRef.videoUrl.replace(/\.[a-z0-9]+$/i, '.jpg') : null);
-
-        return (
-          <View>
-            {replyPreview}
-            <ReelMessagePreview
-              thumb={thumb}
-              isDeleted={isDeleted}
-              isMe={isMe}
-              ownerName={item.reelRef?.ownerName || item.senderName || 'Anonymous'}
-              ownerAvatar={item.reelRef?.ownerAvatar || avatarUrl || null}
-              caption={item.reelRef?.title || ''}
-              duration={item.reelRef?.duration || 0}
-              onPress={() => {
-                if (isDeleted) {
-                  Alert.alert('Not Available', 'This reel is no longer available.');
-                } else {
-                  navigation.navigate('ReelsFeed', { reelId: item.reelRef?.reelId });
-                }
-              }}
-              onLongPress={longPressHandler}
-              windowWidth={windowWidth}
-              theme={T}
-              styles={styles}
-            />
-          </View>
-        );
-      }
-
-      // Default: text
-      return (
-        <Text style={[styles.msgText, isMe ? { color: '#fff' } : undefined]}>{item.content}</Text>
-      );
-    };
-
-    const longPressHandler = () => {
-      if (isTemp || item.deletedAt) return;
-      chat.setReactionMsgId(item.id || item._id);
-    };
-
-    const pressHandler = () => {
-      if (isTemp || item.deletedAt) return;
-      if (isAudio) {
-        chat.playAudio(item);
-      } else {
-        chat.handlePressMessage(item);
-      }
-    };
-
-    const showAvatar = !isMe && !dmPartnerId && !shouldGroup;
-    const showAvatarPlaceholder = !isMe && !dmPartnerId && shouldGroup;
-
     return (
-      <View>
-        {renderDateSeparator(item, prevMsg)}
-        <AnimatedReanimated.View
-          entering={enteringAnimation}
-          style={[styles.row, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}
-        >
-          {showAvatar && (
-            avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatar, { backgroundColor: T.surfaceAlt, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: T.divider }]}>
-                <Text style={{ color: T.text, fontSize: 13, fontWeight: '700' }}>
-                  {String(item.senderName || 'A').charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )
-          )}
-          {showAvatarPlaceholder && (
-            <View style={styles.avatar} />
-          )}
-
-          {/* Optimistic send status indicators */}
-          {isMe && item.status === 'failed' && (
-            <TouchableOpacity onPress={() => chat.handleRetrySend(item)} style={{ marginRight: 6, alignSelf: 'center', padding: 4 }} accessibilityLabel="Retry sending">
-              <Ionicons name="alert-circle" size={20} color="#E74C3C" />
-            </TouchableOpacity>
-          )}
-          {isMe && item.status === 'sending' && (
-            <View style={{ marginRight: 6, alignSelf: 'center', padding: 4 }}>
-              <ActivityIndicator size="small" color={T.textMuted} />
-            </View>
-          )}
-
-          <View style={[styles.messageBlock, isMe ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
-            {/* Only show sender name in GROUP conversations for the first message of a group */}
-            {!isMe && !dmPartnerId && !isContinuation && (
-              <Text style={{ fontSize: 11, fontWeight: '600', color: T.green || '#2ECC71', marginBottom: 3, marginLeft: 6 }}>
-                {item.senderName || 'User'}
-              </Text>
-            )}
-
-            {isReel ? (
-              <View>
-                {replyPreview}
-                {renderBubbleContent()}
-              </View>
-            ) : (
-              <TouchableOpacity
-                activeOpacity={0.92}
-                onLongPress={longPressHandler}
-                onPress={pressHandler}
-                style={bubbleStyle}
-              >
-                {replyPreview}
-                {renderBubbleContent()}
-              </TouchableOpacity>
-            )}
-
-            {/* If reel, render the message as a separate bubble below the reel preview */}
-            {isReel && !!item.content && (
-              <View style={{ marginTop: 8 }}>
-                <TouchableOpacity
-                  activeOpacity={0.92}
-                  onLongPress={longPressHandler}
-                  onPress={pressHandler}
-                  style={isMe ? styles.bubbleRight : styles.bubbleLeft}
-                >
-                  <Text style={[styles.msgText, isMe ? { color: '#fff' } : { color: T.text }]}>{item.content}</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Reaction pills — rendered OUTSIDE the bubble touchable to prevent
-                event bubbling from pill taps triggering the bubble's onPress handler */}
-            {reactionPills}
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3, marginHorizontal: 6 }}>
-              {!!item.pinned && (
-                <Ionicons name="pin" size={11} color={T.green || '#2ECC71'} style={{ marginRight: 4 }} />
-              )}
-              <Text style={{ fontSize: 10, color: T.textMuted }}>
-                {formatMessageTime(item.createdAt || item.created_at)}
-              </Text>
-              {isMe && !isTemp && !isDeleted && (() => {
-                const isRead = (() => {
-                  const ch = chat.channel;
-                  if (!ch) return false;
-                  const parts = ch.participants || ch.members || [];
-                  const msgTime = new Date(item.createdAt || item.created_at).getTime();
-
-                  if (isDMChannel) {
-                    const partner = parts.find((p: any) => {
-                      const pId = p.userId?._id || p.userId || p._id || p.id;
-                      return pId && String(pId) !== String(user?._id);
-                    });
-                    if (!partner || !partner.lastReadAt) return false;
-                    return new Date(partner.lastReadAt).getTime() >= msgTime;
-                  } else {
-                    return parts.some((p: any) => {
-                      const pId = p.userId?._id || p.userId || p._id || p.id;
-                      return pId && String(pId) !== String(user?._id) && p.lastReadAt && new Date(p.lastReadAt).getTime() >= msgTime;
-                    });
-                  }
-                })();
-
-                if (isRead) {
-                  return (
-                    <Ionicons name="checkmark-done" size={13} color={T.green || '#2ECC71'} style={{ marginLeft: 3 }} />
-                  );
-                } else {
-                  return (
-                    <Ionicons name="checkmark" size={13} color={T.textMuted || '#888'} style={{ marginLeft: 3 }} />
-                  );
-                }
-              })()}
-              {!!item.editedAt && !isDeleted && (
-                <Text style={{ fontSize: 9, color: T.textMuted, marginLeft: 4, fontStyle: 'italic' }}>{t('edited')}</Text>
-              )}
-            </View>
-          </View>
-        </AnimatedReanimated.View>
-      </View>
+      <MessageItem
+        item={item}
+        index={index}
+        prevMsg={prevMsg}
+        nextMsg={nextMsg}
+        shouldGroup={shouldGroup}
+        isContinuation={isContinuation}
+        channelParticipants={chat.channel?.participants || chat.channel?.members || []}
+        user={user}
+        T={T}
+        isDark={isDark}
+        isRTL={isRTL}
+        dmPartnerId={dmPartnerId}
+        isDMChannel={isDMChannel}
+        highlightedMsgId={highlightedMsgId}
+        windowWidth={windowWidth}
+        playingId={chat.playingId}
+        audioProgress={chat.audioProgress}
+        onPress={chat.playingId === (item.id || item._id) ? chat.playAudio : chat.handlePressMessage}
+        onLongPress={chat.setReactionMsgId}
+        onRetrySend={chat.handleRetrySend}
+        onToggleReaction={chat.handleToggleReaction}
+        onUserProfilePress={chat.openUserProfile}
+        onReactorsPress={(msgId: string, counts: any) => {
+          setReactorsMsgId(msgId);
+          setReactorsCounts(counts);
+          setReactorsSheetVisible(true);
+        }}
+        onTogglePin={chat.handleTogglePin}
+        navigation={navigation}
+        t={t}
+        styles={styles}
+        reducedMotion={reducedMotion}
+      />
     );
   }, [
-    chat.messages, chat.channel, chat.playingId, chat.audioProgress,
+    filteredMessages, chat.playingId, chat.audioProgress,
+    chat.playAudio, chat.handlePressMessage, chat.setReactionMsgId,
+    chat.handleRetrySend, chat.handleToggleReaction, chat.openUserProfile,
+    chat.handleTogglePin, chat.channel?.participants, chat.channel?.members,
     user, T, isDark, isRTL, dmPartnerId, isDMChannel,
-    highlightedMsgId, windowWidth, seenIds, reducedMotion,
-    chat.handleToggleReaction, chat.setReactionMsgId, chat.playAudio,
-    chat.handlePressMessage, chat.handleRetrySend, chat.handleTogglePin,
-    setReactorsMsgId, setReactorsCounts, setReactorsSheetVisible,
-    t, formatMessageTime, formatDuration, styles,
+    highlightedMsgId, windowWidth, setReactorsMsgId, setReactorsCounts,
+    setReactorsSheetVisible, t, styles, reducedMotion, navigation
   ]);
 
   if (!chat.channel) {
@@ -1522,9 +1712,10 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
         ) : (
           <FlatList
             ref={chat.listRef}
-            data={filteredMessages}
+            data={reversedMessages}
             keyExtractor={(i) => String(i.id || i._id || Math.random())}
             renderItem={renderItem}
+            inverted={true}
             contentContainerStyle={[
               styles.listContent,
               { paddingBottom: 16 },
@@ -1533,18 +1724,18 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             // ── Performance ────────────────────────────────────────────
-            windowSize={10}
-            maxToRenderPerBatch={10}
+            windowSize={5}
+            maxToRenderPerBatch={8}
             initialNumToRender={20}
-            removeClippedSubviews={Platform.OS === 'android'}
+            removeClippedSubviews={true}
+            updateCellsBatchingPeriod={50}
             // ── Scroll throttle — fire at most every 100ms ─────────────
             scrollEventThrottle={100}
             onScroll={(event) => {
-              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+              const { contentOffset } = event.nativeEvent;
 
-              // Track whether user is near the bottom (within 150px)
-              const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-              const nearBottom = distanceFromBottom < 150;
+              // In an inverted list, y = 0 is the bottom (newest messages)
+              const nearBottom = contentOffset.y < 150;
               chat.isNearBottomRef.current = nearBottom;
 
               if (nearBottom !== isNearBottom) {
@@ -1555,24 +1746,28 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
               if (nearBottom && chat.unreadCount > 0) {
                 chat.setUnreadCount(0);
               }
-
-              // Load more when scrolled to the very top
-              if (contentOffset.y <= 20 && !chat.loadingMore) {
+            }}
+            onEndReached={() => {
+              if (chat.hasMore && !chat.loadingMore) {
                 chat.loadMoreMessages();
               }
             }}
-            ListHeaderComponent={
+            onEndReachedThreshold={0.2}
+            ListFooterComponent={
               chat.loadingMore ? (
-                <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+                <View style={{ paddingVertical: 12, alignItems: 'center', transform: [{ scaleY: -1 }] }}>
                   <ActivityIndicator size="small" color={T.green || '#2ECC71'} />
+                </View>
+              ) : (!chat.hasMore && chat.messages.length > 0) ? (
+                <View style={{ paddingVertical: 16, alignItems: 'center', transform: [{ scaleY: -1 }] }}>
+                  <Text style={{ fontSize: 13, color: T.textMuted || '#7F8C8D', fontStyle: 'italic' }}>
+                    {t("You've reached the beginning of the conversation") || "You've reached the beginning of the conversation"}
+                  </Text>
                 </View>
               ) : null
             }
-            onContentSizeChange={() => { /* no-op — auto-scroll disabled */ }}
-            onLayout={() => { /* no-op — auto-scroll disabled */ }}
-
             ListEmptyComponent={
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60, transform: [{ scaleY: -1 }] }}>
                 <Ionicons name="chatbubbles-outline" size={64} color={T.textMuted} style={{ marginBottom: 12, opacity: 0.5 }} />
                 <Text style={{ fontSize: 16, fontWeight: '600', color: T.text, textAlign: 'center' }}>
                   {dmPartnerId
@@ -1596,31 +1791,19 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
           </Animated.View>
         ) : null}
 
-        {/* Floating Scroll to Bottom Arrow */}
+        {/* Floating Scroll to Bottom Arrow / New Messages Pill */}
         {(!isNearBottom || chat.unreadCount > 0) && (() => {
-          const ButtonContent = (
-            <View style={{ width: 44, height: 44, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+          const hasUnread = chat.unreadCount > 0;
+          const ButtonContent = hasUnread ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 6 }}>
+              <Ionicons name="arrow-down-circle" size={18} color="#fff" />
+              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '700', fontFamily: 'Poppins_700Bold' }}>
+                {t('New Messages') || 'New Messages'} {chat.unreadCount > 1 ? `(${chat.unreadCount})` : ''}
+              </Text>
+            </View>
+          ) : (
+            <View style={{ width: 44, height: 44, justifyContent: 'center', alignItems: 'center' }}>
               <Ionicons name="arrow-down" size={20} color={T.text} />
-              {chat.unreadCount > 0 && (
-                <View style={{
-                  position: 'absolute',
-                  top: 2,
-                  right: 2,
-                  backgroundColor: T.green || '#2ECC71',
-                  minWidth: 18,
-                  height: 18,
-                  borderRadius: 9,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  paddingHorizontal: 4,
-                  borderWidth: 1.5,
-                  borderColor: T.surface,
-                }}>
-                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>
-                    {chat.unreadCount}
-                  </Text>
-                </View>
-              )}
             </View>
           );
 
@@ -1630,25 +1813,23 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                 position: 'absolute',
                 left: 0,
                 right: 0,
-                bottom: chat.isRecording ? 104 : insets.bottom + 104, // floats elegantly above the input bar with plenty of clearance
+                bottom: chat.isRecording ? 104 : insets.bottom + 104,
                 alignItems: 'center',
                 justifyContent: 'center',
                 zIndex: 99,
               }}
             >
               <TouchableOpacity
-                activeOpacity={0.7}
+                activeOpacity={0.8}
                 onPress={() => {
-                  chat.listRef.current?.scrollToEnd({ animated: true });
+                  chat.scrollToEnd(true);
                   chat.setUnreadCount(0);
                 }}
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
+                  borderRadius: hasUnread ? 20 : 22,
                   overflow: 'hidden',
-                  backgroundColor: isDark ? 'rgba(30, 30, 30, 0.75)' : 'rgba(255, 255, 255, 0.8)',
-                  borderWidth: 1,
+                  backgroundColor: hasUnread ? (T.green || '#2ECC71') : (isDark ? 'rgba(30, 30, 30, 0.75)' : 'rgba(255, 255, 255, 0.8)'),
+                  borderWidth: hasUnread ? 0 : 1,
                   borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)',
                   justifyContent: 'center',
                   alignItems: 'center',
@@ -1659,7 +1840,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                   elevation: 4,
                 }}
               >
-                {BlurView ? (
+                {!hasUnread && BlurView ? (
                   <BlurView
                     intensity={60}
                     tint={isDark ? 'dark' : 'light'}
@@ -1672,7 +1853,7 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                     {ButtonContent}
                   </BlurView>
                 ) : (
-                  <View style={{ ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' }}>
+                  <View style={!hasUnread ? { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' } : undefined}>
                     {ButtonContent}
                   </View>
                 )}

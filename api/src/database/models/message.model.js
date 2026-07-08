@@ -61,6 +61,8 @@ const messageSchema = new Schema(
 
 // Cursor-based pagination index (newest-first)
 messageSchema.index({ channelId: 1, createdAt: -1 });
+messageSchema.index({ channelId: 1, _id: -1 });
+messageSchema.index({ channelId: 1, createdAt: -1, _id: -1 });
 // Allow filtering out deleted messages efficiently
 messageSchema.index({ deletedAt: 1 });
 

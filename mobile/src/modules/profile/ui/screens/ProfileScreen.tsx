@@ -1621,8 +1621,12 @@ export default function ProfileScreen({ navigation, route }: Props) {
                     style={s.reelGridItem}
                     activeOpacity={0.9}
                     onPress={() => {
-                      setSelectedReel(reel);
-                      setIsStatsModalOpen(true);
+                      if (isOwnProfile) {
+                        setSelectedReel(reel);
+                        setIsStatsModalOpen(true);
+                      } else {
+                        navigation.navigate('ReelsFeed', { autoOpenReelId: reel.id });
+                      }
                     }}
                   >
                     <Image
@@ -1630,12 +1634,14 @@ export default function ProfileScreen({ navigation, route }: Props) {
                       style={s.reelThumbnail}
                       resizeMode="cover"
                     />
-                    <View style={s.viewsOverlay}>
-                      <Feather name="play" size={10} color="#FFFFFF" />
-                      <Text style={s.viewsOverlayText}>
-                        {reel.viewsCount >= 1000 ? `${(reel.viewsCount / 1000).toFixed(1)}k` : reel.viewsCount}
-                      </Text>
-                    </View>
+                    {isOwnProfile && reel.viewsCount !== undefined && (
+                      <View style={s.viewsOverlay}>
+                        <Feather name="play" size={10} color="#FFFFFF" />
+                        <Text style={s.viewsOverlayText}>
+                          {reel.viewsCount >= 1000 ? `${(reel.viewsCount / 1000).toFixed(1)}k` : reel.viewsCount}
+                        </Text>
+                      </View>
+                    )}
                     {isOwnProfile && (
                       <TouchableOpacity
                         style={s.reelOptionsBtn}

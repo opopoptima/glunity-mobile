@@ -271,24 +271,15 @@ export function useReelsFeed(initialCategory = 'all') {
 		}
 	}, [category]);
 
-	const recordView = useCallback(async (reelId: string) => {
-		if (viewedReelsRef.current.has(reelId)) {
-			return;
-		}
+	const recordView = useCallback((reelId: string) => {
 		const cat = category;
-		try {
-			await ReelsService.recordView(reelId);
-			viewedReelsRef.current.add(reelId);
-			setFeeds(prev => ({
-				...prev,
-				[cat]: {
-					...prev[cat],
-					reels: prev[cat].reels.map(r => r.id === reelId ? { ...r, viewsCount: r.viewsCount + 1 } : r)
-				}
-			}));
-		} catch (err) {
-			console.warn('Failed to record view for reel:', reelId, err);
-		}
+		setFeeds(prev => ({
+			...prev,
+			[cat]: {
+				...prev[cat],
+				reels: prev[cat].reels.map(r => r.id === reelId ? { ...r, viewsCount: (r.viewsCount || 0) + 1 } : r)
+			}
+		}));
 	}, [category]);
 
 	const recordShare = useCallback(async (reelId: string) => {

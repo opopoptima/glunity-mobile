@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import axios from 'axios';
 import { Platform, Alert, Animated, Dimensions, Clipboard, LayoutAnimation, UIManager } from 'react-native';
 import http from '../../../core/network/http.client';
 import * as ImagePicker from 'expo-image-picker';
@@ -68,6 +69,8 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const { socket } = useSocket();
   const { theme: T } = useTheme();
   const { t } = useLanguage();
+
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const safeGoBack = useCallback(() => {
     if (navigation && typeof navigation.goBack === 'function') {
@@ -173,7 +176,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   const shouldScrollToEndRef = useRef(false);
   const scrollToEnd = useCallback((animated = true) => {
     setTimeout(() => {
-      listRef.current?.scrollToEnd({ animated });
+      listRef.current?.scrollToOffset({ offset: 0, animated });
     }, 60);
   }, []);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -293,29 +296,32 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     const cursor = oldestMsg._id || oldestMsg.id;
     if (!cursor) return;
 
+    const controller = abortControllerRef.current || new AbortController();
     setLoadingMore(true);
     try {
       const res = await messagingHttp.get(`/channels/${targetId}/messages`, {
         params: {
-          limit: 30,
+          limit: 20,
           cursor,
           direction: 'before',
         },
+        signal: controller.signal,
       });
 
       const older = res.data?.data || [];
-      if (older.length < 30) {
+      if (older.length < 20) {
         setHasMore(false);
       }
 
       if (older.length > 0) {
         setMessages((prev) => {
-          const existingIds = new Set(prev.map((m) => m._id || m.id));
-          const uniqueOlder = older.filter((m: any) => !existingIds.has(m._id || m.id));
+          const existingIds = new Set(prev.map((m) => String(m._id || m.id)));
+          const uniqueOlder = older.filter((m: any) => !existingIds.has(String(m._id || m.id)));
           return [...uniqueOlder, ...prev];
         });
       }
     } catch (err) {
+      if (axios.isCancel(err)) return;
       console.warn('[community] Failed to load older messages', err);
     } finally {
       setLoadingMore(false);
@@ -326,6 +332,10 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
   useEffect(() => {
     if (!channelId) return;
     let mounted = true;
+
+    // Create abort controller for this channel lifecycle
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     async function loadHistory() {
       const id = channelId as string; // guarded by `if (!channelId) return` above
@@ -353,34 +363,71 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       setLoading(true);
       try {
         // 2. Fetch fresh messages from the backend (uses auto-refresh interceptor)
-        const res = await messagingHttp.get(`/channels/${id}/messages?limit=60`);
+        const res = await messagingHttp.get(`/channels/${id}/messages?limit=20`, {
+          signal: controller.signal,
+        });
         if (!mounted) return;
 
         const fresh = res.data?.data || [];
-        setMessages(fresh);
-        if (fresh.length < 60) {
+        
+        let mergedMessages: any[] = [];
+        setMessages((prev) => {
+          const merged = [...prev];
+          const existingIds = new Set(merged.map(m => String(m.id || m._id)));
+          
+          fresh.forEach((msg: any) => {
+            const idStr = String(msg.id || msg._id);
+            if (!existingIds.has(idStr)) {
+              merged.push(msg);
+            } else {
+              const idx = merged.findIndex(m => String(m.id || m._id) === idStr);
+              if (idx !== -1) {
+                merged[idx] = msg;
+              }
+            }
+          });
+          
+          mergedMessages = merged.sort((a, b) => {
+            const tA = new Date(a.createdAt || 0).getTime();
+            const tB = new Date(b.createdAt || 0).getTime();
+            return tA - tB;
+          });
+          return mergedMessages;
+        });
+
+        if (fresh.length < 20) {
           setHasMore(false);
         }
+        
         scrollToEnd(false);
 
-        // 3. Update the local cache
-        await ChatCacheService.saveMessages(id, fresh);
+        // 3. Update the local cache with the merged messages
+        if (mergedMessages.length > 0) {
+          await ChatCacheService.saveMessages(id, mergedMessages);
+        } else if (fresh.length > 0) {
+          await ChatCacheService.saveMessages(id, fresh);
+        }
 
-        if (fresh.length > 0) {
-          const lastMsg = fresh[fresh.length - 1];
+        const newestList = mergedMessages.length > 0 ? mergedMessages : fresh;
+        if (newestList.length > 0) {
+          const lastMsg = newestList[newestList.length - 1];
           const lastMsgId = lastMsg.id || lastMsg._id;
           if (lastMsgId) {
             markAsRead(id, lastMsgId);
           }
         }
       } catch (err) {
+        if (axios.isCancel(err)) return;
         console.warn('[community] loadHistory failed', err);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
     // Explicitly catch to avoid unhandled promise rejections
     loadHistory().catch((err) => {
+      if (axios.isCancel(err)) return;
       console.warn('[useCommunityChat] loadHistory unexpected error', err);
     });
 
@@ -389,7 +436,10 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       messagingEvents.emit('channel:opened', channelId);
     } catch (e) { }
 
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
   }, [channelId, markAsRead, scrollToEnd]);
 
   // Synchronize state mutations (new WS messages, reactions, edits, deletions) to cache
@@ -577,7 +627,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
         socket.emit('channel:join', { channelId });
       }
       try {
-        const res = await messagingHttp.get(`/channels/${channelId}/messages?limit=60`);
+        const res = await messagingHttp.get(`/channels/${channelId}/messages?limit=20`);
         const fresh: any[] = res.data?.data || [];
         if (fresh.length > 0) {
           setMessages((prev: any[]) => {
@@ -630,14 +680,24 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     }
   }, [currentTime, duration, playingId]);
 
-  // Clean up recording timers when the hook unmounts
+  // Clean up audio player, recorder, and active timers on unmount
   useEffect(() => {
     return () => {
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
+      if (player) {
+        try {
+          player.pause();
+          if (typeof player.release === 'function') player.release();
+          else if (typeof player.remove === 'function') player.remove();
+        } catch (e) {}
+      }
+      if (recorder && recorder.isRecording) {
+        recorder.stop().catch(() => {});
+      }
     };
-  }, []);
+  }, [player, recorder]);
 
   // Emitting typing events (throttled client-side to prevent socket spam)
   useEffect(() => {
@@ -1517,7 +1577,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       try {
         messagingEvents.emit('channel:updated', updatedChannel);
       } catch (e) {}
-      const freshMsgRes = await messagingHttp.get(`/channels/${channelId}/messages?limit=60`);
+      const freshMsgRes = await messagingHttp.get(`/channels/${channelId}/messages?limit=20`);
       setMessages(freshMsgRes.data?.data || []);
       Alert.alert(t('Success'), t('You joined the channel!'));
     } catch (err: any) {
@@ -1723,6 +1783,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     popEmoji,
     popAnim,
     listRef,
+    scrollToEnd,
     isNearBottomRef,
     unreadCount,
     setUnreadCount,

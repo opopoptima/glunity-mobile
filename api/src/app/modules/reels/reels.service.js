@@ -87,7 +87,7 @@ const reelsService = {
 		const reelIds = reels.map(r => r._id);
 		const likesMap = userId ? await reelsRepository.hasLikedMany(reelIds, userId) : {};
 		
-		return reelsMapper.toReelListResponse(reels, likesMap);
+		return reelsMapper.toReelListResponse(reels, likesMap, userId);
 	},
 
 	async createReel(payload, userId) {
@@ -131,7 +131,7 @@ const reelsService = {
 		}
 
 		const populatedReel = await reelsRepository.findById(reel._id);
-		return reelsMapper.toReelResponse(populatedReel, false);
+		return reelsMapper.toReelResponse(populatedReel, false, userId);
 	},
 
 	async updateReel(reelId, userId, payload) {
@@ -181,7 +181,7 @@ const reelsService = {
 		}
 
 		const liked = await reelsRepository.hasLiked(reelId, userId);
-		return reelsMapper.toReelResponse(updatedReel, liked);
+		return reelsMapper.toReelResponse(updatedReel, liked, userId);
 	},
 
 	async deleteReel(reelId, currentUser) {
@@ -353,6 +353,36 @@ const reelsService = {
 		// Recompute score asynchronously — fire and forget
 		this.recomputeScore(reelId);
 		return { success: true, counted: true };
+	},
+
+	async recordAnalytics(reelId, userId = null, { impressions = 0, plays = 0, watchTime = 0, completions = 0, qualifiedView = false } = {}) {
+		const reel = await reelsRepository.findById(reelId);
+		if (!reel) {
+			throw AppError.notFound('Reel');
+		}
+
+		// Update continuous analytics counters
+		await reelsRepository.incrementAnalytics(reelId, { impressions, plays, watchTime, completions });
+
+		let viewCounted = false;
+		if (qualifiedView) {
+			if (userId) {
+				const alreadyViewed = await reelsRepository.hasViewedToday(reelId, userId);
+				if (!alreadyViewed) {
+					await reelsRepository.recordViewEvent(reelId, userId);
+					await reelsRepository.incrementViews(reelId);
+					viewCounted = true;
+				}
+			} else {
+				// Anonymous user — always count qualified view
+				await reelsRepository.incrementViews(reelId);
+				viewCounted = true;
+			}
+		}
+
+		// Recompute score asynchronously — fire and forget
+		this.recomputeScore(reelId);
+		return { success: true, counted: viewCounted };
 	},
 
 	async recordShare(reelId, userId = null) {

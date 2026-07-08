@@ -1,9 +1,12 @@
 'use strict';
 
-const toReelResponse = (reel, isLiked = false) => {
+const toReelResponse = (reel, isLiked = false, currentUserId = null) => {
 	if (!reel) return null;
 	
 	const author = reel.authorId || {};
+	const authorIdStr = (author._id || author.id || '').toString();
+	const isOwner = currentUserId && authorIdStr === currentUserId.toString();
+
 	return {
 		id: reel._id || reel.id,
 		author: {
@@ -17,7 +20,7 @@ const toReelResponse = (reel, isLiked = false) => {
 		coverUrl: reel.thumbnailUrl, // Single source of truth for both thumbnailUrl and coverUrl
 		caption: reel.caption || '',
 		duration: reel.duration || 0,
-		viewsCount: reel.viewsCount || 0,
+		viewsCount: isOwner ? (reel.viewsCount || 0) : undefined,
 		likesCount: reel.likesCount || 0,
 		commentsCount: reel.commentsCount || 0,
 		sharesCount: reel.sharesCount || 0,
@@ -38,10 +41,10 @@ const toReelResponse = (reel, isLiked = false) => {
 	};
 };
 
-const toReelListResponse = (reels, likesMap = {}) => {
+const toReelListResponse = (reels, likesMap = {}, currentUserId = null) => {
 	return {
 		success: true,
-		data: reels.map(reel => toReelResponse(reel, !!likesMap[reel._id?.toString()])),
+		data: reels.map(reel => toReelResponse(reel, !!likesMap[reel._id?.toString()], currentUserId)),
 	};
 };
 

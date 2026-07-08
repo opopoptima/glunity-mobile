@@ -4,26 +4,37 @@ const Message = require('../../database/models/message.model');
 
 const messagesRepository = {
 
-  async findByChannel(channelId, { cursor, limit = 50, direction = 'before', clearedAt } = {}) {
+  async findByChannel(channelId, { cursor, limit = 20, direction = 'before', clearedAt } = {}) {
     const query = { channelId };
+
+    const isObjectId = cursor && /^[a-f\d]{24}$/i.test(cursor);
 
     if (cursor) {
       if (direction === 'before') {
-        query._id = { $lt: cursor };
+        if (isObjectId) {
+          query._id = { $lt: cursor };
+        } else {
+          query.createdAt = { $lt: new Date(cursor) };
+        }
       } else {
-        query._id = { $gt: cursor };
+        if (isObjectId) {
+          query._id = { $gt: cursor };
+        } else {
+          query.createdAt = { $gt: new Date(cursor) };
+        }
       }
     }
 
     if (clearedAt) {
-      query.createdAt = { $gt: clearedAt };
+      query.createdAt = query.createdAt ? { ...query.createdAt, $gt: clearedAt } : { $gt: clearedAt };
     }
 
+    const sortField = isObjectId || !cursor ? '_id' : 'createdAt';
     const sortOrder = direction === 'before' ? -1 : 1;
 
     const items = await Message.find(query)
       .populate('senderId', 'fullName avatar')
-      .sort({ _id: sortOrder })
+      .sort({ [sortField]: sortOrder })
       .limit(limit)
       .lean();
 

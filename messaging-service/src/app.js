@@ -76,6 +76,7 @@ app.get('/', (req, res) => {
 //   POST   /api/channels/:channelId/messages/:messageId/pin
 //   DELETE /api/channels/:channelId/messages/:messageId/pin
 app.use('/api/channels', channelsRoutes);
+app.use('/api/conversations', channelsRoutes);
 
 // Standalone message mutations (edit & soft-delete)
 //   PATCH  /api/messages/:id

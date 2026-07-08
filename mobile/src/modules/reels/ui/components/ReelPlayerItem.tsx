@@ -14,8 +14,11 @@ import {
 	ActivityIndicator,
 	Alert,
 	Keyboard,
-	Clipboard
+	Clipboard,
+	AppState
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
@@ -29,7 +32,8 @@ import Animated, {
 	withSpring,
 	withSequence,
 	withTiming,
-	withDelay
+	withDelay,
+	runOnJS
 } from 'react-native-reanimated';
 import { Reel, ReelComment, ReelsService } from '../../services/reels.service';
 import { useReelComments } from '../../hooks/useReelComments';
@@ -59,6 +63,321 @@ function formatRelativeTime(dateString: string): string {
 const SCREEN_RATIO = Dimensions.get('window').width / Dimensions.get('window').height;
 
 const DEFAULT_AVATAR_URL = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop';
+
+const COOLDOWN_KEY = 'reel_view_cooldowns';
+const COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+const OFFLINE_QUEUE_KEY = 'offline_reel_analytics';
+
+const viewCooldownCache: Record<string, number> = {};
+
+const queueOfflineAnalytics = async (reelId: string, payload: any) => {
+	try {
+		const existing = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
+		const queue = existing ? JSON.parse(existing) : [];
+		queue.push({ reelId, payload, timestamp: Date.now() });
+		await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+	} catch (e) {}
+};
+
+const syncOfflineAnalytics = async () => {
+	try {
+		const existing = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
+		if (!existing) return;
+		const queue = JSON.parse(existing);
+		if (queue.length === 0) return;
+
+		const remaining = [];
+		for (const item of queue) {
+			try {
+				const response = await ReelsService.recordAnalytics(item.reelId, item.payload);
+				if (!response.success) {
+					remaining.push(item);
+				}
+			} catch (err) {
+				remaining.push(item);
+			}
+		}
+
+		if (remaining.length > 0) {
+			await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
+		} else {
+			await AsyncStorage.removeItem(OFFLINE_QUEUE_KEY);
+		}
+	} catch (e) {}
+};
+
+const sendAnalytics = async (reelId: string, payload: any) => {
+	try {
+		const response = await ReelsService.recordAnalytics(reelId, payload);
+		if (!response.success) {
+			await queueOfflineAnalytics(reelId, payload);
+		}
+	} catch (error) {
+		await queueOfflineAnalytics(reelId, payload);
+	}
+};
+
+interface ReplyItemProps {
+	reply: ReelComment;
+	user: any;
+	T: any;
+	replyIsOwner: boolean;
+	replyIsLikedByMe: boolean;
+	replyRelativeTime: string;
+	highlightedReplyId: string | null;
+	replyHighlightStyle: any;
+	onCommentPress: (comment: ReelComment) => void;
+	onStartEdit: (comment: ReelComment) => void;
+	onDeleteComment: (commentId: string) => void;
+	onToggleCommentLike: (commentId: string) => void;
+	parentComment: ReelComment;
+	onReplyPress: (comment: ReelComment) => void;
+}
+
+const ReplyItem = memo(({
+	reply,
+	user,
+	T,
+	replyIsOwner,
+	replyIsLikedByMe,
+	replyRelativeTime,
+	highlightedReplyId,
+	replyHighlightStyle,
+	onCommentPress,
+	onStartEdit,
+	onDeleteComment,
+	onToggleCommentLike,
+	parentComment,
+	onReplyPress,
+}: ReplyItemProps) => {
+	return (
+		<Animated.View
+			style={[
+				highlightedReplyId === reply.id && styles.highlightedItemBase,
+				highlightedReplyId === reply.id ? replyHighlightStyle : null,
+			]}
+		>
+			<TouchableOpacity
+				activeOpacity={0.9}
+				onPress={() => onCommentPress(reply)}
+				style={styles.replyItem}
+			>
+				<Image
+					source={{ uri: reply.authorAvatar || reply.author.avatarUrl || DEFAULT_AVATAR_URL }}
+					style={styles.replyAvatar}
+				/>
+				<View style={styles.commentTextContainer}>
+					<View style={styles.commentAuthorHeader}>
+						<Text style={[styles.commentAuthor, { color: T.text }]}>
+							{reply.authorUsername}
+						</Text>
+						<Text style={[styles.commentTime, { color: T.textMuted }]}>
+							{replyRelativeTime}{reply.edited ? ' • Edited' : ''}
+						</Text>
+					</View>
+					<Text style={[styles.commentText, { color: T.text }]}>{reply.text}</Text>
+					
+					<View style={styles.commentActionsRow}>
+						{!replyIsOwner && (
+							<TouchableOpacity style={styles.commentActionButton} onPress={() => onReplyPress(parentComment)}>
+								<Text style={[styles.commentActionText, { color: T.textMuted }]}>Reply</Text>
+							</TouchableOpacity>
+						)}
+						{replyIsOwner && (
+							<>
+								<TouchableOpacity style={styles.commentActionButton} onPress={() => onStartEdit(reply)}>
+									<Text style={[styles.commentActionText, { color: T.textMuted }]}>Edit</Text>
+								</TouchableOpacity>
+								<TouchableOpacity style={styles.commentActionButton} onPress={() => onDeleteComment(reply.id)}>
+									<Text style={[styles.commentActionText, { color: T.textMuted }]}>Delete</Text>
+								</TouchableOpacity>
+							</>
+						)}
+					</View>
+				</View>
+
+				{/* Reply Like */}
+				<View style={styles.likeIconContainer}>
+					<TouchableOpacity onPress={() => onToggleCommentLike(reply.id)}>
+						<Ionicons
+							name={replyIsLikedByMe ? "heart" : "heart-outline"}
+							size={14}
+							color={replyIsLikedByMe ? "#FF2D55" : T.textMuted}
+						/>
+					</TouchableOpacity>
+					{reply.likeCount > 0 && (
+						<Text style={[styles.replyLikeCount, { color: T.textMuted }]}>
+							{reply.likeCount.toLocaleString()}
+						</Text>
+					)}
+				</View>
+			</TouchableOpacity>
+		</Animated.View>
+	);
+});
+
+interface CommentItemProps {
+	item: ReelComment;
+	user: any;
+	T: any;
+	isDark: boolean;
+	relativeTime: string;
+	isLikedByMe: boolean;
+	isExpanded: boolean;
+	commentReplies: ReelComment[];
+	loadingRepliesForComment: boolean;
+	highlightedCommentId: string | null;
+	highlightedReplyId: string | null;
+	commentHighlightStyle: any;
+	replyHighlightStyle: any;
+	onCommentPress: (comment: ReelComment) => void;
+	onToggleReplies: (commentId: string) => void;
+	onStartEdit: (comment: ReelComment) => void;
+	onDeleteComment: (commentId: string) => void;
+	onToggleCommentLike: (commentId: string) => void;
+	onReplyPress: (comment: ReelComment) => void;
+}
+
+const CommentItem = memo(({
+	item,
+	user,
+	T,
+	isDark,
+	relativeTime,
+	isLikedByMe,
+	isExpanded,
+	commentReplies,
+	loadingRepliesForComment,
+	highlightedCommentId,
+	highlightedReplyId,
+	commentHighlightStyle,
+	replyHighlightStyle,
+	onCommentPress,
+	onToggleReplies,
+	onStartEdit,
+	onDeleteComment,
+	onToggleCommentLike,
+	onReplyPress,
+}: CommentItemProps) => {
+	const isOwner = item.authorId === user?._id;
+
+	return (
+		<View style={styles.commentRowContainer}>
+			{/* Parent Comment */}
+			<Animated.View
+				style={[
+					highlightedCommentId === item.id && styles.highlightedItemBase,
+					highlightedCommentId === item.id ? commentHighlightStyle : null,
+				]}
+			>
+				<TouchableOpacity
+					activeOpacity={0.9}
+					onPress={() => onCommentPress(item)}
+					style={styles.commentItem}
+				>
+					<Image
+						source={{ uri: item.authorAvatar || item.author.avatarUrl || DEFAULT_AVATAR_URL }}
+						style={styles.commentAvatar}
+					/>
+					<View style={styles.commentTextContainer}>
+						<View style={styles.commentAuthorHeader}>
+							<Text style={[styles.commentAuthor, { color: T.text }]}>
+								{item.authorUsername}
+							</Text>
+							<Text style={[styles.commentTime, { color: T.textMuted }]}>
+								{relativeTime}{item.edited ? ' • Edited' : ''}
+							</Text>
+						</View>
+						<Text style={[styles.commentText, { color: T.text }]}>{item.text}</Text>
+						
+						<View style={styles.commentActionsRow}>
+							{!isOwner && (
+								<TouchableOpacity style={styles.commentActionButton} onPress={() => onReplyPress(item)}>
+									<Text style={[styles.commentActionText, { color: T.textMuted }]}>Reply</Text>
+								</TouchableOpacity>
+							)}
+							{isOwner && (
+								<>
+									<TouchableOpacity style={styles.commentActionButton} onPress={() => onStartEdit(item)}>
+										<Text style={[styles.commentActionText, { color: T.textMuted }]}>Edit</Text>
+									</TouchableOpacity>
+									<TouchableOpacity style={styles.commentActionButton} onPress={() => onDeleteComment(item.id)}>
+										<Text style={[styles.commentActionText, { color: T.textMuted }]}>Delete</Text>
+									</TouchableOpacity>
+								</>
+							)}
+						</View>
+					</View>
+
+					{/* Heart Like icon & count */}
+					<View style={styles.likeIconContainer}>
+						<TouchableOpacity onPress={() => onToggleCommentLike(item.id)}>
+							<Ionicons
+								name={isLikedByMe ? "heart" : "heart-outline"}
+								size={16}
+								color={isLikedByMe ? "#FF2D55" : T.textMuted}
+							/>
+						</TouchableOpacity>
+						{item.likeCount > 0 && (
+							<Text style={[styles.commentLikeCount, { color: T.textMuted }]}>
+								{item.likeCount.toLocaleString()}
+							</Text>
+						)}
+					</View>
+				</TouchableOpacity>
+			</Animated.View>
+
+			{/* Collapsible Nested Replies */}
+			{(item.replyCount > 0 || commentReplies.length > 0) && (
+				<View style={styles.repliesWrapper}>
+					<TouchableOpacity
+						style={styles.viewRepliesButton}
+						onPress={() => onToggleReplies(item.id)}
+					>
+						<View style={[styles.viewRepliesLine, { backgroundColor: T.textMuted }]} />
+						<Text style={[styles.viewRepliesText, { color: T.textMuted }]}>
+							{isExpanded ? 'Hide replies' : `View ${item.replyCount} more repl${item.replyCount > 1 ? 'ies' : 'y'}`}
+						</Text>
+					</TouchableOpacity>
+
+					{isExpanded && (
+						<View style={styles.repliesList}>
+							{loadingRepliesForComment && commentReplies.length === 0 ? (
+								<ActivityIndicator size="small" color={T.green} style={{ marginVertical: 8, alignSelf: 'flex-start' }} />
+							) : (
+								commentReplies.map((reply) => {
+									const replyIsOwner = reply.authorId === user?._id;
+									const replyIsLikedByMe = user?._id ? reply.likedBy.includes(user._id) : false;
+									const replyRelativeTime = formatRelativeTime(reply.createdAt);
+
+									return (
+										<ReplyItem
+											key={reply.id}
+											reply={reply}
+											user={user}
+											T={T}
+											replyIsOwner={replyIsOwner}
+											replyIsLikedByMe={replyIsLikedByMe}
+											replyRelativeTime={replyRelativeTime}
+											highlightedReplyId={highlightedReplyId}
+											replyHighlightStyle={replyHighlightStyle}
+											onCommentPress={onCommentPress}
+											onStartEdit={onStartEdit}
+											onDeleteComment={onDeleteComment}
+											onToggleCommentLike={onToggleCommentLike}
+											parentComment={item}
+											onReplyPress={onReplyPress}
+										/>
+									);
+								})
+							)}
+						</View>
+					)}
+				</View>
+			)}
+		</View>
+	);
+});
 
 export interface ReelPlayerItemProps {
 	reel: Reel;
@@ -120,11 +439,13 @@ function ReelPlayerItemComponent({
 	// userPaused: true when the user manually tapped to pause THIS reel.
 	// Resets automatically when the reel becomes active (swipe).
 	const [userPaused, setUserPaused] = useState(false);
-	const hasRecordedView = useRef(false);
-	// Timer ref for the 3-second view eligibility gate.
-	// The view is only counted after the video has been continuously visible
-	// and active for VIEW_THRESHOLD_MS milliseconds.
-	const viewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const lastUpdateRef = useRef<number | null>(null);
+	const continuousWatchRef = useRef<number>(0);
+	const qualifiedViewSentRef = useRef<boolean>(false);
+	const playRecordedRef = useRef<boolean>(false);
+	const impressionRecordedRef = useRef<boolean>(false);
+	const totalWatchTimeRef = useRef<number>(0);
+	const completionsRef = useRef<number>(0);
 	const insets = useSafeAreaInsets();
 
 	// Calculate dynamic offsets so layout elements float perfectly above the bottom navigation bar and gesture area.
@@ -204,10 +525,166 @@ function ReelPlayerItemComponent({
 
 	const handlePlaybackStatusUpdate = useCallback((s: AVPlaybackStatus) => {
 		setStatus(s);
-	}, []);
+		
+		if (!s.isLoaded) {
+			lastUpdateRef.current = null;
+			return;
+		}
+
+		const now = Date.now();
+		const isBuffering = s.isBuffering;
+		const isPlaying = s.isPlaying;
+		const isFinished = s.didJustFinish;
+
+		// 1. Playback loop completion count
+		if (isFinished) {
+			completionsRef.current += 1;
+		}
+
+		// 2. Play recording (occurs when the video first starts playing)
+		if (isPlaying && !playRecordedRef.current && isActive && isFocused) {
+			playRecordedRef.current = true;
+		}
+
+		// Check if watch time conditions are met
+		const watchConditionsMet = 
+			isActive &&
+			isFocused &&
+			isPlaying &&
+			!isBuffering &&
+			!userPaused;
+
+		if (watchConditionsMet) {
+			if (lastUpdateRef.current !== null) {
+				const deltaSec = (now - lastUpdateRef.current) / 1000;
+				// Avoid double count or crazy jumps (e.g. if tab is suspended)
+				if (deltaSec > 0 && deltaSec < 3) {
+					continuousWatchRef.current += deltaSec;
+					totalWatchTimeRef.current += deltaSec;
+				}
+			}
+			lastUpdateRef.current = now;
+
+			// Check 3 seconds continuous watch gate
+			if (continuousWatchRef.current >= 3.0 && !qualifiedViewSentRef.current) {
+				const lastViewTime = viewCooldownCache[reel.id] || 0;
+				if (Date.now() - lastViewTime >= COOLDOWN_MS) {
+					qualifiedViewSentRef.current = true;
+				}
+			}
+		} else {
+			// Reset continuous watch timer if conditions are not met
+			continuousWatchRef.current = 0;
+			lastUpdateRef.current = null;
+		}
+	}, [isActive, isFocused, userPaused, reel.id]);
 	
 	// Comments state
 	const [commentsVisible, setCommentsVisible] = useState(false);
+	const sheetTranslateY = useSharedValue(containerHeight);
+	const backdropOpacity = useSharedValue(0);
+	const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+	useEffect(() => {
+		const showSub = Keyboard.addListener(
+			Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+			(e) => {
+				setKeyboardHeight(e.endCoordinates.height);
+			}
+		);
+		const hideSub = Keyboard.addListener(
+			Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+			() => {
+				setKeyboardHeight(0);
+			}
+		);
+		return () => {
+			showSub.remove();
+			hideSub.remove();
+		};
+	}, []);
+
+	const sheetAnimatedStyle = useAnimatedStyle(() => ({
+		transform: [{ translateY: sheetTranslateY.value }],
+	}));
+
+	const backdropAnimatedStyle = useAnimatedStyle(() => ({
+		opacity: backdropOpacity.value,
+	}));
+
+	const openComments = useCallback(() => {
+		setCommentsVisible(true);
+	}, []);
+
+	const closeComments = useCallback(() => {
+		sheetTranslateY.value = withSpring(containerHeight, { damping: 15, stiffness: 120 }, (finished) => {
+			if (finished) {
+				runOnJS(setCommentsVisible)(false);
+			}
+		});
+		backdropOpacity.value = withTiming(0, { duration: 200 });
+	}, [containerHeight]);
+
+	// Open animation trigger
+	useEffect(() => {
+		if (commentsVisible) {
+			sheetTranslateY.value = containerHeight;
+			sheetTranslateY.value = withSpring(containerHeight * (1 - 0.75), { damping: 15, stiffness: 120 });
+			backdropOpacity.value = withTiming(1, { duration: 250 });
+		}
+	}, [commentsVisible, containerHeight]);
+
+	const dragStartY = useSharedValue(0);
+	const panGesture = Gesture.Pan()
+		.onStart(() => {
+			dragStartY.value = sheetTranslateY.value;
+		})
+		.onUpdate((event) => {
+			const targetY = dragStartY.value + event.translationY;
+			const maxUp = containerHeight * (1 - 0.95);
+			const maxDown = containerHeight;
+			sheetTranslateY.value = Math.max(maxUp, Math.min(maxDown, targetY));
+		})
+		.onEnd((event) => {
+			const y = sheetTranslateY.value;
+			const snapPoints = [
+				containerHeight * (1 - 0.95), // 95%
+				containerHeight * (1 - 0.75), // 75%
+				containerHeight * (1 - 0.45), // 45%
+				containerHeight,              // closed
+			];
+			let closest = snapPoints[0];
+			let minDist = Math.abs(y - closest);
+			for (let i = 1; i < snapPoints.length; i++) {
+				const dist = Math.abs(y - snapPoints[i]);
+				if (dist < minDist) {
+					minDist = dist;
+					closest = snapPoints[i];
+				}
+			}
+
+			if (event.velocityY > 500) {
+				const currentIndex = snapPoints.indexOf(closest);
+				const nextIndex = Math.min(snapPoints.length - 1, currentIndex + 1);
+				closest = snapPoints[nextIndex];
+			} else if (event.velocityY < -500) {
+				const currentIndex = snapPoints.indexOf(closest);
+				const nextIndex = Math.max(0, currentIndex - 1);
+				closest = snapPoints[nextIndex];
+			}
+
+			sheetTranslateY.value = withSpring(closest, { damping: 15, stiffness: 120 }, (finished) => {
+				if (finished && closest === containerHeight) {
+					runOnJS(setCommentsVisible)(false);
+				}
+			});
+			if (closest === containerHeight) {
+				backdropOpacity.value = withTiming(0, { duration: 200 });
+			} else {
+				backdropOpacity.value = withTiming(1, { duration: 200 });
+			}
+		});
+
 	const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
 	const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
 	const [highlightedReplyId, setHighlightedReplyId] = useState<string | null>(null);
@@ -221,6 +698,7 @@ function ReelPlayerItemComponent({
 
 	const { user } = useAuth();
 	const { theme: T, isDark } = useTheme();
+	const isOwner = user?._id ? String(reel.author.id) === String(user._id) : false;
 
 	const {
 		comments,
@@ -411,42 +889,118 @@ function ReelPlayerItemComponent({
 		}
 	}, [shouldPlay]);
 
-	// ── 3-second view eligibility gate ──────────────────────────────────────
-	// The view is only counted when:
-	//   1. The reel is the active (currently visible) item.
-	//   2. It has been continuously active for at least 3 seconds.
-	//   3. It hasn't already been counted in this session (hasRecordedView).
-	// If the user scrolls away before 3 seconds the timer is cleared and no
-	// view event is fired.
+	// Consolidated analytics flush function
+	const flushAnalytics = useCallback(() => {
+		const impressions = impressionRecordedRef.current ? 1 : 0;
+		const plays = playRecordedRef.current ? 1 : 0;
+		const watchTime = totalWatchTimeRef.current;
+		const completions = completionsRef.current;
+
+		const lastViewTime = viewCooldownCache[reel.id] || 0;
+		const now = Date.now();
+		const isCooldownElapsed = now - lastViewTime >= COOLDOWN_MS;
+		const isQualified = qualifiedViewSentRef.current && isCooldownElapsed;
+
+		if (impressions === 0 && plays === 0 && watchTime === 0 && completions === 0) {
+			return; // Nothing to report
+		}
+
+		const payload = {
+			impressions,
+			plays,
+			watchTime: parseFloat(watchTime.toFixed(2)),
+			completions,
+			qualifiedView: isQualified,
+		};
+
+		if (isQualified) {
+			viewCooldownCache[reel.id] = now;
+			AsyncStorage.getItem(COOLDOWN_KEY).then((data) => {
+				const cache = data ? JSON.parse(data) : {};
+				cache[reel.id] = now;
+				AsyncStorage.setItem(COOLDOWN_KEY, JSON.stringify(cache));
+			}).catch(() => {});
+
+			// Update UI state
+			onRecordView(reel.id);
+		}
+
+		// Reset flags so they aren't double reported in next segment
+		impressionRecordedRef.current = false;
+		playRecordedRef.current = false;
+		totalWatchTimeRef.current = 0;
+		completionsRef.current = 0;
+
+		sendAnalytics(reel.id, payload);
+	}, [reel.id, onRecordView]);
+
+	// AppState Listener to pause timer and flush analytics
+	const appStateRef = useRef(AppState.currentState);
+	useEffect(() => {
+		const subscription = AppState.addEventListener('change', (nextAppState) => {
+			if (appStateRef.current === 'active' && nextAppState.match(/inactive|background/)) {
+				// App going to background: pause watch timer and flush
+				lastUpdateRef.current = null;
+				continuousWatchRef.current = 0;
+				flushAnalytics();
+			}
+			appStateRef.current = nextAppState;
+		});
+		return () => subscription.remove();
+	}, [flushAnalytics]);
+
+	// Cooldown and visibility active transition
 	useEffect(() => {
 		if (isActive) {
 			setUserPaused(false);
+			
+			// Sync offline queue
+			syncOfflineAnalytics();
+			
+			// Load cooldown cache from storage if empty
+			AsyncStorage.getItem(COOLDOWN_KEY).then((data) => {
+				if (data) {
+					try {
+						const parsed = JSON.parse(data);
+						Object.assign(viewCooldownCache, parsed);
+					} catch (e) {}
+				}
+			}).catch(() => {});
 
-			// Start the 3-second gate if we haven't already recorded a view.
-			if (!hasRecordedView.current) {
-				viewTimerRef.current = setTimeout(() => {
-					if (!hasRecordedView.current) {
-						onRecordView(reel.id);
-						hasRecordedView.current = true;
-					}
-				}, 3000); // 3 seconds
+			// Impression starts!
+			impressionRecordedRef.current = true;
+			
+			// Check cooldown
+			const lastViewTime = viewCooldownCache[reel.id] || 0;
+			const now = Date.now();
+			if (now - lastViewTime < COOLDOWN_MS) {
+				qualifiedViewSentRef.current = true; // Already viewed within cooldown
+			} else {
+				qualifiedViewSentRef.current = false;
 			}
+			
+			// Start tracking watch time
+			continuousWatchRef.current = 0;
+			lastUpdateRef.current = Date.now();
 		} else {
-			// User scrolled away — cancel the pending timer.
-			if (viewTimerRef.current !== null) {
-				clearTimeout(viewTimerRef.current);
-				viewTimerRef.current = null;
-			}
+			// User scrolled away! Flush analytics
+			flushAnalytics();
+			
+			// Reset tracking refs
+			lastUpdateRef.current = null;
+			continuousWatchRef.current = 0;
+			playRecordedRef.current = false;
+			impressionRecordedRef.current = false;
+			qualifiedViewSentRef.current = false;
+			totalWatchTimeRef.current = 0;
+			completionsRef.current = 0;
 		}
 
-		// Cleanup on unmount or when isActive changes
 		return () => {
-			if (viewTimerRef.current !== null) {
-				clearTimeout(viewTimerRef.current);
-				viewTimerRef.current = null;
-			}
+			// Flush on unmount
+			flushAnalytics();
 		};
-	}, [isActive]);
+	}, [isActive, reel.id, flushAnalytics]);
 
 	// Handle single/double tap on the screen
 	const handlePress = () => {
@@ -487,9 +1041,7 @@ function ReelPlayerItemComponent({
 		heartOpacity.value = withTiming(0, { duration: 700 });
 	};
 
-	const openComments = () => {
-		setCommentsVisible(true);
-	};
+
 
 	const handleSubmitComment = async () => {
 		if (!text.trim()) return;
@@ -662,10 +1214,12 @@ function ReelPlayerItemComponent({
 						<Ionicons name="musical-notes" size={12} color="#FFF" style={styles.musicIcon} />
 						<Text style={styles.musicText} numberOfLines={1}>Original Audio</Text>
 					</View>
-					<View style={styles.userTag}>
-						<Ionicons name="people" size={12} color="#FFF" style={styles.userIcon} />
-						<Text style={styles.userText}>{reel.viewsCount} users</Text>
-					</View>
+					{isOwner && reel.viewsCount !== undefined && reel.viewsCount !== null && (
+						<View style={styles.userTag}>
+							<Ionicons name="people" size={12} color="#FFF" style={styles.userIcon} />
+							<Text style={styles.userText}>{reel.viewsCount} users</Text>
+						</View>
+					)}
 				</View>
 			</View>
 
@@ -722,38 +1276,50 @@ function ReelPlayerItemComponent({
 				</TouchableOpacity>
 			</View>
 
-			{/* Redesigned Comments Modal */}
-			<Modal
-				visible={commentsVisible}
-				animationType="slide"
-				transparent
-				onRequestClose={() => setCommentsVisible(false)}
-			>
-				<View style={styles.commentsOverlay}>
-					<TouchableOpacity
-						style={styles.commentsCloseArea}
-						onPress={() => setCommentsVisible(false)}
-					/>
-					<KeyboardAvoidingView
-						behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-						style={[styles.commentsContainer, { backgroundColor: T.surface, borderColor: T.border }]}
+			{/* Custom Bottom Sheet for Comments */}
+			{commentsVisible && (
+				<View style={[StyleSheet.absoluteFillObject, { zIndex: 1000 }]}>
+					{/* Backdrop */}
+					<Animated.View style={[styles.sheetBackdrop, backdropAnimatedStyle]}>
+						<TouchableOpacity
+							activeOpacity={1}
+							style={StyleSheet.absoluteFillObject}
+							onPress={closeComments}
+						/>
+					</Animated.View>
+
+					{/* Sheet container */}
+					<Animated.View
+						style={[
+							styles.sheetContainer,
+							sheetAnimatedStyle,
+							{
+								backgroundColor: T.surface,
+								borderColor: T.border,
+								// Adjust bottom padding when keyboard is open:
+								paddingBottom: keyboardHeight > 0 ? keyboardHeight : Math.max(insets.bottom, 12),
+							},
+						]}
 					>
+						{/* Header handle - wrapped with gesture detector for dragging */}
+						<GestureDetector gesture={panGesture}>
+							<View style={[styles.commentsHeader, { borderBottomColor: T.divider }]}>
+								<View style={[styles.commentsHeaderIndicator, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
+								<View style={styles.commentsHeaderTitleRow}>
+									<Text style={[styles.commentsTitle, { color: T.text }]}>Comments</Text>
+									<TouchableOpacity onPress={closeComments} style={styles.commentsCloseBtn}>
+										<Ionicons name="close" size={24} color={T.text} />
+									</TouchableOpacity>
+								</View>
+							</View>
+						</GestureDetector>
+
 						{/* Toast notification for failures */}
 						{toastMessage && (
 							<View style={styles.toastContainer}>
 								<Text style={styles.toastText}>{toastMessage}</Text>
 							</View>
 						)}
-
-						<View style={[styles.commentsHeader, { borderBottomColor: T.divider }]}>
-							<View style={[styles.commentsHeaderIndicator, { backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
-							<View style={styles.commentsHeaderTitleRow}>
-								<Text style={[styles.commentsTitle, { color: T.text }]}>Comments</Text>
-								<TouchableOpacity onPress={() => setCommentsVisible(false)} style={styles.commentsCloseBtn}>
-									<Ionicons name="close" size={24} color={T.text} />
-								</TouchableOpacity>
-							</View>
-						</View>
 
 						{loadingComments && comments.length === 0 ? (
 							<View style={styles.centerSpinner}>
@@ -764,265 +1330,104 @@ function ReelPlayerItemComponent({
 								style={{ flex: 1 }}
 								data={comments}
 								keyExtractor={(item) => item.id}
+								keyboardShouldPersistTaps="handled"
+								contentContainerStyle={{ paddingBottom: 16 }}
 								renderItem={({ item }) => {
-									const isOwner = item.authorId === user?._id;
-									const relativeTime = formatRelativeTime(item.createdAt);
 									const isLikedByMe = user?._id ? item.likedBy.includes(user._id) : false;
 									const isExpanded = !!expandedComments[item.id];
 									const commentReplies = replies[item.id] || [];
 									const loadingRepliesForComment = !!loadingReplies[item.id];
+									const relativeTime = formatRelativeTime(item.createdAt);
 
 									return (
-										<View style={styles.commentRowContainer}>
-											{/* Parent Comment */}
-											<Animated.View
-												style={[
-													highlightedCommentId === item.id && styles.highlightedItemBase,
-													highlightedCommentId === item.id ? commentHighlightStyle : null,
-												]}
-											>
-												<TouchableOpacity
-													activeOpacity={0.9}
-													onPress={() => handleCommentPress(item)}
-													style={styles.commentItem}
-												>
-												<Image
-													source={{ uri: item.authorAvatar || item.author.avatarUrl || DEFAULT_AVATAR_URL }}
-													style={styles.commentAvatar}
-												/>
-												<View style={styles.commentTextContainer}>
-													<View style={styles.commentAuthorHeader}>
-														<Text style={[styles.commentAuthor, { color: T.text }]}>
-															{item.authorUsername}
-														</Text>
-														<Text style={[styles.commentTime, { color: T.textMuted }]}>
-															{relativeTime}{item.edited ? ' • Edited' : ''}
-														</Text>
-													</View>
-													<Text style={[styles.commentText, { color: T.text }]}>{item.text}</Text>
-													
-													<View style={styles.commentActionsRow}>
-														{!isOwner && (
-															<TouchableOpacity style={styles.commentActionButton} onPress={() => {
-																setReplyingTo(item);
-																inputRef.current?.focus();
-															}}>
-																<Text style={[styles.commentActionText, { color: T.textMuted }]}>Reply</Text>
-															</TouchableOpacity>
-														)}
-														{isOwner && (
-															<>
-																<TouchableOpacity style={styles.commentActionButton} onPress={() => handleStartEdit(item)}>
-																	<Text style={[styles.commentActionText, { color: T.textMuted }]}>Edit</Text>
-																</TouchableOpacity>
-																<TouchableOpacity style={styles.commentActionButton} onPress={() => deleteComment(item.id)}>
-																	<Text style={[styles.commentActionText, { color: T.textMuted }]}>Delete</Text>
-																</TouchableOpacity>
-															</>
-														)}
-													</View>
-												</View>
-
-												{/* Heart Like icon & count */}
-												<View style={styles.likeIconContainer}>
-													<TouchableOpacity onPress={() => toggleCommentLike(item.id)}>
-														<Ionicons
-															name={isLikedByMe ? "heart" : "heart-outline"}
-															size={16}
-															color={isLikedByMe ? "#FF2D55" : T.textMuted}
-														/>
-													</TouchableOpacity>
-													{item.likeCount > 0 && (
-														<Text style={[styles.commentLikeCount, { color: T.textMuted }]}>
-															{item.likeCount.toLocaleString()}
-														</Text>
-													)}
-												</View>
-											</TouchableOpacity>
-										</Animated.View>
-
-											{/* Collapsible Nested Replies */}
-											{(item.replyCount > 0 || commentReplies.length > 0) && (
-												<View style={styles.repliesWrapper}>
-													<TouchableOpacity
-														style={styles.viewRepliesButton}
-														onPress={() => toggleReplies(item.id)}
-													>
-														<View style={[styles.viewRepliesLine, { backgroundColor: T.textMuted }]} />
-														<Text style={[styles.viewRepliesText, { color: T.textMuted }]}>
-															{isExpanded ? 'Hide replies' : `View ${item.replyCount} more repl${item.replyCount > 1 ? 'ies' : 'y'}`}
-														</Text>
-													</TouchableOpacity>
-
-													{isExpanded && (
-														<View style={styles.repliesList}>
-															{loadingRepliesForComment && commentReplies.length === 0 ? (
-																<ActivityIndicator size="small" color={T.green} style={{ marginVertical: 8, alignSelf: 'flex-start' }} />
-															) : (
-																commentReplies.map((reply) => {
-																	const replyIsOwner = reply.authorId === user?._id;
-																	const replyIsLikedByMe = user?._id ? reply.likedBy.includes(user._id) : false;
-																	const replyRelativeTime = formatRelativeTime(reply.createdAt);
-
-																	return (
-																		<Animated.View
-																			key={reply.id}
-																			style={[
-																				highlightedReplyId === reply.id && styles.highlightedItemBase,
-																				highlightedReplyId === reply.id ? replyHighlightStyle : null,
-																			]}
-																		>
-																			<TouchableOpacity
-																				activeOpacity={0.9}
-																				onPress={() => handleCommentPress(reply)}
-																				style={styles.replyItem}
-																			>
-																			<Image
-																				source={{ uri: reply.authorAvatar || reply.author.avatarUrl || DEFAULT_AVATAR_URL }}
-																				style={styles.replyAvatar}
-																			/>
-																			<View style={styles.commentTextContainer}>
-																				<View style={styles.commentAuthorHeader}>
-																					<Text style={[styles.commentAuthor, { color: T.text }]}>
-																						{reply.authorUsername}
-																					</Text>
-																					<Text style={[styles.commentTime, { color: T.textMuted }]}>
-																						{replyRelativeTime}{reply.edited ? ' • Edited' : ''}
-																					</Text>
-																				</View>
-																				<Text style={[styles.commentText, { color: T.text }]}>{reply.text}</Text>
-																				
-																				<View style={styles.commentActionsRow}>
-																					{!replyIsOwner && (
-																						<TouchableOpacity style={styles.commentActionButton} onPress={() => {
-																							setReplyingTo(item);
-																							inputRef.current?.focus();
-																						}}>
-																							<Text style={[styles.commentActionText, { color: T.textMuted }]}>Reply</Text>
-																						</TouchableOpacity>
-																					)}
-																					{replyIsOwner && (
-																						<>
-																							<TouchableOpacity style={styles.commentActionButton} onPress={() => handleStartEdit(reply)}>
-																								<Text style={[styles.commentActionText, { color: T.textMuted }]}>Edit</Text>
-																							</TouchableOpacity>
-																							<TouchableOpacity style={styles.commentActionButton} onPress={() => deleteComment(reply.id)}>
-																								<Text style={[styles.commentActionText, { color: T.textMuted }]}>Delete</Text>
-																							</TouchableOpacity>
-																						</>
-																					)}
-																				</View>
-																			</View>
-
-																			{/* Reply Like */}
-																			<View style={styles.likeIconContainer}>
-																				<TouchableOpacity onPress={() => toggleCommentLike(reply.id)}>
-																					<Ionicons
-																						name={replyIsLikedByMe ? "heart" : "heart-outline"}
-																						size={14}
-																						color={replyIsLikedByMe ? "#FF2D55" : T.textMuted}
-																					/>
-																				</TouchableOpacity>
-																				{reply.likeCount > 0 && (
-																					<Text style={[styles.replyLikeCount, { color: T.textMuted }]}>
-																						{reply.likeCount.toLocaleString()}
-																					</Text>
-																				)}
-																			</View>
-																		</TouchableOpacity>
-																	</Animated.View>
-																	);
-																})
-															)}
-														</View>
-													)}
-												</View>
-											)}
-										</View>
+										<CommentItem
+											item={item}
+											user={user}
+											T={T}
+											isDark={isDark}
+											relativeTime={relativeTime}
+											isLikedByMe={isLikedByMe}
+											isExpanded={isExpanded}
+											commentReplies={commentReplies}
+											loadingRepliesForComment={loadingRepliesForComment}
+											highlightedCommentId={highlightedCommentId}
+											highlightedReplyId={highlightedReplyId}
+											commentHighlightStyle={commentHighlightStyle}
+											replyHighlightStyle={replyHighlightStyle}
+											onCommentPress={handleCommentPress}
+											onToggleReplies={toggleReplies}
+											onStartEdit={handleStartEdit}
+											onDeleteComment={deleteComment}
+											onToggleCommentLike={toggleCommentLike}
+											onReplyPress={(parent) => {
+												setReplyingTo(parent);
+												inputRef.current?.focus();
+											}}
+										/>
 									);
 								}}
-								ListEmptyComponent={
-									<Text style={[styles.emptyComments, { color: T.textMuted }]}>No comments yet. Start the conversation!</Text>
-								}
-								contentContainerStyle={styles.commentList}
-								onEndReached={() => {
-									if (hasMore && !loadingComments && !loadingMore) {
-										loadComments(false);
-									}
-								}}
-								onEndReachedThreshold={0.3}
-								ListFooterComponent={
-									loadingMore ? (
-										<ActivityIndicator size="small" color={T.green} style={{ marginVertical: 12 }} />
-									) : null
-								}
 							/>
 						)}
 
-						{/* Quick Emojis reaction bar */}
-						<View style={[styles.emojiBar, { backgroundColor: T.surface, borderTopColor: T.border }]}>
-							{['❤️', '🙌', '🔥', '👏', '😢', '😍', '😮', '😂'].map((emoji) => (
-								<TouchableOpacity key={emoji} onPress={() => handleEmojiPress(emoji)}>
-									<Text style={styles.emojiText}>{emoji}</Text>
-								</TouchableOpacity>
-							))}
-						</View>
-
-						{/* Replying/Editing Banner indicator */}
-						{replyingTo && (
-							<View style={[styles.inputBanner, { backgroundColor: T.surfaceAlt, borderTopColor: T.border }]}>
-								<Text style={[styles.inputBannerText, { color: T.textMuted }]}>Replying to @{replyingTo.authorUsername}</Text>
-								<TouchableOpacity onPress={() => setReplyingTo(null)}>
-									<Ionicons name="close-circle" size={18} color={T.textMuted} />
-								</TouchableOpacity>
-							</View>
-						)}
-						{editingComment && (
-							<View style={[styles.inputBanner, { backgroundColor: T.surfaceAlt, borderTopColor: T.border }]}>
-								<Text style={[styles.inputBannerText, { color: T.textMuted }]}>Editing comment</Text>
-								<TouchableOpacity onPress={() => setEditingComment(null)}>
-									<Ionicons name="close-circle" size={18} color={T.textMuted} />
-								</TouchableOpacity>
-							</View>
-						)}
-
-						{/* Comment input area */}
-						<View style={[styles.commentInputRow, { backgroundColor: T.surface, borderTopColor: T.border }]}>
-							<Image
-								source={{ uri: user?.avatarUrl || DEFAULT_AVATAR_URL }}
-								style={styles.inputAvatar}
-							/>
-							<View style={[styles.commentInputContainer, { backgroundColor: T.inputBg }]}>
-								<TextInput
-									ref={inputRef}
-									value={text}
-									onChangeText={setText}
-									placeholder={replyingTo ? `Reply to @${replyingTo.authorUsername}...` : "Join the conversation..."}
-									placeholderTextColor={T.textMuted}
-									style={[styles.commentInput, { color: T.text }]}
-									multiline
-								/>
-								<TouchableOpacity style={styles.inputIconButton} onPress={() => showToast("Image comments are coming soon!")}>
-									<Ionicons name="image-outline" size={20} color={T.textMuted} />
-								</TouchableOpacity>
-								<TouchableOpacity style={[styles.gifButton, { borderColor: T.textMuted }]} onPress={() => showToast("GIF comments are coming soon!")}>
-									<Text style={[styles.gifButtonText, { color: T.textMuted }]}>GIF</Text>
-								</TouchableOpacity>
-							</View>
-							
-							{text.trim() ? (
-								<TouchableOpacity onPress={handleSubmitComment} style={styles.postButton}>
-									<Ionicons name="send" size={22} color="#6DAE3F" />
-								</TouchableOpacity>
-							) : (
-								<TouchableOpacity style={styles.giftButtonIcon} onPress={() => showToast("Reels Gifts are not available in this region.")}>
-									<Ionicons name="gift-outline" size={22} color={T.textMuted} />
-								</TouchableOpacity>
+						{/* Input section */}
+						<View style={{ borderTopWidth: 1, borderTopColor: T.divider, backgroundColor: T.surface }}>
+							{replyingTo && (
+								<View style={[styles.inputBanner, { backgroundColor: T.surfaceAlt, borderTopWidth: 0 }]}>
+									<Text style={[styles.inputBannerText, { color: T.textMuted }]}>
+										Replying to @{replyingTo.authorUsername}
+									</Text>
+									<TouchableOpacity onPress={() => setReplyingTo(null)}>
+										<Ionicons name="close-circle" size={16} color={T.textMuted} />
+									</TouchableOpacity>
+								</View>
 							)}
+							{editingComment && (
+								<View style={[styles.inputBanner, { backgroundColor: T.surfaceAlt, borderTopWidth: 0 }]}>
+									<Text style={[styles.inputBannerText, { color: T.textMuted }]}>
+										Editing comment
+									</Text>
+									<TouchableOpacity onPress={() => setEditingComment(null)}>
+										<Ionicons name="close-circle" size={16} color={T.textMuted} />
+									</TouchableOpacity>
+								</View>
+							)}
+							<View style={[styles.commentInputRow, { borderTopWidth: 0, backgroundColor: T.surface, paddingBottom: Platform.OS === 'ios' ? 16 : 12 }]}>
+								<Image
+									source={{ uri: user?.avatarUrl || DEFAULT_AVATAR_URL }}
+									style={styles.inputAvatar}
+								/>
+								<View style={[styles.commentInputContainer, { backgroundColor: T.surfaceAlt }]}>
+									<TextInput
+										ref={inputRef}
+										value={text}
+										onChangeText={setText}
+										placeholder={replyingTo ? `Reply to @${replyingTo.authorUsername}...` : "Join the conversation..."}
+										placeholderTextColor={T.textMuted}
+										style={[styles.commentInput, { color: T.text }]}
+										multiline
+									/>
+									<TouchableOpacity style={styles.inputIconButton} onPress={() => showToast("Image comments are coming soon!")}>
+										<Ionicons name="image-outline" size={20} color={T.textMuted} />
+									</TouchableOpacity>
+									<TouchableOpacity style={[styles.gifButton, { borderColor: T.textMuted }]} onPress={() => showToast("GIF comments are coming soon!")}>
+										<Text style={[styles.gifButtonText, { color: T.textMuted }]}>GIF</Text>
+									</TouchableOpacity>
+								</View>
+								
+								{text.trim() ? (
+									<TouchableOpacity onPress={handleSubmitComment} style={styles.postButton}>
+										<Ionicons name="send" size={22} color="#6DAE3F" />
+									</TouchableOpacity>
+								) : (
+									<TouchableOpacity style={styles.giftButtonIcon} onPress={() => showToast("Reels Gifts are not available in this region.")}>
+										<Ionicons name="gift-outline" size={22} color={T.textMuted} />
+									</TouchableOpacity>
+								)}
+							</View>
 						</View>
-					</KeyboardAvoidingView>
+					</Animated.View>
 				</View>
-			</Modal>
+			)}
 
 			{/* Custom Owner Action Sheet Modal */}
 			<Modal
@@ -1212,6 +1617,24 @@ const styles = StyleSheet.create({
 	musicText: {
 		color: '#FFF',
 		fontSize: 12,
+	},
+	sheetBackdrop: {
+		...StyleSheet.absoluteFillObject,
+		backgroundColor: 'rgba(0,0,0,0.6)',
+		zIndex: 999,
+	},
+	sheetContainer: {
+		position: 'absolute',
+		left: 0,
+		right: 0,
+		bottom: 0,
+		height: '100%',
+		borderTopLeftRadius: 24,
+		borderTopRightRadius: 24,
+		borderWidth: 1,
+		borderColor: 'rgba(255,255,255,0.08)',
+		overflow: 'hidden',
+		zIndex: 1000,
 	},
 	commentsOverlay: {
 		flex: 1,

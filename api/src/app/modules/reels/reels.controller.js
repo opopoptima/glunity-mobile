@@ -79,6 +79,17 @@ async function recordView(req, res, next) {
 	}
 }
 
+async function recordAnalytics(req, res, next) {
+	try {
+		const reelId = req.params.id;
+		const userId = req.user ? req.user._id : null;
+		const result = await reelsService.recordAnalytics(reelId, userId, req.body);
+		res.status(200).json(result);
+	} catch (err) {
+		next(err);
+	}
+}
+
 async function recordShare(req, res, next) {
 	try {
 		const reelId = req.params.id;
@@ -195,6 +206,7 @@ module.exports = {
 	remove,
 	toggleLike,
 	recordView,
+	recordAnalytics,
 	recordShare,
 	listComments,
 	postComment,

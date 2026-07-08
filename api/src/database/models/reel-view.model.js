@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const { Schema, model, Types } = mongoose;
 
 /**
- * ReelView — tracks individual view events for deduplication.
+ * ReelView â€” tracks individual view events for deduplication.
  *
  * A record is created when an authenticated user successfully triggers
  * a view (>=3 s watch time, enforced on the client). The TTL index
@@ -27,11 +27,11 @@ const reelViewSchema = new Schema(
 	}
 );
 
-// Compound index — fast existence check for deduplication
+// Compound index â€” fast existence check for deduplication
 reelViewSchema.index({ reelId: 1, userId: 1 });
 
-// TTL index — Mongo automatically purges documents 24 hours after viewedAt
-reelViewSchema.index({ viewedAt: 1 }, { expireAfterSeconds: 86400 });
+// TTL index â€” Mongo automatically purges documents 24 hours after viewedAt
+reelViewSchema.index({ viewedAt: 1 }, { expireAfterSeconds: 1800 });
 
 const ReelView = model('ReelView', reelViewSchema);
 module.exports = ReelView;

@@ -8,14 +8,27 @@ const messagesController = {
 
   list: asyncHandler(async (req, res) => {
     const { channelId } = req.params;
-    const limit     = Math.min(Number(req.query.limit) || 50, 100);
-    const cursor    = req.query.cursor || null;
-    const direction = req.query.direction === 'after' ? 'after' : 'before';
+    const limit     = Math.min(Number(req.query.limit) || 20, 100);
+    
+    let cursor = req.query.cursor || null;
+    let direction = req.query.direction === 'after' ? 'after' : 'before';
+
+    if (req.query.before !== undefined) {
+      cursor = req.query.before || null;
+      direction = 'before';
+    } else if (req.query.after !== undefined) {
+      cursor = req.query.after || null;
+      direction = 'after';
+    }
 
     const { items } = await service.list(channelId, req.user._id, { cursor, limit, direction });
 
     const hasMore = items.length === limit;
-    const nextCursor = hasMore ? items[items.length - 1]._id?.toString() : null;
+    let nextCursor = null;
+    if (hasMore && items.length > 0) {
+      const cursorItem = direction === 'before' ? items[0] : items[items.length - 1];
+      nextCursor = cursorItem._id?.toString() || cursorItem.id?.toString() || null;
+    }
 
     res.status(200).json(mapper.toMessageListResponse(items, { cursor: nextCursor, hasMore }));
   }),

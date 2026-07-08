@@ -15,6 +15,10 @@ const reelSchema = new Schema(
 		commentsCount: { type: Number, default: 0 },
 		sharesCount: { type: Number, default: 0 },
 		savedCount: { type: Number, default: 0 }, // How many users saved this reel
+		impressionsCount: { type: Number, default: 0 },
+		playsCount: { type: Number, default: 0 },
+		totalWatchTime: { type: Number, default: 0 }, // Total continuous watch duration in seconds
+		completionsCount: { type: Number, default: 0 }, // Number of times watched to completion
 		// ── Ranking ──────────────────────────────────────────────────────────────
 		// Pre-computed trending score. Recomputed after every interaction so that
 		// the feed query is a simple sort — no in-query arithmetic.

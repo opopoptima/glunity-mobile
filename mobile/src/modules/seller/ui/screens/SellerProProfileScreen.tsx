@@ -1092,12 +1092,14 @@ export default function SellerProProfileScreen({ navigation }: Props) {
                       style={s.reelThumbnail}
                       resizeMode="cover"
                     />
-                    <View style={s.viewsOverlay}>
-                      <Feather name="play" size={10} color="#FFFFFF" />
-                      <Text style={s.viewsOverlayText}>
-                        {reel.viewsCount >= 1000 ? `${(reel.viewsCount / 1000).toFixed(1)}k` : reel.viewsCount}
-                      </Text>
-                    </View>
+                    {reel.viewsCount !== undefined && reel.viewsCount !== null && (
+                      <View style={s.viewsOverlay}>
+                        <Feather name="play" size={10} color="#FFFFFF" />
+                        <Text style={s.viewsOverlayText}>
+                          {reel.viewsCount >= 1000 ? `${(reel.viewsCount / 1000).toFixed(1)}k` : reel.viewsCount}
+                        </Text>
+                      </View>
+                    )}
                     <TouchableOpacity
                       style={s.reelOptionsBtn}
                       onPress={() => {

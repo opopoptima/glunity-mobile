@@ -57,7 +57,11 @@ export class ChatCacheService {
     if (message.reelRef) {
       compact.reelRef = {
         reelId: message.reelRef.reelId,
-        thumbnailUrl: message.reelRef.thumbnailUrl,
+        thumbnailUrl: message.reelRef.thumbnailUrl || message.reelRef.thumbnail,
+        title: message.reelRef.title,
+        duration: message.reelRef.duration,
+        ownerName: message.reelRef.ownerName,
+        ownerAvatar: message.reelRef.ownerAvatar,
         isDeleted: message.reelRef.isDeleted,
       };
     }

@@ -112,6 +112,8 @@ const messageSchema = new Schema(
  * This is the most-hit query in any messaging system.
  */
 messageSchema.index({ channelId: 1, createdAt: -1 });
+messageSchema.index({ channelId: 1, _id: -1 });
+messageSchema.index({ channelId: 1, createdAt: -1, _id: -1 });
 
 /**
  * SOFT-DELETE FILTER

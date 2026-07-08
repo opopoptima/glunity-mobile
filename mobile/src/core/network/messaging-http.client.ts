@@ -48,11 +48,24 @@ const processQueue = (error: any, token: string | null = null) => {
   failedQueue = [];
 };
 
-// ── Response: handle 401 → refresh token then retry ──────────────────────────
 messagingHttp.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
+
+    // Exponential Backoff Retry for GET requests on network or 5xx errors
+    const isNetworkError = !error.response || (error.code && error.code !== 'ERR_CANCELED');
+    const isServerError = error.response && error.response.status >= 500 && error.response.status <= 599;
+
+    if (original && (isNetworkError || isServerError) && original.method?.toLowerCase() === 'get') {
+      original._retryCount = original._retryCount || 0;
+      if (original._retryCount < 3) {
+        original._retryCount += 1;
+        const delay = Math.pow(2, original._retryCount) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return messagingHttp(original);
+      }
+    }
 
     if (error.response?.status === 401 && !original._retry) {
       if (isRefreshing) {

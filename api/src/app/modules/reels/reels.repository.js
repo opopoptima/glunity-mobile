@@ -185,6 +185,17 @@ const reelsRepository = {
 		return Reel.findByIdAndUpdate(reelId, { $inc: { sharesCount: 1 } }, { new: true });
 	},
 
+	incrementAnalytics(reelId, { impressions = 0, plays = 0, watchTime = 0, completions = 0 } = {}) {
+		const inc = {};
+		if (impressions > 0) inc.impressionsCount = impressions;
+		if (plays > 0) inc.playsCount = plays;
+		if (watchTime > 0) inc.totalWatchTime = watchTime;
+		if (completions > 0) inc.completionsCount = completions;
+
+		if (Object.keys(inc).length === 0) return Reel.findById(reelId).lean();
+		return Reel.findByIdAndUpdate(reelId, { $inc: inc }, { new: true }).lean();
+	},
+
 	// ── View deduplication helpers ────────────────────────────────────────────
 
 	/**

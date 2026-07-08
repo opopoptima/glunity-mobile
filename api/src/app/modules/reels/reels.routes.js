@@ -34,6 +34,7 @@ router.delete('/:id', authMiddleware, reelIdSchema, validate, controller.remove)
 // ── Interactions ─────────────────────────────────────────────────────────────
 router.post('/:id/like', authMiddleware, reelIdSchema, validate, controller.toggleLike);
 router.post('/:id/view', authMiddleware.optional, reelIdSchema, validate, controller.recordView);
+router.post('/:id/analytics', authMiddleware.optional, reelIdSchema, validate, controller.recordAnalytics);
 router.post('/:id/share', authMiddleware, reelIdSchema, validate, controller.recordShare);
 
 // ── Comments ─────────────────────────────────────────────────────────────────

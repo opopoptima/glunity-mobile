@@ -85,6 +85,24 @@ export const ReelsService = {
 		return response.data;
 	},
 
+	async recordAnalytics(
+		reelId: string,
+		payload: {
+			impressions?: number;
+			plays?: number;
+			watchTime?: number;
+			completions?: number;
+			qualifiedView?: boolean;
+		}
+	): Promise<{ success: boolean; counted?: boolean }> {
+		const response = await http.post<{ success: boolean; counted?: boolean }>(
+			`/reels/${reelId}/analytics`,
+			payload,
+			{ timeout: 15000 }
+		);
+		return response.data;
+	},
+
 	async recordShare(reelId: string): Promise<{ success: boolean; data: { sharesCount: number } }> {
 		const response = await http.post<{ success: boolean; data: { sharesCount: number } }>(`/reels/${reelId}/share`, {});
 		return response.data;
