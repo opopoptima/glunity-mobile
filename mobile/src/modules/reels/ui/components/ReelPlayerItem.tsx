@@ -1328,6 +1328,7 @@ function ReelPlayerItemComponent({
 						) : (
 							<FlatList
 								style={{ flex: 1 }}
+								nestedScrollEnabled={true}
 								data={comments}
 								keyExtractor={(item) => item.id}
 								keyboardShouldPersistTaps="handled"
@@ -1648,7 +1649,7 @@ const styles = StyleSheet.create({
 		backgroundColor: '#1C1C1E',
 		borderTopLeftRadius: 20,
 		borderTopRightRadius: 20,
-		maxHeight: '75%',
+		height: '75%',
 		paddingBottom: Platform.OS === 'ios' ? 24 : 12,
 		borderWidth: 1,
 		borderColor: 'rgba(255,255,255,0.08)',
