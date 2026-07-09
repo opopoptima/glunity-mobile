@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Pressable, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, useWindowDimensions, Alert, Linking, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../auth/state/auth.context';
@@ -171,6 +171,16 @@ const ReelMessagePreview = ({
   );
 };
 
+const getWaveformHeights = (id: string, count: number) => {
+  const heights = [];
+  const seed = id ? id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 42;
+  for (let i = 0; i < count; i++) {
+    const h = 8 + Math.abs(Math.sin(seed + i * 0.7) * 20);
+    heights.push(h);
+  }
+  return heights;
+};
+
 const MessageItem = React.memo(({
   item,
   index,
@@ -222,6 +232,21 @@ const MessageItem = React.memo(({
   const isPlaying = playingId === itemId;
   const [barWidth, setBarWidth] = useState(0);
   const hasAudioError = !!(audioErrors && audioErrors[itemId]);
+  const [animTick, setAnimTick] = useState(0);
+
+  useEffect(() => {
+    let animId: any;
+    if (isPlaying && !audioBuffering) {
+      const tick = () => {
+        setAnimTick(t => t + 1);
+        animId = requestAnimationFrame(tick);
+      };
+      animId = requestAnimationFrame(tick);
+    }
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [isPlaying, audioBuffering]);
 
   const bubbleStyle = isMe
     ? [
@@ -380,30 +405,35 @@ const MessageItem = React.memo(({
 
 
     if (isAudio) {
+      const audioDuration = firstAtt?.duration || item.duration || 5;
+      const barCount = Math.max(15, Math.min(45, Math.floor(audioDuration * 1.5)));
+      const heights = getWaveformHeights(itemId, barCount);
+      const dynamicWidth = Math.min(260, Math.max(160, 160 + (audioDuration - 5) * 5));
+
       return (
-        <View style={{ flexDirection: 'row', alignItems: 'center', minWidth: 200, paddingVertical: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', width: dynamicWidth, paddingVertical: 4 }}>
           {/* Play/Pause/Buffer/Error Button */}
           <TouchableOpacity 
             onPress={() => onPress(item)} 
             style={{ 
-              width: 36, 
-              height: 36, 
-              borderRadius: 18, 
+              width: 34, 
+              height: 34, 
+              borderRadius: 17, 
               backgroundColor: isMe ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.06)', 
               justifyContent: 'center', 
               alignItems: 'center' 
             }}
           >
             {hasAudioError ? (
-              <Ionicons name="refresh" size={18} color={isMe ? '#fff' : T.text} />
+              <Ionicons name="refresh" size={16} color={isMe ? '#fff' : T.text} />
             ) : isPlaying && audioBuffering ? (
               <ActivityIndicator size="small" color={isMe ? '#fff' : T.text} />
             ) : (
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color={isMe ? '#fff' : T.text} />
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={16} color={isMe ? '#fff' : T.text} />
             )}
           </TouchableOpacity>
 
-          {/* Seekable Progress Bar */}
+          {/* Seekable Waveform Bars */}
           <View style={{ flex: 1, marginLeft: 10, marginRight: 10, justifyContent: 'center' }}>
             <Pressable
               onPress={(e) => {
@@ -414,45 +444,41 @@ const MessageItem = React.memo(({
                 }
               }}
               onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-              style={{ height: 20, justifyContent: 'center', width: '100%' }}
+              style={{ 
+                height: 32, 
+                flexDirection: 'row', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                width: '100%' 
+              }}
             >
-              {/* Progress Line Track */}
-              <View style={{ height: 4, borderRadius: 2, backgroundColor: isMe ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)', width: '100%' }}>
-                <View 
-                  style={{ 
-                    height: '100%', 
-                    borderRadius: 2, 
-                    backgroundColor: isMe ? '#fff' : T.green || '#2ECC71', 
-                    width: `${(isPlaying ? audioProgress : 0) * 100}%` 
-                  }} 
-                />
-              </View>
-              {/* Seek handle */}
-              {isPlaying && (
-                <View 
-                  style={{ 
-                    position: 'absolute', 
-                    left: `${audioProgress * 100}%`, 
-                    marginLeft: -6, 
-                    width: 12, 
-                    height: 12, 
-                    borderRadius: 6, 
-                    backgroundColor: isMe ? '#fff' : T.green || '#2ECC71',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.2,
-                    shadowRadius: 1,
-                    elevation: 2
-                  }} 
-                />
-              )}
+              {heights.map((h, idx) => {
+                const isPlayed = isPlaying && audioProgress >= (idx / barCount);
+                const barColor = isMe ? '#FFFFFF' : (T.green || '#8BC34A');
+                
+                return (
+                  <View 
+                    key={idx} 
+                    style={{ 
+                      width: 2.5, 
+                      height: h, 
+                      borderRadius: 1.25, 
+                      backgroundColor: barColor, 
+                      opacity: isPlayed ? 1 : 0.35,
+                      transform: isPlaying && isPlayed && !audioBuffering
+                        ? [{ scaleY: 1 + Math.sin(animTick * 0.15 + idx) * 0.15 }] 
+                        : undefined
+                    }} 
+                  />
+                );
+              })}
             </Pressable>
           </View>
 
           {/* Time display */}
           <View style={{ minWidth: 32, alignItems: 'flex-end' }}>
             <Text style={{ color: isMe ? '#fff' : T.text, fontSize: 11, fontWeight: '500' }}>
-              {hasAudioError ? t('Failed') : formatDuration(isPlaying ? audioProgress * (firstAtt?.duration || item.duration || 0) : (firstAtt?.duration || item.duration || 0))}
+              {hasAudioError ? t('Failed') : formatDuration(isPlaying ? audioProgress * audioDuration : audioDuration)}
             </Text>
           </View>
         </View>
