@@ -619,10 +619,6 @@ Duplicate requests prevented: ${perfStats.current.duplicateRequestsPrevented}
       return found || { _id: otherEntry, fullName: null, avatarUrl: null };
     }
 
-<<<<<<< HEAD
-    return { _id: otherId, fullName: otherId, avatarUrl: null };
-  }, [user, users]);
-=======
     // Participant is an enriched object — use it directly
     const pid = String(otherEntry.userId || otherEntry._id || otherEntry.id || '');
     // Check local users cache for the freshest profile
@@ -633,8 +629,7 @@ Duplicate requests prevented: ${perfStats.current.duplicateRequestsPrevented}
       fullName: otherEntry.fullName || otherEntry.name || otherEntry.displayName || null,
       avatarUrl: otherEntry.avatarUrl || otherEntry.avatar || null,
     };
-  }
->>>>>>> 45ef51d4d0b74c8fce03461935c1885474602c36
+  }, [user, users]);
 
   const getChannelDisplay = useCallback((channel: any) => {
     const d = getDisplayForChannel(channel, user);
