@@ -1823,7 +1823,12 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                 <Ionicons name="chatbubbles-outline" size={64} color={T.textMuted} style={{ marginBottom: 12, opacity: 0.5 }} />
                 <Text style={{ fontSize: 16, fontWeight: '600', color: T.text, textAlign: 'center' }}>
                   {dmPartnerId
-                    ? `${t('Say hi to')} ${display.name} 👋`
+                    ? (() => {
+                        const name = partnerUser?.fullName || partnerUser?.name || display.name;
+                        return name === 'Direct Message' 
+                          ? `${t('Say hi!')} 👋` 
+                          : `${t('Say hi to')} ${name} 👋`;
+                      })()
                     : t('Start the conversation!')}
                 </Text>
                 <Text style={{ fontSize: 13, color: T.textMuted, textAlign: 'center', marginTop: 4, paddingHorizontal: 40 }}>
@@ -1893,21 +1898,16 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                 }}
               >
                 {!hasUnread && BlurView ? (
-                  <BlurView
-                    intensity={60}
-                    tint={isDark ? 'dark' : 'light'}
-                    style={{
-                      ...StyleSheet.absoluteFillObject,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                    }}
-                  >
+                  <>
+                    <BlurView
+                      intensity={60}
+                      tint={isDark ? 'dark' : 'light'}
+                      style={StyleSheet.absoluteFillObject}
+                    />
                     {ButtonContent}
-                  </BlurView>
+                  </>
                 ) : (
-                  <View style={!hasUnread ? { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' } : undefined}>
-                    {ButtonContent}
-                  </View>
+                  <>{ButtonContent}</>
                 )}
               </TouchableOpacity>
             </View>

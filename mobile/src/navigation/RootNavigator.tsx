@@ -13,23 +13,6 @@ export function RootNavigator() {
   // Keep ThemeContext in sync when user profile loads / changes
   useSyncDarkModeFromProfile(user?.darkMode);
 
-  const styles = React.useMemo(() => StyleSheet.create({
-    splash: {
-      flex: 1,
-      backgroundColor: T.bg,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-  }), [T]);
-
-  if (!isInitialized) {
-    return (
-      <View style={styles.splash}>
-        <ActivityIndicator size="large" color={T.green} />
-      </View>
-    );
-  }
-
   return isAuthenticated ? (
     <ReelCreationProvider>
       <AppNavigator />

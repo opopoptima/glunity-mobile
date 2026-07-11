@@ -986,64 +986,7 @@ export default function SellerProProfileScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* ── Seller actions ── */}
-        <View style={s.menuStack}>
-          <TouchableOpacity style={s.menuRow} onPress={() => navigation.navigate('ProductsMarket', { sellerId: user?._id })} id="pro-profile-products-btn">
-            <View style={s.menuLeft}>
-              <View style={s.menuIconCircle}><Feather name="shopping-bag" size={17} color={T.red} /></View>
-              <Text style={s.menuLabel}>{t('My products')}</Text>
-            </View>
-            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
-          </TouchableOpacity>
-          <View style={s.menuDivider} />
-          <TouchableOpacity style={s.menuRow} onPress={() => navigation.navigate('SellerStats')} id="pro-profile-visibility-btn">
-            <View style={s.menuLeft}>
-              <View style={s.menuIconCircle}><Feather name="eye" size={17} color={T.red} /></View>
-              <Text style={s.menuLabel}>{t('Visibility')}</Text>
-            </View>
-            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
-          </TouchableOpacity>
-          <View style={s.menuDivider} />
-          <TouchableOpacity style={s.menuRow} id="pro-profile-messages-btn">
-            <View style={s.menuLeft}>
-              <View style={s.menuIconCircle}><Feather name="message-square" size={17} color={T.red} /></View>
-              <Text style={s.menuLabel}>{t('Clients messages')}</Text>
-            </View>
-            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Settings / Logout ── */}
-        <View style={s.menuStack}>
-          <TouchableOpacity style={s.menuRow} onPress={() => navigation.navigate('Settings')} id="pro-profile-settings-btn">
-            <View style={s.menuLeft}>
-              <View style={s.menuIconCircle}><Feather name="settings" size={17} color={T.red} /></View>
-              <Text style={s.menuLabel}>{t('Settings')}</Text>
-            </View>
-            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
-          </TouchableOpacity>
-          <View style={s.menuDivider} />
-          <TouchableOpacity
-            style={s.menuRow}
-            onPress={() => navigation.navigate('Privacy')}
-            id="pro-profile-privacy-btn"
-          >
-            <View style={s.menuLeft}>
-              <View style={s.menuIconCircle}><Feather name="shield" size={17} color={T.red} /></View>
-              <Text style={s.menuLabel}>{t('Privacy & Security')}</Text>
-            </View>
-            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
-          </TouchableOpacity>
-          <View style={s.menuDivider} />
-          <TouchableOpacity style={s.menuRow} onPress={logout} id="pro-profile-logout-btn">
-            <View style={s.menuLeft}>
-              <View style={s.menuIconCircle}><Feather name="log-out" size={17} color={T.red} /></View>
-              <Text style={s.menuLabel}>{t('Log out')}</Text>
-            </View>
-            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
-          </TouchableOpacity>
-        </View>
-          </>
+        </>
         ) : (
           <View style={{ width: '100%' }}>
             <View style={s.reelsHeaderRow}>
@@ -1115,6 +1058,64 @@ export default function SellerProProfileScreen({ navigation }: Props) {
             )}
           </View>
         )}
+
+        {/* ── Seller actions ── */}
+        <View style={[s.menuStack, { marginTop: 20 }]}>
+          <TouchableOpacity style={s.menuRow} onPress={() => navigation.navigate('ProductsMarket', { sellerId: user?._id })} id="pro-profile-products-btn">
+            <View style={s.menuLeft}>
+              <View style={s.menuIconCircle}><Feather name="shopping-bag" size={17} color={T.red} /></View>
+              <Text style={s.menuLabel}>{t('My products')}</Text>
+            </View>
+            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
+          </TouchableOpacity>
+          <View style={s.menuDivider} />
+          <TouchableOpacity style={s.menuRow} onPress={() => navigation.navigate('SellerStats')} id="pro-profile-visibility-btn">
+            <View style={s.menuLeft}>
+              <View style={s.menuIconCircle}><Feather name="eye" size={17} color={T.red} /></View>
+              <Text style={s.menuLabel}>{t('Visibility')}</Text>
+            </View>
+            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
+          </TouchableOpacity>
+          <View style={s.menuDivider} />
+          <TouchableOpacity style={s.menuRow} id="pro-profile-messages-btn">
+            <View style={s.menuLeft}>
+              <View style={s.menuIconCircle}><Feather name="message-square" size={17} color={T.red} /></View>
+              <Text style={s.menuLabel}>{t('Clients messages')}</Text>
+            </View>
+            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Settings / Logout ── */}
+        <View style={s.menuStack}>
+          <TouchableOpacity style={s.menuRow} onPress={() => navigation.navigate('Settings')} id="pro-profile-settings-btn">
+            <View style={s.menuLeft}>
+              <View style={s.menuIconCircle}><Feather name="settings" size={17} color={T.red} /></View>
+              <Text style={s.menuLabel}>{t('Settings')}</Text>
+            </View>
+            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
+          </TouchableOpacity>
+          <View style={s.menuDivider} />
+          <TouchableOpacity
+            style={s.menuRow}
+            onPress={() => navigation.navigate('Privacy')}
+            id="pro-profile-privacy-btn"
+          >
+            <View style={s.menuLeft}>
+              <View style={s.menuIconCircle}><Feather name="shield" size={17} color={T.red} /></View>
+              <Text style={s.menuLabel}>{t('Privacy & Security')}</Text>
+            </View>
+            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
+          </TouchableOpacity>
+          <View style={s.menuDivider} />
+          <TouchableOpacity style={s.menuRow} onPress={logout} id="pro-profile-logout-btn">
+            <View style={s.menuLeft}>
+              <View style={s.menuIconCircle}><Feather name="log-out" size={17} color={T.red} /></View>
+              <Text style={s.menuLabel}>{t('Log out')}</Text>
+            </View>
+            <Feather name={isRTL ? 'chevron-left' : 'chevron-right'} size={17} color={T.textMuted} />
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* --- STATS & ENGAGEMENT INSIGHTS MODAL --- */}

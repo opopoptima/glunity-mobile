@@ -48,6 +48,36 @@ const usersController = {
 
     res.status(200).json({ success: true, data: mapped });
   }),
+  // GET /api/users/random
+  getRandomUsers: asyncHandler(async (req, res) => {
+    const limit = req.query.limit !== undefined ? Number(req.query.limit) : 10;
+    // Using aggregation to get random documents
+    const randomUsers = await User.aggregate([
+      { $match: { isActive: true } },
+      { $sample: { size: limit } },
+      { $project: { fullName: 1, email: 1, avatar: 1, profileType: 1, points: 1, badges: 1, onlineStatus: 1, lastActiveAt: 1 } }
+    ]);
+    
+    // We still want to map to public (though we projected, toPublic standardizes it if needed)
+    // We will populate badges if needed, but aggregate returns raw objects. 
+    // So let's instantiate them as mongoose docs to use toPublic
+    const userDocs = randomUsers.map(u => new User(u));
+    const mapped = userDocs.map(u => u.toPublic());
+
+    res.status(200).json({ success: true, data: mapped });
+  }),
+
+  /** GET /api/users/me — get the authenticated user's profile */
+  getMe: asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id).populate('badges');
+    if (!user) throw AppError.notFound('User');
+
+    res.status(200).json({
+      success: true,
+      data: user.toPublic(),
+    });
+  }),
+
   /** PATCH /api/users/me — update the authenticated user's profile */
   updateMe: asyncHandler(async (req, res) => {
     const updates = {};
@@ -186,6 +216,10 @@ const usersController = {
 
   /** GET /api/users/me/seller-stats — get seller dashboard statistics */
   getSellerStats: asyncHandler(async (req, res) => {
+    if (req.user.profileType !== 'pro_commerce') {
+      throw AppError.forbidden('Only sellers can access seller statistics');
+    }
+
     const sellerId = req.user._id;
     const now = new Date();
 

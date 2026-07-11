@@ -15,6 +15,9 @@ router.get('/', usersController.list);
 /** POST /api/users/batch — fetch batch of user profiles */
 router.post('/batch', usersController.batch);
 
+/** GET /api/users/me — get authenticated user's profile */
+router.get('/me', usersController.getMe);
+
 /** PATCH /api/users/me — update authenticated user's profile */
 router.patch('/me', usersController.updateMe);
 
@@ -26,6 +29,9 @@ router.post('/change-password', usersController.changePassword);
 
 /** POST /api/users/check-in — daily check-in */
 router.post('/check-in', usersController.checkIn);
+
+/** GET /api/users/random — get random users */
+router.get('/random', usersController.getRandomUsers);
 
 /** GET /api/users/:id — get user profile by ID */
 router.get('/:id', usersController.getById);

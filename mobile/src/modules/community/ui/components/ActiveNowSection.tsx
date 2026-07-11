@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -143,11 +144,11 @@ const AvatarCard = React.memo(({
         <View
           style={{ alignItems: 'center' }}
         >
-          <View
+          <TouchableOpacity
             style={[avatarStyles.pressable]}
-            // @ts-ignore – RN Pressable compatible
-            onTouchEnd={onPress}
+            onPress={onPress}
             onLongPress={onLongPress}
+            activeOpacity={0.7}
           >
             <View style={avatarStyles.avatarContainer}>
               {avatarUrl ? (
@@ -168,7 +169,7 @@ const AvatarCard = React.memo(({
                 borderColor={isDark ? '#1C1C1E' : '#FFFFFF'}
               />
             </View>
-          </View>
+          </TouchableOpacity>
           <Text
             style={[avatarStyles.name, { color: theme.text }]}
             numberOfLines={1}

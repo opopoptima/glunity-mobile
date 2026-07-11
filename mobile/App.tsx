@@ -9,6 +9,7 @@ import { LanguageProvider } from './src/shared/context/language.context';
 import { ThemeProvider } from './src/shared/context/theme.context';
 import { ThemedNavigationContainer } from './src/shared/components/ThemedNavigationContainer';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { useAuth } from './src/modules/auth/state/auth.context';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestStartupPermissions } from './src/shared/utils/permissions';
@@ -112,17 +113,35 @@ export default function App() {
           <PresenceProvider>
             <LanguageProvider>
               <ThemeProvider>
-                <ThemedNavigationContainer linking={linking as any}>
-                  <RootNavigator />
-                  <StartupPrefetch />
-                  <StartupPermissions />
-                </ThemedNavigationContainer>
+                <AppContent />
               </ThemeProvider>
             </LanguageProvider>
           </PresenceProvider>
         </SocketProvider>
       </AuthProvider>
     </GestureHandlerRootView>
+  );
+}
+
+function AppContent() {
+  const { isInitialized } = useAuth();
+
+  // Do not render NavigationContainer until we know which navigator (App/Auth) to display.
+  // This prevents React Navigation from crashing on the web when parsing deep links.
+  if (!isInitialized) {
+    return (
+      <View style={styles.loadingRoot}>
+        <ActivityIndicator size="small" color="#8BC34A" />
+      </View>
+    );
+  }
+
+  return (
+    <ThemedNavigationContainer linking={linking as any}>
+      <RootNavigator />
+      <StartupPrefetch />
+      <StartupPermissions />
+    </ThemedNavigationContainer>
   );
 }
 

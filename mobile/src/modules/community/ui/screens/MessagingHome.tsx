@@ -539,7 +539,7 @@ Duplicate requests prevented: ${perfStats.current.duplicateRequestsPrevented}
       }
       try {
         const baseURL = http.defaults.baseURL || '';
-        const msgBaseUrl = baseURL.replace(':5000', ':5002');
+        const msgBaseUrl = baseURL.replace(':5000', ':5001');
         const res = await http.get(`${msgBaseUrl}/channels/discover`);
         setPublicChannels(res.data?.data || []);
       } catch (err) {
