@@ -18,6 +18,7 @@ import OnlineDot from '../../../../shared/components/OnlineDot';
 import AnimatedReanimated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { UserProfileBottomSheet } from '../components/UserProfileBottomSheet';
 import ActiveNowSection from '../components/ActiveNowSection';
+import { resolveMessagingServiceUrl } from '../../../../core/network/messaging-service-url';
 
 let BlurView: any = null;
 try { BlurView = require('expo-blur').BlurView; } catch (e) { BlurView = null; }
@@ -558,7 +559,7 @@ Duplicate requests prevented: ${perfStats.current.duplicateRequestsPrevented}
       }
       try {
         const baseURL = http.defaults.baseURL || '';
-        const msgBaseUrl = baseURL.replace(':5000', ':5001');
+        const msgBaseUrl = resolveMessagingServiceUrl(baseURL);
         const res = await http.get(`${msgBaseUrl}/channels/discover`);
         setPublicChannels(res.data?.data || []);
       } catch (err) {
@@ -1186,7 +1187,7 @@ Duplicate requests prevented: ${perfStats.current.duplicateRequestsPrevented}
       {activeTab !== 'contacts' && (
         <ActiveNowSection
           users={users}
-          currentUserId={String(user?._id || user?.id || '')}
+          currentUserId={String((user as any)?._id || (user as any)?.id || '')}
           isOnline={isOnline}
           getLastSeen={getLastSeen}
           onUserPress={(u: any) => {

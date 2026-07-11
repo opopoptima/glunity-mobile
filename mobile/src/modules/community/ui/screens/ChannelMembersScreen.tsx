@@ -3,6 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, Style
 import http from '../../../../core/network/http.client';
 import messagingHttp from '../../../../core/network/messaging-http.client';
 import { API_BASE_URL } from '../../../../core/config/api.config';
+import { resolveMessagingServiceUrl } from '../../../../core/network/messaging-service-url';
 import { useAuth } from '../../../auth/state/auth.context';
 import { useTheme } from '../../../../shared/context/theme.context';
 import { useLanguage } from '../../../../shared/context/language.context';
@@ -16,7 +17,7 @@ let BlurView: any = null;
 try { BlurView = require('expo-blur').BlurView; } catch (e) { BlurView = null; }
 
 const CORE_API_URL = API_BASE_URL;
-const MSG_SERVICE_URL = API_BASE_URL.replace(':5000', ':5001');
+const MSG_SERVICE_URL = resolveMessagingServiceUrl(API_BASE_URL);
 
 // Gets clean 1 or 2 letter initials
 const getInitials = (name: string) => {

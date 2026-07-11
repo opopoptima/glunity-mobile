@@ -10,12 +10,13 @@ import { useLanguage } from '../../../shared/context/language.context';
 import { TokenStore } from '../../../core/storage/secure-store';
 import { API_BASE_URL } from '../../../core/config/api.config';
 import messagingHttp from '../../../core/network/messaging-http.client';
+import { resolveMessagingServiceUrl } from '../../../core/network/messaging-service-url';
 import messagingEvents from '../../../shared/utils/messagingEvents';
 import { ChatCacheService } from '../services/chat-cache.service';
 
 // Keep for legacy usages that don't go through the intercepted clients
 const CORE_API_URL = API_BASE_URL;
-const MSG_SERVICE_URL = API_BASE_URL.replace(':5000', ':5001');
+const MSG_SERVICE_URL = resolveMessagingServiceUrl(API_BASE_URL);
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
