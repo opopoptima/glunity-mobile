@@ -1,0 +1,136 @@
+{
+  "celiac": [
+    {
+      "path": "/users",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/users/random",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/users/me",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/users/me/seller-stats",
+      "status": 403,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/recipes",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/locations",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/events",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/products",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/reels",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/channels",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/channels",
+      "status": 200,
+      "server": "http://localhost:5001/api"
+    },
+    {
+      "path": "/notifications",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/badges",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    }
+  ],
+  "pro": [
+    {
+      "path": "/users",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/users/random",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/users/me",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/users/me/seller-stats",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/recipes",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/locations",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/events",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/products",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/reels",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/channels",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/channels",
+      "status": 200,
+      "server": "http://localhost:5001/api"
+    },
+    {
+      "path": "/notifications",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    },
+    {
+      "path": "/badges",
+      "status": 200,
+      "server": "http://localhost:5000/api"
+    }
+  ]
+}

@@ -15,24 +15,19 @@ interface SocketContextValue {
 const SocketContext = createContext<SocketContextValue | undefined>(undefined);
 
 const resolveSocketUrl = (apiBaseUrl: string): string => {
-  let resolved = apiBaseUrl.replace(':5000', ':5002');
-  if (resolved === apiBaseUrl) {
-    try {
-      const match = apiBaseUrl.match(/^https?:\/\/([^/:]+)/i);
-      const host = match ? match[1] : '';
-      if (host === 'localhost' || host === '127.0.0.1' || /^192\.168\./.test(host) || /^10\./.test(host)) {
-        resolved = apiBaseUrl.replace(host, `${host}:5002`);
-      }
-    } catch (e) {
-      console.warn('[SocketProvider] Failed parsing host for port replacement:', e);
-    }
-  }
+  let resolved = apiBaseUrl;
   
-  if (resolved.endsWith('/api')) {
-    resolved = resolved.slice(0, -4);
-  } else if (resolved.endsWith('/api/')) {
-    resolved = resolved.slice(0, -5);
+  // React Native's URL polyfill often ignores property mutations like url.port = '5001'.
+  // Using robust string replacement ensures it works identically on Web and physical devices.
+  if (/:\d+/.test(resolved)) {
+    resolved = resolved.replace(/:\d+/, ':5001');
+  } else {
+    // If no port exists (e.g., https://api.domain.com/api)
+    resolved = resolved.replace(/(https?:\/\/[^/]+)/, '$1:5001');
   }
+
+  if (resolved.endsWith('/api')) resolved = resolved.slice(0, -4);
+  if (resolved.endsWith('/api/')) resolved = resolved.slice(0, -5);
   return resolved;
 };
 
