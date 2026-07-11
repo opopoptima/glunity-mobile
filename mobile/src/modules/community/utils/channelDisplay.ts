@@ -44,7 +44,11 @@ export function getChannelDisplay(channel: any, currentUser?: any) {
       }
     }
 
-    const name = other?.fullName || other?.name || other?.displayName || channel.name || 'Direct Message';
+    let name = other?.fullName || other?.name || other?.displayName;
+    if (!name && channel.name && !channel.name.startsWith('DM-')) {
+      name = channel.name;
+    }
+    name = name || 'Direct Message';
     const avatar = other?.avatarUrl || other?.avatar || channel.avatarUrl || null;
     return { name, avatar, isDM: true };
   }

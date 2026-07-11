@@ -15,7 +15,7 @@ import { ChatCacheService } from '../services/chat-cache.service';
 
 // Keep for legacy usages that don't go through the intercepted clients
 const CORE_API_URL = API_BASE_URL;
-const MSG_SERVICE_URL = API_BASE_URL.replace(':5000', ':5002');
+const MSG_SERVICE_URL = API_BASE_URL.replace(':5000', ':5001');
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -697,11 +697,21 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
     socket.on('channel:cleared', handleChannelCleared);
     socket.on('channel:read', handleChannelRead);
 
-    // On reconnect: re-join the room and re-sync missed messages
-    const handleReconnect = async () => {
+    // On initial mount or when socket connects, we must join the room
+    const handleConnectOrMount = () => {
       if (typeof channelId === 'string' && !channelId.startsWith('local-')) {
         socket.emit('channel:join', { channelId });
       }
+    };
+
+    // If socket is already connected, join immediately
+    if (socket.connected) {
+      handleConnectOrMount();
+    }
+
+    // On reconnect: re-join the room and re-sync missed messages
+    const handleReconnect = async () => {
+      handleConnectOrMount();
       try {
         const res = await messagingHttp.get(`/channels/${channelId}/messages?limit=20`);
         const fresh: any[] = res.data?.data || [];
