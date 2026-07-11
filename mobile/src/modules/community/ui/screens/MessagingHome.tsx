@@ -198,6 +198,50 @@ export default function MessagingHome({ navigation }: any) {
     return () => { messagingEvents.off('channel:updated', handler); };
   }, []);
 
+  // Listen to global socket events for real-time new messages
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleNewMessageGlobal = ({ message }: any) => {
+      if (!message) return;
+      const msgChannelId = String(message.channelId || message.channel || '');
+      if (!msgChannelId) return;
+
+      setChannels((prev) => {
+        const foundIdx = prev.findIndex(c => String(c._id || c.id) === msgChannelId);
+        if (foundIdx === -1) {
+          // If we don't have this channel in memory, a refresh might be needed later
+          return prev;
+        }
+        const next = [...prev];
+        const channel = next[foundIdx];
+        
+        // Skip if this message is already the last message
+        if (channel.lastMessage && String(channel.lastMessage.id || channel.lastMessage._id) === String(message.id || message._id)) {
+          return prev;
+        }
+
+        const isMe = String(message.senderId) === String(user?._id);
+        
+        next[foundIdx] = {
+          ...channel,
+          lastMessage: message,
+          updatedAt: message.createdAt || new Date().toISOString(),
+          unreadCount: !isMe ? (channel.unreadCount || 0) + 1 : (channel.unreadCount || 0)
+        };
+        
+        ChatCacheService.saveChannels(next).catch(() => {});
+        return next;
+      });
+    };
+
+    socket.on('message:new', handleNewMessageGlobal);
+    return () => {
+      socket.off('message:new', handleNewMessageGlobal);
+    };
+  }, [socket, user]);
+
+
   const closeUserProfile = useCallback(() => {
     setProfileSheetVisible(false);
     setProfileUserId(null);

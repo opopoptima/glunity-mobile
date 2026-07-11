@@ -560,7 +560,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
           });
           if (bestIdx !== -1) {
             const next = [...prev];
-            next[bestIdx] = { ...message, status: 'sent' };
+            next[bestIdx] = { ...message, status: 'sent', localId: next[bestIdx].id };
             return next;
           }
         }
@@ -848,7 +848,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
           }
           // Mark as confirmed so the subsequent message:new socket event skips it
           if (realId) confirmedIdsRef.current.add(realId);
-          return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent' } : m));
+          return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent', localId: tempId } : m));
         });
         try { messagingEvents.emit('message:new', serverMsg); } catch (e) { }
       } else {
@@ -907,7 +907,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
             return prev.filter((m) => m.id !== tempId);
           }
           if (realId) confirmedIdsRef.current.add(realId);
-          return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent' } : m));
+          return prev.map((m) => (m.id === tempId ? { ...serverMsg, status: 'sent', localId: tempId } : m));
         });
         try { messagingEvents.emit('message:new', serverMsg); } catch (e) { }
       } else {
@@ -952,6 +952,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
 
     const optimisticMsg = {
       id: tempId,
+      localId: tempId,
       content: textToSend,
       senderId: user?._id,
       senderName: user?.fullName,
@@ -1015,7 +1016,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
           // Socket event hasn't arrived yet — do the swap ourselves AND mark the ID
           // as confirmed so that when message:new fires, it won't re-insert it.
           if (realId) confirmedIdsRef.current.add(realId);
-          return prev.map(m => m.id === tempId ? { ...res.data, status: 'sent' } : m);
+          return prev.map(m => m.id === tempId ? { ...res.data, status: 'sent', localId: tempId } : m);
         });
         try { messagingEvents.emit('message:new', res.data); } catch (e) { }
       } else {
