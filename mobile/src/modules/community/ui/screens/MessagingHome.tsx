@@ -604,7 +604,7 @@ Duplicate requests prevented: ${perfStats.current.duplicateRequestsPrevented}
       try {
         const baseURL = http.defaults.baseURL || '';
         const msgBaseUrl = resolveMessagingServiceUrl(baseURL);
-        const res = await http.get(`${msgBaseUrl}/channels/discover`);
+        const res = await http.get(`${msgBaseUrl}/api/channels/discover`);
         setPublicChannels(res.data?.data || []);
       } catch (err) {
         setPublicChannels([]);

@@ -102,9 +102,9 @@ export default function CommunityJoin({ navigation }: any) {
           }
         });
 
-        const discoverPromise = http.get(`${msgBaseUrl}/channels/discover`).then(r => r.data?.data || []).catch(async (err) => {
+        const discoverPromise = http.get(`${msgBaseUrl}/api/channels/discover`).then(r => r.data?.data || []).catch(async (err) => {
           try {
-            const res = await axios.get(`${msgBaseUrl}/channels/discover`);
+            const res = await axios.get(`${msgBaseUrl}/api/channels/discover`);
             return res.data?.data || [];
           } catch (e) {
             console.debug('[CommunityJoin] discover unauth fallback failed', (e as any)?.message || e);

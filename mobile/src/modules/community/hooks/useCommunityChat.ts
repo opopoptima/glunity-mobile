@@ -1075,33 +1075,7 @@ export function useCommunityChat(initialChannel: any, initialChannelId: string |
       });
     };
 
-    socket.emit('message:send', payload, (res: any) => {
-      clearTimeout(timeout);
-      if (resolved) return;
-      resolved = true;
-
-      if (Platform.OS !== 'web') {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      }
-      if (res?.ok) {
-        const realId = String(res.data?.id || res.data?._id || '');
-        // Clear reply context now that the message was sent successfully
-        setReplyingTo(null);
-        setMessages((prev) => {
-          // handleNewMessage already swapped temp- with the real message — just remove the ghost temp
-          if (realId && prev.some(m => (m.id || m._id) === realId)) {
-            return prev.filter(m => m.id !== tempId);
-          }
-          // Socket event hasn't arrived yet — do the swap ourselves AND mark the ID
-          // as confirmed so that when message:new fires, it won't re-insert it.
-          if (realId) confirmedIdsRef.current.add(realId);
-          return prev.map(m => m.id === tempId ? { ...res.data, status: 'sent', localId: tempId } : m);
-        });
-        try { messagingEvents.emit('message:new', res.data); } catch (e) { }
-      } else {
-        setMessages((prev) => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
-      }
-    });
+    performSendEmit(textToSend, tempId);
   }, [input, editingMsgId, socket, channel, user, t, scrollToEnd]);
 
   const handleRetrySend = useCallback((message: any) => {
