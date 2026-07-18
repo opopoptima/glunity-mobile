@@ -52,7 +52,7 @@ const registrationSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ['WAITING_PAYMENT', 'APPROVED', 'REJECTED', 'CANCELLED', 'pending', 'waiting_payment', 'paid', 'confirmed', 'cancelled'],
+      enum: ['WAITING_PAYMENT', 'APPROVED', 'REJECTED', 'CANCELLED', 'CONFIRMED', 'PAID', 'pending', 'waiting_payment', 'paid', 'confirmed', 'cancelled'],
       default: 'WAITING_PAYMENT',
       index: true,
     },
@@ -99,35 +99,56 @@ registrationSchema.index({ eventId: 1, phone: 1 });
 
 // Backward compatibility pre-save hook
 registrationSchema.pre('validate', function() {
-  if (this.registrationForm) {
-    if (!this.fullName && this.registrationForm.firstName && this.registrationForm.lastName) {
-      this.fullName = `${this.registrationForm.firstName} ${this.registrationForm.lastName}`;
-    }
-    if (!this.email && this.registrationForm.email) {
-      this.email = this.registrationForm.email;
-    }
-    if (!this.phone && this.registrationForm.phone) {
-      this.phone = this.registrationForm.phone;
-    }
-    if (this.registrationForm.ticketCount) {
-      this.ticketCount = this.registrationForm.ticketCount;
-      this.ticketsCount = this.registrationForm.ticketCount;
-    }
-    if (!this.notes && this.registrationForm.notes) {
-      this.notes = this.registrationForm.notes;
-    }
-  } else {
-    // Generate form from legacy properties if missing
+  if (!this.registrationForm) {
     const names = (this.fullName || '').split(' ');
     this.registrationForm = {
       firstName: names[0] || 'Attendee',
       lastName: names.slice(1).join(' ') || 'User',
       email: this.email || '',
       phone: this.phone || '',
-      gender: 'Male', // fallback
+      gender: 'Male',
       ticketCount: this.ticketCount || this.ticketsCount || 1,
       notes: this.notes || ''
     };
+  } else {
+    const names = (this.fullName || '').split(' ');
+    if (!this.registrationForm.firstName) {
+      this.registrationForm.firstName = names[0] || 'Attendee';
+    }
+    if (!this.registrationForm.lastName) {
+      this.registrationForm.lastName = names.slice(1).join(' ') || 'User';
+    }
+    if (!this.registrationForm.email) {
+      this.registrationForm.email = this.email || '';
+    }
+    if (!this.registrationForm.phone) {
+      this.registrationForm.phone = this.phone || '';
+    }
+    if (!this.registrationForm.gender) {
+      this.registrationForm.gender = 'Male';
+    }
+    if (this.registrationForm.ticketCount == null) {
+      this.registrationForm.ticketCount = this.ticketCount || this.ticketsCount || 1;
+    }
+    if (this.registrationForm.notes == null) {
+      this.registrationForm.notes = this.notes || '';
+    }
+  }
+
+  if (!this.fullName && this.registrationForm.firstName && this.registrationForm.lastName) {
+    this.fullName = `${this.registrationForm.firstName} ${this.registrationForm.lastName}`;
+  }
+  if (!this.email && this.registrationForm.email) {
+    this.email = this.registrationForm.email;
+  }
+  if (!this.phone && this.registrationForm.phone) {
+    this.phone = this.registrationForm.phone;
+  }
+  if (this.ticketCount == null) {
+    this.ticketCount = this.registrationForm.ticketCount || this.ticketsCount || 1;
+  }
+  if (this.ticketsCount == null) {
+    this.ticketsCount = this.registrationForm.ticketCount || this.ticketCount || 1;
   }
 });
 

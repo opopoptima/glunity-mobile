@@ -19,6 +19,9 @@ interface RawEvent {
   locationLng?: number;
   isCancelled?: boolean;
   status?: string;
+  ownerId?: string;
+  createdBy?: string;
+  pendingRequestsCount?: number;
 }
 
 interface ListResponse {
@@ -46,7 +49,10 @@ function mapEvent(it: RawEvent): GlunityEvent {
     locationLng: it.locationLng,
     isCancelled: it.isCancelled || false,
     status: it.status || 'active',
-    onPress: () => {},
+    ownerId: it.ownerId,
+    createdBy: it.createdBy,
+    pendingRequestsCount: it.pendingRequestsCount || 0,
+    onPress: () => { },
   } as any;
 }
 
@@ -103,7 +109,7 @@ export const eventsApi = {
     options?: { signal?: AbortSignal }
   ): Promise<{ items: GlunityEvent[]; total: number }> {
     const cacheKey = JSON.stringify(params || {});
-    
+
     // Check cache
     if (eventListCache.has(cacheKey)) {
       const cached = eventListCache.get(cacheKey)!;
@@ -115,9 +121,9 @@ export const eventsApi = {
 
     try {
       const result = await requestWithRetry(async () => {
-        const res = await http.get<ListResponse>('/events', { 
-          params, 
-          signal: options?.signal 
+        const res = await http.get<ListResponse>('/events', {
+          params,
+          signal: options?.signal
         });
         const items = (res.data?.data ?? []).map(mapEvent);
         const total = res.data?.meta?.total ?? items.length;
@@ -139,6 +145,7 @@ export const eventsApi = {
       description: it.description || '',
       imageUrl: it.imageUrl || '',
       createdBy: it.createdBy || it.created_by || undefined,
+      ownerId: it.organizer?.organizerId || it.createdBy || undefined,
       location: it.location || '',
       date: it.date || it.startsAt || '',
       type: it.type,
@@ -152,6 +159,7 @@ export const eventsApi = {
       maxCapacity: it.maxCapacity || 0,
       isCancelled: it.isCancelled || false,
       status: it.status || 'active',
+      pendingRequestsCount: it.pendingRequestsCount || 0,
       format: it.format || 'presentiel',
       meetingUrl: it.meetingUrl || '',
       platform: it.platform || '',
@@ -174,7 +182,7 @@ export const eventsApi = {
       payInstructions: it.payInstructions || '',
       payDeadline: it.payDeadline,
       locationDetails: it.locationDetails,
-      onPress: () => {},
+      onPress: () => { },
     } as any;
   },
   async join(id: string): Promise<GlunityEvent> {
@@ -200,7 +208,7 @@ export const eventsApi = {
       maxCapacity: it.maxCapacity || 0,
       isCancelled: it.isCancelled || false,
       status: it.status || 'active',
-      onPress: () => {},
+      onPress: () => { },
     } as any;
   },
   async leave(id: string): Promise<GlunityEvent> {
@@ -224,7 +232,7 @@ export const eventsApi = {
       maxCapacity: it.maxCapacity || 0,
       isCancelled: it.isCancelled || false,
       status: it.status || 'active',
-      onPress: () => {},
+      onPress: () => { },
     } as any;
   },
   async cancel(id: string): Promise<GlunityEvent> {
@@ -248,7 +256,7 @@ export const eventsApi = {
       maxCapacity: it.maxCapacity || 0,
       isCancelled: it.isCancelled || false,
       status: it.status || 'active',
-      onPress: () => {},
+      onPress: () => { },
     } as any;
   },
   async remove(id: string): Promise<GlunityEvent> {
@@ -272,7 +280,7 @@ export const eventsApi = {
       maxCapacity: it.maxCapacity || 0,
       isCancelled: it.isCancelled || false,
       status: it.status || 'active',
-      onPress: () => {},
+      onPress: () => { },
     } as any;
   },
   async create(payload: {
@@ -312,7 +320,7 @@ export const eventsApi = {
       maxCapacity: it.maxCapacity || 0,
       isCancelled: it.isCancelled || false,
       status: it.status || 'active',
-      onPress: () => {},
+      onPress: () => { },
     } as any;
   },
   async register(id: string, payload: {
@@ -334,10 +342,10 @@ export const eventsApi = {
     const res = await http.get<{ success: boolean; data: any }>(`/events/${id}/my-registration`);
     return res.data?.data ?? null;
   },
-  async confirmRegistration(regId: string): Promise<any> {
-    const res = await http.post<{ success: boolean; data: any }>(`/events/registrations/${regId}/confirm`);
+  async confirmRegistration(eventId: string, registrationId: string): Promise<any> {
+    const res = await http.patch<any>(`/events/${eventId}/registrations/${registrationId}/approve`);
     clearEventsCache();
-    return res.data?.data;
+    return res.data;
   },
   async cancelRegistration(regId: string): Promise<any> {
     const res = await http.post<{ success: boolean; data: any }>(`/events/registrations/${regId}/cancel`);
@@ -352,18 +360,14 @@ export const eventsApi = {
     const res = await http.get<{ success: boolean; data: any }>(`/events/${eventId}/registrations/${registrationId}`);
     return res.data?.data;
   },
-  async approveRegistration(id: string): Promise<any> {
-    const res = await http.patch<{ success: boolean; data: any }>(`/registrations/${id}/approve`);
+  async approveRegistration(eventId: string, registrationId: string): Promise<any> {
+    const res = await http.patch<any>(`/events/${eventId}/registrations/${registrationId}/approve`);
     clearEventsCache();
-    return res.data?.data;
+    return res.data;
   },
-  async rejectRegistration(id: string, reason?: string): Promise<any> {
-    const res = await http.patch<{ success: boolean; data: any }>(`/registrations/${id}/reject`, { reason });
+  async rejectRegistration(eventId: string, registrationId: string, reason?: string): Promise<any> {
+    const res = await http.patch<any>(`/events/${eventId}/registrations/${registrationId}/reject`, { reason });
     clearEventsCache();
-    return res.data?.data;
-  },
-  async getOwnerStats(): Promise<any> {
-    const res = await http.get<{ success: boolean; data: any }>('/events/owner/stats');
-    return res.data?.data;
+    return res.data;
   },
 };

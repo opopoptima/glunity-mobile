@@ -28,5 +28,7 @@ router.get('/:id/registrations', authMiddleware, controller.getRegistrations);
 router.get('/:id/my-registration', authMiddleware, controller.getMyRegistration);
 router.post('/registrations/:regId/confirm', authMiddleware, controller.confirmRegistration);
 router.post('/registrations/:regId/cancel', authMiddleware, controller.cancelRegistration);
+router.patch('/:id/registrations/:registrationId/approve', authMiddleware, controller.approveRegistration);
+router.patch('/:id/registrations/:registrationId/reject', authMiddleware, controller.rejectRegistration);
 
 module.exports = router;

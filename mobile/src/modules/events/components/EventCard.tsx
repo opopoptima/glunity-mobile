@@ -47,28 +47,28 @@ function EventCard({ event, onPress }: Props) {
 
   const optimizedSource = event.imageUrl ? { uri: optimizedUrl(event.imageUrl, 600) || '' } : undefined;
 
-const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function formatDateFast(d?: string | null) {
-  if (!d) return '';
-  const dt = new Date(d);
-  if (isNaN(dt.getTime())) return String(d);
-  const month = MONTHS_SHORT[dt.getMonth()];
-  const day = dt.getDate();
-  return `${month} ${day}`;
-}
+  function formatDateFast(d?: string | null) {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return String(d);
+    const month = MONTHS_SHORT[dt.getMonth()];
+    const day = dt.getDate();
+    return `${month} ${day}`;
+  }
 
-function formatTimeFast(d?: string | null) {
-  if (!d) return '';
-  const dt = new Date(d);
-  if (isNaN(dt.getTime())) return '';
-  let hours = dt.getHours();
-  const minutes = String(dt.getMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  return `${hours}:${minutes} ${ampm}`;
-}
+  function formatTimeFast(d?: string | null) {
+    if (!d) return '';
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return '';
+    let hours = dt.getHours();
+    const minutes = String(dt.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${hours}:${minutes} ${ampm}`;
+  }
 
   const styles = React.useMemo(() => StyleSheet.create({
     card: {
@@ -145,7 +145,7 @@ function formatTimeFast(d?: string | null) {
             <Ionicons name="location-outline" size={14} color={T.textSub} style={styles.metaIcon} />
             <Text style={[styles.cardMeta, { color: T.textSub }]} numberOfLines={1}>{typeof event.location === 'object' && event.location ? (event.location.name || event.location.address || '') : event.location}</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: T.greenLight }]}> 
+          <View style={[styles.badge, { backgroundColor: T.greenLight }]}>
             <Ionicons name="people" size={14} color={T.green} />
             <Text style={[styles.badgeText, { color: T.green }]}>{event.attendeesCount || 0} going</Text>
           </View>

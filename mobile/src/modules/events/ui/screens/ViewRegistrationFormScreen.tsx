@@ -7,38 +7,50 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Modal,
-  TextInput,
   RefreshControl,
 } from 'react-native';
 import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
+import { useAuth } from '@/modules/auth/state/auth.context';
+import { useSocket } from '@/shared/context/socket.context';
 import { eventsApi } from '../../../home/api/events.api';
 import { Feather } from '@expo/vector-icons';
-import FastImage from '@/shared/components/FastImage';
+import { Avatar } from '@/shared/components/Avatar';
 
 export default function ViewRegistrationFormScreen({ route, navigation }: any) {
   const { eventId, registrationId } = route.params;
   const { theme: T } = useTheme();
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const { socket } = useSocket();
 
   const [registration, setRegistration] = useState<any>(null);
+  const [event, setEvent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [approving, setApproving] = useState(false);
 
-  // Reject Modal State
-  const [rejectModalVisible, setRejectModalVisible] = useState(false);
-  const [rejectReason, setRejectReason] = useState('');
-  const [rejecting, setRejecting] = useState(false);
+  const currentUserId = user?._id || (user as any)?.id;
+  const isOwner = Boolean(event && currentUserId && [
+    event?.ownerId,
+    event?.createdBy,
+    event?.organizer?.organizerId,
+    event?.organizer?.id,
+    event?.organizer?.userId,
+  ].some((value) => Boolean(value) && String(value) === String(currentUserId)));
 
   const fetchDetails = useCallback(async (isRefresh = false) => {
     if (!isRefresh) setLoading(true);
     setError(null);
     try {
-      const data = await eventsApi.getRegistrationDetails(eventId, registrationId);
-      setRegistration(data);
+      const [regData, eventData] = await Promise.all([
+        eventsApi.getRegistrationDetails(eventId, registrationId),
+        eventsApi.get(eventId),
+      ]);
+      setRegistration(regData);
+      setEvent(eventData);
     } catch (err: any) {
       console.warn('[ViewRegistrationForm] Fetch error:', err);
       setError(err.message || t('Failed to load registration details'));
@@ -52,48 +64,59 @@ export default function ViewRegistrationFormScreen({ route, navigation }: any) {
     fetchDetails();
   }, [fetchDetails]);
 
+  // Socket.IO listener for real-time registration updates
+  useEffect(() => {
+    if (!socket) return;
+    const onRegChange = (payload: any) => {
+      if (String(payload.eventId) === String(eventId)) {
+        fetchDetails(true);
+      }
+    };
+    socket.on('registration:change', onRegChange);
+    return () => {
+      socket.off('registration:change', onRegChange);
+    };
+  }, [socket, eventId, fetchDetails]);
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchDetails(true);
   }, [fetchDetails]);
 
-  const handleApprove = () => {
+  const handleConfirmPayment = async () => {
     if (!registration) return;
-    Alert.alert(
-      t('Confirm Approval'),
-      t('Approve this registration?'),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Approve'),
-          onPress: async () => {
-            try {
-              setLoading(true);
-              await eventsApi.approveRegistration(registrationId);
-              Alert.alert(t('Success'), t('Participant approved successfully.'));
-              navigation.goBack();
-            } catch (err: any) {
-              Alert.alert(t('Error'), err.message || t('Failed to approve participant'));
-              setLoading(false);
-            }
-          }
-        }
-      ]
-    );
-  };
 
-  const handleRejectSubmit = async () => {
-    if (!registration) return;
-    setRejecting(true);
     try {
-      await eventsApi.rejectRegistration(registrationId, rejectReason);
-      setRejectModalVisible(false);
-      Alert.alert(t('Success'), t('Registration rejected.'));
-      navigation.goBack();
+      setApproving(true);
+      console.log('[PAYMENT] Button pressed', { eventId, registrationId });
+      const result = await eventsApi.confirmRegistration(eventId, registrationId);
+      console.log('[PAYMENT] Success response:', result);
+      Alert.alert(t('Success'), t('Payment confirmed successfully.'));
+      
+      try {
+        navigation.navigate({
+          name: 'EventRegistrationRequests',
+          params: { statusChanged: true },
+          merge: true,
+        } as any);
+      } catch (navErr) {
+        console.warn('[NAVIGATION] Failed to update parent screen stateChanged param:', navErr);
+      }
+
+      fetchDetails(true);
     } catch (err: any) {
-      Alert.alert(t('Error'), err.message || t('Failed to reject registration'));
+      console.error('[PAYMENT] Error:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        config: err.config ? { url: err.config.url, method: err.config.method } : null,
+      });
+      Alert.alert(
+        t('Error'),
+        err.response?.data?.message || err.response?.data?.error || err.message || t('Failed to confirm payment')
+      );
     } finally {
-      setRejecting(false);
+      setApproving(false);
     }
   };
 
@@ -126,7 +149,8 @@ export default function ViewRegistrationFormScreen({ route, navigation }: any) {
   }
 
   const form = registration.registrationForm || {};
-  const isPending = registration.status === 'WAITING_PAYMENT' || registration.status === 'waiting_payment';
+  const normalizedStatus = String(registration.status || '').toUpperCase();
+  const isPending = ['WAITING_PAYMENT', 'PENDING'].includes(normalizedStatus);
   
   // Format registration date
   const regDate = registration.createdAt ? new Date(registration.createdAt).toLocaleDateString() : '-';
@@ -153,10 +177,11 @@ export default function ViewRegistrationFormScreen({ route, navigation }: any) {
       >
         {/* Profile Card Header */}
         <View style={s.profileHeader}>
-          <FastImage
-            source={{ uri: registration.userId?.avatar?.url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100' }}
+          <Avatar
+            url={registration.userId?.avatar?.url}
+            name={[form.firstName, form.lastName].filter(Boolean).join(' ') || registration.userId?.fullName || registration.fullName || 'User'}
+            size={80}
             style={s.avatar}
-            contentFit="cover"
           />
           <Text style={[s.fullName, { color: T.text }]}>
             {form.firstName || registration.fullName} {form.lastName || ''}
@@ -228,93 +253,24 @@ export default function ViewRegistrationFormScreen({ route, navigation }: any) {
           </View>
         </View>
 
-        {/* Action Buttons */}
         {isPending ? (
-          <View style={s.actionContainer}>
-            <TouchableOpacity
-              style={[s.actionBtn, { backgroundColor: T.green }]}
-              onPress={handleApprove}
-            >
-              <Text style={s.actionBtnText}>{t('Approve')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[s.actionBtn, s.btnReject, { borderColor: T.border }]}
-              onPress={() => {
-                Alert.alert(
-                  t('Confirm Rejection'),
-                  t('Reject this registration?'),
-                  [
-                    { text: t('Cancel'), style: 'cancel' },
-                    {
-                      text: t('Reject'),
-                      onPress: () => setRejectModalVisible(true)
-                    }
-                  ]
-                );
-              }}
-            >
-              <Text style={[s.actionBtnText, { color: T.red }]}>{t('Reject')}</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[s.actionBtn, { backgroundColor: T.green }]}
+            onPress={handleConfirmPayment}
+            disabled={approving}
+            activeOpacity={0.7}
+          >
+            {approving ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Feather name="check" size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={s.actionBtnText}>{t('Accept Payment')}</Text>
+              </>
+            )}
+          </TouchableOpacity>
         ) : null}
-
-        <TouchableOpacity
-          style={[s.backBtn, { borderColor: T.border }]}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={[s.backBtnText, { color: T.textSub }]}>{t('Back')}</Text>
-        </TouchableOpacity>
       </ScrollView>
-
-      {/* Reject Reason input modal */}
-      <Modal
-        visible={rejectModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setRejectModalVisible(false)}
-      >
-        <View style={s.modalOverlay}>
-          <View style={[s.modalContent, { backgroundColor: T.surface }]}>
-            <Text style={[s.modalTitle, { color: T.text }]}>{t('Reject Registration')}</Text>
-            <Text style={[s.modalSub, { color: T.textSub }]}>
-              {t('Provide a reason for rejection (optional):')}
-            </Text>
-
-            <TextInput
-              style={[s.modalInput, { color: T.text, borderColor: T.border, backgroundColor: T.surfaceAlt }]}
-              value={rejectReason}
-              onChangeText={setRejectReason}
-              placeholder={t('Reason for rejection...')}
-              placeholderTextColor={T.textMuted}
-              multiline={true}
-              numberOfLines={3}
-            />
-
-            <View style={s.modalActions}>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnCancel, { borderColor: T.border }]}
-                onPress={() => setRejectModalVisible(false)}
-                disabled={rejecting}
-              >
-                <Text style={[s.modalBtnText, { color: T.textSub }]}>{t('Cancel')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnConfirm, { backgroundColor: T.red }]}
-                onPress={handleRejectSubmit}
-                disabled={rejecting}
-              >
-                {rejecting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={[s.modalBtnText, { color: '#FFFFFF' }]}>{t('Reject')}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </AppScaffold>
   );
 }
@@ -383,38 +339,19 @@ const s = StyleSheet.create({
     fontWeight: '600',
     fontFamily: 'Poppins_600SemiBold',
   },
-  actionContainer: {
-    gap: 12,
-    marginTop: 8,
-  },
   actionBtn: {
     height: 48,
     borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  btnReject: {
-    borderWidth: 1.5,
-    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    marginTop: 8,
   },
   actionBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
     fontFamily: 'Poppins_700Bold',
-  },
-  backBtn: {
-    height: 48,
-    borderRadius: 14,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  backBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Poppins_600SemiBold',
   },
   errorTitle: {
     fontSize: 16,
@@ -437,66 +374,5 @@ const s = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontFamily: 'Poppins_700Bold',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '85%',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: 'Poppins_700Bold',
-    marginBottom: 8,
-  },
-  modalSub: {
-    fontSize: 13,
-    fontFamily: 'Poppins_400Regular',
-    marginBottom: 12,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 10,
-    fontSize: 14,
-    fontFamily: 'Poppins_400Regular',
-    textAlignVertical: 'top',
-    minHeight: 70,
-    marginBottom: 20,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalBtnCancel: {
-    borderWidth: 1,
-  },
-  modalBtnConfirm: {
-    backgroundColor: '#EF4444',
-  },
-  modalBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Poppins_600SemiBold',
   },
 });

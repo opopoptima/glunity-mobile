@@ -21,6 +21,7 @@ function toEventDto(doc) {
 		endsAt: doc.endsAt,
 		organizer: doc.organizer || {},
 		attendeesCount,
+		pendingRequestsCount: doc.pendingRequestsCount || 0,
 		attendees: Array.isArray(doc.attendees)
 			? doc.attendees.map(a => (a && a._id) ? String(a._id) : String(a))
 			: [],

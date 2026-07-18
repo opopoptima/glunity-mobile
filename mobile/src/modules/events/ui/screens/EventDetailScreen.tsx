@@ -25,6 +25,7 @@ import { useLanguage } from '@/shared/context/language.context';
 import { Radius } from '@/shared/utils/theme';
 import { eventsApi } from '../../../home/api/events.api';
 import { useAuth } from '@/modules/auth/state/auth.context';
+import { useSocket } from '@/shared/context/socket.context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import FastImage from '@/shared/components/FastImage';
 
@@ -40,6 +41,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   const { isRTL, t } = useLanguage();
   const { eventId } = route.params as any;
   const { user } = useAuth();
+  const { socket } = useSocket();
 
   const [event, setEvent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -51,9 +53,10 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   // Registration Modal States
   const [showRegModal, setShowRegModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [isDirectSuccess, setIsDirectSuccess] = useState(false);
   const scaleAnim = React.useRef(new Animated.Value(0.3)).current;
 
-  const triggerSuccessModal = () => {
+  const triggerSuccessModal = (autoClose = false) => {
     setShowSuccessModal(true);
     Animated.spring(scaleAnim, {
       toValue: 1,
@@ -61,6 +64,13 @@ export default function EventDetailScreen({ navigation, route }: Props) {
       friction: 7,
       useNativeDriver: true,
     }).start();
+
+    if (autoClose) {
+      setTimeout(() => {
+        closeSuccessModal();
+        setShowRegModal(false);
+      }, 1000);
+    }
   };
 
   const closeSuccessModal = () => {
@@ -170,6 +180,21 @@ export default function EventDetailScreen({ navigation, route }: Props) {
   useEffect(() => {
     loadData();
   }, [eventId, user]);
+
+  // Socket.IO listener for real-time registration updates
+  useEffect(() => {
+    if (!socket) return;
+    const onRegChange = (payload: any) => {
+      if (String(payload.eventId) === String(eventId)) {
+        // Reload event details to get updated pendingRequestsCount
+        loadData();
+      }
+    };
+    socket.on('registration:change', onRegChange);
+    return () => {
+      socket.off('registration:change', onRegChange);
+    };
+  }, [socket, eventId]);
 
   function formatDate(d: string | undefined) {
     try {
@@ -316,8 +341,12 @@ export default function EventDetailScreen({ navigation, route }: Props) {
       } as any);
       setActiveRegId(reg._id);
       
-      // Trigger Scale/Fade Success Modal
-      triggerSuccessModal();
+      // Refresh event details and registration status immediately
+      await loadData();
+      
+      setIsDirectSuccess(true);
+      // Trigger Scale/Fade Success Modal (with 1 second auto-close)
+      triggerSuccessModal(true);
     } catch (err: any) {
       const errMsg = err?.response?.data?.message || err?.message || '';
       if (errMsg.includes('already registered')) {
@@ -344,7 +373,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
       
       // Confirm registration on backend
       if (activeRegId) {
-        await eventsApi.confirmRegistration(activeRegId);
+        await eventsApi.confirmRegistration(eventId, activeRegId);
         await loadData();
       }
       setRegStep('success');
@@ -370,7 +399,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
           onPress: async () => {
             try {
               setLoadingRegs(true);
-              await eventsApi.confirmRegistration(regId);
+              await eventsApi.approveRegistration(eventId, regId);
               await loadData();
             } catch (err: any) {
               Alert.alert(t('Error'), err.message);
@@ -578,30 +607,6 @@ export default function EventDetailScreen({ navigation, route }: Props) {
             <View style={styles.body}>
               <Text style={[styles.title, { color: T.text }]}>{event.title}</Text>
 
-              {/* Status Indicator for registered users */}
-              {userRegistration && (
-                <View style={[
-                  styles.statusBadge,
-                  userRegistration.status === 'confirmed' && { backgroundColor: T.greenLight },
-                  userRegistration.status === 'waiting_payment' && { backgroundColor: '#FFF9C4' },
-                  userRegistration.status === 'cancelled' && { backgroundColor: T.errorLight },
-                  userRegistration.status === 'paid' && { backgroundColor: '#E8F5E9' }
-                ]}>
-                  <Text style={[
-                    styles.statusText,
-                    userRegistration.status === 'confirmed' && { color: T.green },
-                    userRegistration.status === 'waiting_payment' && { color: '#F57F17' },
-                    userRegistration.status === 'cancelled' && { color: T.red },
-                    userRegistration.status === 'paid' && { color: '#2E7D32' }
-                  ]}>
-                    {userRegistration.status === 'confirmed' && `✓ ${t('Registration Confirmed')}`}
-                    {userRegistration.status === 'waiting_payment' && `⏳ ${t('Payment Pending Validation')}`}
-                    {userRegistration.status === 'paid' && `✓ ${t('Paid - Awaiting Confirmation')}`}
-                    {userRegistration.status === 'cancelled' && `✗ ${t('Registration Cancelled')}`}
-                  </Text>
-                </View>
-              )}
-
               {/* Schedule and Timings */}
               <View style={styles.infoRow}>
                 <Ionicons name="calendar-outline" size={18} color={T.red} />
@@ -644,7 +649,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                     <Ionicons name="people-outline" size={18} color={T.red} />
                     <View style={styles.infoCol}>
                       <Text style={[styles.infoTitle, { color: T.text }]}>
-                        {event.attendeesCount || 0} / {event.maxCapacity || 50} {t('participants')}
+                        {event.attendeesCount || 0} {t('participants')}
                       </Text>
                       {attendeeAvatars.length > 0 && (
                         <View style={styles.smallAvatars}>
@@ -752,14 +757,15 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                         <Text style={[styles.joinBtnTextLarge, { color: '#111827' }]}>{t('Cancel')}</Text>
                       )}
                     </TouchableOpacity>
-                  ) : userRegistration && (userRegistration.status === 'WAITING_PAYMENT' || userRegistration.status === 'waiting_payment') ? (
+                  ) : userRegistration && ['WAITING_PAYMENT', 'PENDING'].includes(String(userRegistration.status || '').toUpperCase()) ? (
                     <TouchableOpacity
                       onPress={() => {
                         setActiveRegId(userRegistration._id);
+                        setIsDirectSuccess(false);
                         triggerSuccessModal();
                       }}
                       activeOpacity={0.8}
-                      style={[styles.joinBtnLarge, { backgroundColor: '#F57F17' }]}
+                      style={[styles.joinBtnLarge, { backgroundColor: T.green }]}
                     >
                       <Text style={styles.joinBtnTextLarge}>{t('Pending Validation')}</Text>
                     </TouchableOpacity>
@@ -799,6 +805,7 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                       shadowOffset: { width: 0, height: 4 },
                       shadowRadius: 8,
                       elevation: 3,
+                      position: 'relative',
                     }}
                     onPress={() => navigation.navigate('EventRegistrationRequests', { eventId, title: event.title })}
                     activeOpacity={0.85}
@@ -807,6 +814,27 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                     <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700', fontFamily: 'Poppins_700Bold' }}>
                       {t('Manage Registrations')}
                     </Text>
+                    {Number(event.pendingRequestsCount || 0) > 0 && (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          top: -8,
+                          right: -8,
+                          backgroundColor: T.red,
+                          borderRadius: 12,
+                          width: 24,
+                          height: 24,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          borderWidth: 2,
+                          borderColor: T.surface,
+                        }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: 'Poppins_700Bold' }}>
+                          {event.pendingRequestsCount}
+                        </Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 </View>
               )}
@@ -1014,9 +1042,22 @@ export default function EventDetailScreen({ navigation, route }: Props) {
               {t('Your ticket is currently waiting for organizer validation. Since this event uses Cash on Arrival (Sur Place), your registration will be approved after payment verification by the organizer.')}
             </Text>
 
-            <View style={{ flexDirection: 'row', gap: 10, width: '100%' }}>
+            <View style={{
+              flexDirection: isDirectSuccess ? 'row' : 'column-reverse',
+              gap: 10,
+              width: '100%',
+              marginTop: 10
+            }}>
               <TouchableOpacity
-                style={{ flex: 1, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: T.border, justifyContent: 'center', alignItems: 'center' }}
+                style={{
+                  width: '100%',
+                  height: 44,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: T.border,
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}
                 onPress={() => {
                   closeSuccessModal();
                   setShowRegModal(false);
@@ -1025,35 +1066,88 @@ export default function EventDetailScreen({ navigation, route }: Props) {
                 <Text style={{ color: T.textSub, fontWeight: '600', fontFamily: 'Poppins_600SemiBold' }}>{t('Close')}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: T.green, justifyContent: 'center', alignItems: 'center' }}
-                onPress={() => {
-                  closeSuccessModal();
-                  setShowRegModal(false);
-                  loadData();
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontFamily: 'Poppins_700Bold' }}>{t('View Event')}</Text>
-              </TouchableOpacity>
+              {!isDirectSuccess && (
+                <TouchableOpacity
+                  style={{
+                    width: '100%',
+                    height: 44,
+                    borderRadius: 12,
+                    backgroundColor: '#EF4444',
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}
+                  onPress={() => {
+                    // Close success modal and open the cancellation confirmation modal
+                    closeSuccessModal();
+                    setShowRegModal(false);
+                    setShowCancelConfirm(true);
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '700', fontFamily: 'Poppins_700Bold' }}>{t('Withdraw Request')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </Animated.View>
         </View>
       </Modal>
-
+ 
       {/* Cancel participation modal */}
       <Modal visible={showCancelConfirm} transparent animationType="fade" onRequestClose={closeCancel}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 24 }}>
           <View style={{ backgroundColor: T.surface, borderRadius: 14, padding: 18 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: T.text, marginBottom: 8 }}>{t('Cancel participation')}</Text>
-            <Text style={{ fontSize: 14, color: T.textSub, lineHeight: 20, marginBottom: 18 }}>
-              {t('Are you sure you want to cancel your participation? This will remove you from the attendee list.')}
+            <Text style={{ fontSize: 16, fontWeight: '700', color: T.text, marginBottom: 8 }}>
+              {userRegistration && ['WAITING_PAYMENT', 'PENDING'].includes(String(userRegistration.status || '').toUpperCase())
+                ? t("Voulez-vous retirer votre demande d'inscription ?")
+                : t('Cancel participation')}
             </Text>
-            <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'flex-end', gap: 10 }}>
-              <Pressable onPress={closeCancel} style={({ pressed }) => ({ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: T.border, backgroundColor: pressed ? T.surfaceAlt : 'transparent' })}>
-                <Text style={{ color: T.text, fontWeight: '600' }}>{t('Keep')}</Text>
+            <Text style={{ fontSize: 14, color: T.textSub, lineHeight: 20, marginBottom: 18 }}>
+              {userRegistration && ['WAITING_PAYMENT', 'PENDING'].includes(String(userRegistration.status || '').toUpperCase())
+                ? t("Votre demande d'inscription en attente sera annulée.")
+                : t('Are you sure you want to cancel your participation? This will remove you from the attendee list.')}
+            </Text>
+            <View style={{
+              flexDirection: userRegistration && ['WAITING_PAYMENT', 'PENDING'].includes(String(userRegistration.status || '').toUpperCase())
+                ? 'column-reverse'
+                : (isRTL ? 'row-reverse' : 'row'),
+              justifyContent: 'flex-end',
+              gap: 10,
+              width: '100%'
+            }}>
+              <Pressable
+                onPress={closeCancel}
+                style={({ pressed }) => ({
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: T.border,
+                  backgroundColor: pressed ? T.surfaceAlt : 'transparent',
+                  alignItems: 'center',
+                  width: userRegistration && ['WAITING_PAYMENT', 'PENDING'].includes(String(userRegistration.status || '').toUpperCase()) ? '100%' : 'auto'
+                })}
+              >
+                <Text style={{ color: T.text, fontWeight: '600' }}>
+                  {userRegistration && ['WAITING_PAYMENT', 'PENDING'].includes(String(userRegistration.status || '').toUpperCase())
+                    ? t("Non, garder ma demande")
+                    : t('Keep')}
+                </Text>
               </Pressable>
-              <Pressable onPress={confirmCancel} style={({ pressed }) => ({ paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10, backgroundColor: pressed ? '#DC2626' : '#EF4444' })}>
-                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>{t('Cancel participation')}</Text>
+              <Pressable
+                onPress={confirmCancel}
+                style={({ pressed }) => ({
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  backgroundColor: pressed ? '#DC2626' : '#EF4444',
+                  alignItems: 'center',
+                  width: userRegistration && ['WAITING_PAYMENT', 'PENDING'].includes(String(userRegistration.status || '').toUpperCase()) ? '100%' : 'auto'
+                })}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>
+                  {userRegistration && ['WAITING_PAYMENT', 'PENDING'].includes(String(userRegistration.status || '').toUpperCase())
+                    ? t("Oui, retirer ma demande")
+                    : t('Cancel participation')}
+                </Text>
               </Pressable>
             </View>
           </View>

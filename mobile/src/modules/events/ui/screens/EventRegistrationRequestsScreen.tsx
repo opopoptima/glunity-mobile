@@ -9,13 +9,14 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
 import { eventsApi } from '../../../home/api/events.api';
 import { useSocket } from '@/shared/context/socket.context';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import FastImage from '@/shared/components/FastImage';
+import { Avatar } from '@/shared/components/Avatar';
 
 export default function EventRegistrationRequestsScreen({ route, navigation }: any) {
   const { eventId, title } = route.params;
@@ -47,6 +48,19 @@ export default function EventRegistrationRequestsScreen({ route, navigation }: a
   useEffect(() => {
     fetchRegistrations();
   }, [fetchRegistrations]);
+
+  // Handle conditional refresh when returning from detail screen
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.statusChanged) {
+        // Refresh registrations while preserving scroll position and search query
+        setRefreshing(true);
+        fetchRegistrations(true);
+        // Clear the flag
+        navigation.setParams({ statusChanged: false });
+      }
+    }, [route.params?.statusChanged, fetchRegistrations, navigation])
+  );
 
   // Real-time updates via Socket.IO
   useEffect(() => {
@@ -102,16 +116,19 @@ export default function EventRegistrationRequestsScreen({ route, navigation }: a
     const form = item.registrationForm || {};
     const { text: statusText, color: statusColor } = getStatusTextAndColor(item.status);
 
+    const avatarName = [form.firstName, form.lastName].filter(Boolean).join(' ') || item.userId?.fullName || item.fullName || item.userId?.email || 'User';
+
     return (
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={() => navigation.navigate('ViewRegistrationForm', { eventId, registrationId: item._id })}
         style={[s.itemRow, { borderBottomColor: T.border }]}
       >
-        <FastImage
-          source={{ uri: item.userId?.avatar?.url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100' }}
+        <Avatar
+          url={item.userId?.avatar?.url}
+          name={avatarName}
+          size={44}
           style={s.avatar}
-          contentFit="cover"
         />
         <View style={s.textContainer}>
           <Text style={[s.fullName, { color: T.text }]}>
@@ -127,7 +144,6 @@ export default function EventRegistrationRequestsScreen({ route, navigation }: a
   return (
     <AppScaffold
       title={t('Manage Registrations')}
-      subtitle={title}
       activeTab="events"
       onBack={() => navigation.goBack()}
       contentStyle={{ backgroundColor: T.bg }}

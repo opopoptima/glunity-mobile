@@ -9,46 +9,29 @@ import type { GlunityEvent } from '../../../home/domain/home.types';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import EventCard from '../../components/EventCard';
 import { useAuth } from '@/modules/auth/state/auth.context';
+import { useSocket } from '@/shared/context/socket.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguage } from '@/shared/context/language.context';
 import PaginationBar from '@/shared/components/PaginationBar';
 import { EventCardSkeleton } from '@/shared/components/SkeletonLoader';
 
 const FILTER_KEYS = [
-  { key: 'All',       label: 'All',       icon: 'apps-outline'          as const },
-  { key: 'Meetups',   label: 'Meetups',   icon: 'people-outline'        as const },
-  { key: 'Classes',   label: 'Workshops', icon: 'school-outline'        as const },
-  { key: 'Markets',   label: 'Markets',   icon: 'storefront-outline'    as const },
+  { key: 'All', label: 'All', icon: 'apps-outline' as const },
+  { key: 'Meetups', label: 'Meetups', icon: 'people-outline' as const },
+  { key: 'Classes', label: 'Workshops', icon: 'school-outline' as const },
+  { key: 'Markets', label: 'Markets', icon: 'storefront-outline' as const },
 ];
 
 export default function EventsCalendarScreen({ navigation }: any) {
   const { theme: T } = useTheme();
   const { user } = useAuth();
+  const { socket } = useSocket();
   const insets = useSafeAreaInsets();
   const { isRTL, t } = useLanguage();
   const [events, setEvents] = React.useState<GlunityEvent[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [filter, setFilter] = React.useState('All');
-  const [stats, setStats] = React.useState<any>(null);
-  const [loadingStats, setLoadingStats] = React.useState(false);
-
-  const fetchStats = React.useCallback(async () => {
-    if (user?.profileType !== 'pro_commerce') return;
-    setLoadingStats(true);
-    try {
-      const res = await eventsApi.getOwnerStats();
-      setStats(res);
-    } catch (e) {
-      console.warn('Failed to load stats', e);
-    } finally {
-      setLoadingStats(false);
-    }
-  }, [user]);
-
-  React.useEffect(() => {
-    fetchStats();
-  }, [fetchStats]);
 
   // Search State
   const [searchOpen, setSearchOpen] = React.useState(false);
@@ -151,8 +134,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
     setRefreshing(true);
     setPage(1);
     fetchEvents(1, true);
-    fetchStats();
-  }, [fetchEvents, fetchStats]);
+  }, [fetchEvents]);
 
   const filtered = React.useMemo(() => events, [events]);
 
@@ -300,45 +282,6 @@ export default function EventsCalendarScreen({ navigation }: any) {
       fontWeight: '700',
       fontFamily: 'Poppins_700Bold',
     },
-    statsContainer: {
-      paddingHorizontal: 6,
-      marginTop: 10,
-      marginBottom: 16,
-    },
-    statsHeaderTitle: {
-      fontSize: 14,
-      fontWeight: '700',
-      fontFamily: 'Poppins_700Bold',
-      color: T.text,
-      marginBottom: 10,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    statsGrid: {
-      flexDirection: isRTL ? 'row-reverse' : 'row',
-      flexWrap: 'wrap',
-      gap: 10,
-    },
-    statsCard: {
-      flex: 1,
-      minWidth: '45%',
-      borderRadius: 16,
-      borderWidth: 1,
-      padding: 14,
-      justifyContent: 'center',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOpacity: 0.03,
-      shadowOffset: { width: 0, height: 4 },
-      shadowRadius: 8,
-      elevation: 2,
-    },
-    statsValue: {
-      fontSize: 22,
-      fontWeight: '700',
-      fontFamily: 'Poppins_700Bold',
-      marginBottom: 2,
-    },
     statsLabel: {
       fontSize: 11,
       fontFamily: 'Poppins_400Regular',
@@ -348,29 +291,6 @@ export default function EventsCalendarScreen({ navigation }: any) {
 
   const ListHeader = React.useMemo(() => (
     <View style={{ backgroundColor: T.bg }}>
-      {user?.profileType === 'pro_commerce' && stats && (
-        <View style={styles.statsContainer}>
-          <Text style={styles.statsHeaderTitle}>{t('Organizer Dashboard')}</Text>
-          <View style={styles.statsGrid}>
-            <View style={[styles.statsCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-              <Text style={[styles.statsValue, { color: T.green }]}>{stats.upcomingEvents}</Text>
-              <Text style={[styles.statsLabel, { color: T.textSub }]}>{t('Upcoming Events')}</Text>
-            </View>
-            <View style={[styles.statsCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-              <Text style={[styles.statsValue, { color: '#F57F17' }]}>{stats.pendingRegistrations}</Text>
-              <Text style={[styles.statsLabel, { color: T.textSub }]}>{t('Pending Registrations')}</Text>
-            </View>
-            <View style={[styles.statsCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-              <Text style={[styles.statsValue, { color: T.green }]}>{stats.approvedParticipants}</Text>
-              <Text style={[styles.statsLabel, { color: T.textSub }]}>{t('Approved Participants')}</Text>
-            </View>
-            <View style={[styles.statsCard, { backgroundColor: T.surface, borderColor: T.border }]}>
-              <Text style={[styles.statsValue, { color: T.red }]}>{stats.rejectedRequests}</Text>
-              <Text style={[styles.statsLabel, { color: T.textSub }]}>{t('Rejected Requests')}</Text>
-            </View>
-          </View>
-        </View>
-      )}
       <Animated.View style={[styles.searchWrap, { height: searchHeight, opacity: searchOpacity }]}>
         <View style={styles.searchInner}>
           <Feather name="search" size={16} color={T.textMuted} />
@@ -412,7 +332,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
         })}
       </ScrollView>
     </View>
-  ), [filter, searchHeight, searchOpacity, searchVal, T, styles, t, stats, user]);
+  ), [filter, searchHeight, searchOpacity, searchVal, T, styles, t, user]);
 
   return (
     <AppScaffold
@@ -423,7 +343,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
       searchIcon={searchOpen ? 'x' : 'search'}
       contentStyle={{ backgroundColor: T.bg, paddingBottom: 0 }}
     >
-      <View style={[styles.root, { backgroundColor: T.bg }] }>
+      <View style={[styles.root, { backgroundColor: T.bg }]}>
         {/* FlatList header will render filter and will be sticky */}
 
         {error ? (
@@ -470,7 +390,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
                     try {
                       const url = item.imageUrl;
                       if (url) {
-                        Image.prefetch(url).catch(() => {});
+                        Image.prefetch(url).catch(() => { });
                       }
                     } catch (e) { /* ignore */ }
                     navigation.navigate('EventDetail', { eventId: item.id });

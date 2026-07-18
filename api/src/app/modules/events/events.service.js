@@ -225,23 +225,29 @@ const eventsService = {
 
 		const form = dto.registrationForm || dto;
 		const { firstName, lastName, email, phone, gender, dateOfBirth, address, city, country, notes } = form;
-		
+
 		if (!firstName || !lastName || !email || !phone || !gender) {
 			throw AppError.badRequest('Required fields: First Name, Last Name, Email, Phone, Gender');
 		}
 
-		// Enforce unique phone per event check
+		const normalizedPhone = phone.trim();
+
 		const existingReg = await Registration.findOne({
 			eventId,
-			phone: phone.trim()
+			status: { $nin: ['CANCELLED', 'cancelled'] },
+			$or: [
+				...(userId ? [{ userId }] : []),
+				{ phone: normalizedPhone },
+				{ 'registrationForm.phone': normalizedPhone }
+			]
 		});
 		if (existingReg) {
-			throw AppError.badRequest('This phone number is already registered for this event.');
+			throw AppError.badRequest('This phone number or user is already registered for this event.');
 		}
 
 		// Every participant can register for only one ticket per event
 		const finalTicketCount = 1;
-		
+
 		const attendeesCount = (doc.attendees || []).length;
 		if (doc.maxCapacity && attendeesCount + finalTicketCount > doc.maxCapacity) {
 			throw AppError.badRequest('Not enough spots available');
@@ -294,7 +300,7 @@ const eventsService = {
 					type: 'event',
 					metadata: { eventId, registrationId: String(reg._id), kind: 'joined' },
 				});
-			} catch (e) {}
+			} catch (e) { }
 		} else {
 			// Notify organizer about new request
 			try {
@@ -305,7 +311,7 @@ const eventsService = {
 					type: 'registration_request',
 					metadata: { eventId, registrationId: String(reg._id), kind: 'pending' },
 				});
-			} catch (e) {}
+			} catch (e) { }
 
 			// Notify user registration submitted
 			try {
@@ -316,7 +322,7 @@ const eventsService = {
 					type: 'event',
 					metadata: { eventId, registrationId: String(reg._id), kind: 'submitted' },
 				});
-			} catch (e) {}
+			} catch (e) { }
 		}
 
 		// Emit socket events to update counts/badges in real-time
@@ -333,7 +339,7 @@ const eventsService = {
 	async getRegistrations(eventId, userId) {
 		const doc = await repo.findById(eventId);
 		if (!doc) throw AppError.notFound('Event');
-		
+
 		const organizerId = doc.organizer && doc.organizer.organizerId ? String(doc.organizer.organizerId) : String(doc.createdBy);
 		if (String(userId) !== organizerId) {
 			throw AppError.forbidden('Only the event organizer can view registrations');
@@ -345,7 +351,7 @@ const eventsService = {
 	async getRegistrationDetails(eventId, regId, userId) {
 		const doc = await repo.findById(eventId);
 		if (!doc) throw AppError.notFound('Event');
-		
+
 		const organizerId = doc.organizer && doc.organizer.organizerId ? String(doc.organizer.organizerId) : String(doc.createdBy);
 		const reg = await Registration.findById(regId).populate('userId', 'fullName avatar email phone').lean();
 		if (!reg) throw AppError.notFound('Registration');
@@ -358,84 +364,153 @@ const eventsService = {
 	},
 
 	async getMyRegistration(eventId, userId) {
-		return Registration.findOne({ eventId, userId }).lean();
+		return Registration.findOne({ eventId, userId }).sort({ createdAt: -1 }).lean();
 	},
 
 	async approveRegistration(regId, userId) {
+		console.log('[SERVICE] approveRegistration start', { regId, userId });
 		const reg = await Registration.findById(regId);
+		console.log('[SERVICE] Registration found:', { regId, exists: !!reg, status: reg?.status });
 		if (!reg) throw AppError.notFound('Registration');
 
+		const currentStatus = String(reg.status || '').toUpperCase();
+		if (['APPROVED', 'CONFIRMED', 'PAID', 'REJECTED', 'CANCELLED'].includes(currentStatus)) {
+			throw AppError.badRequest('Registration has already been processed.', 'REGISTRATION_ALREADY_PROCESSED');
+		}
+
 		const doc = await repo.findById(reg.eventId);
+		console.log('[SERVICE] Event found:', { eventId: reg.eventId, exists: !!doc });
 		if (!doc) throw AppError.notFound('Event');
 
 		const organizerId = doc.organizer && doc.organizer.organizerId ? String(doc.organizer.organizerId) : String(doc.createdBy);
+		console.log('[SERVICE] Ownership check:', { userId, organizerId, match: String(userId) === organizerId });
 		if (String(userId) !== organizerId) {
-			throw AppError.forbidden('Only the event organizer can approve registrations');
+			throw AppError.forbidden('You are not allowed to perform this action.');
 		}
 
-		reg.status = 'APPROVED';
+		reg.status = 'CONFIRMED';
 		reg.paidAt = new Date();
 		reg.approvedAt = new Date();
 		reg.approvedBy = userId;
+		console.log('[SERVICE] Saving registration...');
 		await reg.save();
+		console.log('[SERVICE] Registration saved, joining event...');
 
 		await repo.join(reg.eventId, reg.userId);
+		console.log('[SERVICE] User joined event');
 
-		try {
-			await notificationsService.create({
-				userId: reg.userId,
-				title: `Registration approved.`,
-				body: `Your registration has been approved.`,
-				type: 'event',
-				metadata: { eventId: String(doc._id), kind: 'confirmed' },
-			});
-		} catch (e) {}
-
-		// Emit socket update
-		const io = require('../../bootstrap/socket.bootstrap').getIO();
-		if (io) {
-			io.to(String(reg.userId)).emit('registration:change', { eventId: String(doc._id), status: 'APPROVED' });
-			io.to(String(organizerId)).emit('registration:change', { eventId: String(doc._id), status: 'APPROVED' });
-		}
-
+		// Clear cache immediately
+		console.log('[SERVICE] Clearing cache...');
 		clearCache();
+		console.log('[SERVICE] approveRegistration complete - returning early for speed');
+
+		// Fire async notification and socket broadcasts in the background
+		(async () => {
+			try {
+				const existingNotification = await Notification.findOne({
+					userId: reg.userId,
+					'metadata.eventId': String(doc._id),
+					'metadata.registrationId': String(reg._id),
+					'metadata.kind': 'payment_confirmed',
+				});
+				if (!existingNotification) {
+					console.log('[SERVICE] [ASYNC] Creating notification...');
+					await notificationsService.create({
+						userId: reg.userId,
+						title: 'Payment confirmed',
+						body: 'Your payment has been confirmed. You have successfully joined the event.',
+						type: 'event',
+						metadata: { eventId: String(doc._id), registrationId: String(reg._id), kind: 'payment_confirmed' },
+					});
+					console.log('[SERVICE] [ASYNC] Notification created');
+				}
+			} catch (e) {
+				console.error('[SERVICE] [ASYNC] Notification creation failed:', e.message);
+			}
+
+			// Emit socket update
+			console.log('[SERVICE] [ASYNC] Emitting socket events...');
+			try {
+				const io = require('../../bootstrap/socket.bootstrap').getIO();
+				if (io) {
+					io.to(String(reg.userId)).emit('registration:change', { eventId: String(doc._id), status: 'CONFIRMED' });
+					io.to(String(organizerId)).emit('registration:change', { eventId: String(doc._id), status: 'CONFIRMED' });
+					console.log('[SERVICE] [ASYNC] Socket events emitted');
+				} else {
+					console.warn('[SERVICE] [ASYNC] Socket.io not available');
+				}
+			} catch (err) {
+				console.error('[SERVICE] [ASYNC] Socket emit failed:', err.message);
+			}
+		})().catch(err => console.error('[SERVICE] [ASYNC] Unexpected error:', err.message));
+
 		return reg;
 	},
 
 	async rejectRegistration(regId, userId, reason) {
+		console.log('[SERVICE] rejectRegistration start', { regId, userId, reason });
 		const reg = await Registration.findById(regId);
+		console.log('[SERVICE] Registration found:', { regId, exists: !!reg, status: reg?.status });
 		if (!reg) throw AppError.notFound('Registration');
 
+		const currentStatus = String(reg.status || '').toUpperCase();
+		if (currentStatus === 'APPROVED' || currentStatus === 'CONFIRMED' || currentStatus === 'REJECTED' || currentStatus === 'CANCELLED') {
+			throw AppError.badRequest('Registration has already been processed.', 'REGISTRATION_ALREADY_PROCESSED');
+		}
+
 		const doc = await repo.findById(reg.eventId);
+		console.log('[SERVICE] Event found:', { eventId: reg.eventId, exists: !!doc });
 		if (!doc) throw AppError.notFound('Event');
 
 		const organizerId = doc.organizer && doc.organizer.organizerId ? String(doc.organizer.organizerId) : String(doc.createdBy);
+		console.log('[SERVICE] Ownership check:', { userId, organizerId, match: String(userId) === organizerId });
 		if (String(userId) !== organizerId) {
-			throw AppError.forbidden('Only the event organizer can reject registrations');
+			throw AppError.forbidden('You are not allowed to perform this action.');
 		}
 
 		reg.status = 'REJECTED';
 		reg.rejectedReason = reason || '';
+		console.log('[SERVICE] Saving registration...');
 		await reg.save();
+		console.log('[SERVICE] Registration saved');
 
-		try {
-			await notificationsService.create({
-				userId: reg.userId,
-				title: `Registration rejected.`,
-				body: `Your registration has been rejected.`,
-				type: 'event',
-				metadata: { eventId: String(doc._id), kind: 'rejected', reason },
-			});
-		} catch (e) {}
-
-		// Emit socket update
-		const io = require('../../bootstrap/socket.bootstrap').getIO();
-		if (io) {
-			io.to(String(reg.userId)).emit('registration:change', { eventId: String(doc._id), status: 'REJECTED' });
-			io.to(String(organizerId)).emit('registration:change', { eventId: String(doc._id), status: 'REJECTED' });
-		}
-
+		// Clear cache immediately
+		console.log('[SERVICE] Clearing cache...');
 		clearCache();
+		console.log('[SERVICE] rejectRegistration complete - returning early for speed');
+
+		// Fire async notification and socket broadcasts in the background
+		(async () => {
+			try {
+				console.log('[SERVICE] [ASYNC] Creating notification...');
+				await notificationsService.create({
+					userId: reg.userId,
+					title: `Registration rejected.`,
+					body: `Your registration has been rejected.`,
+					type: 'event',
+					metadata: { eventId: String(doc._id), kind: 'rejected', reason },
+				});
+				console.log('[SERVICE] [ASYNC] Notification created');
+			} catch (e) { 
+				console.error('[SERVICE] [ASYNC] Notification creation failed:', e.message);
+			}
+
+			// Emit socket update
+			console.log('[SERVICE] [ASYNC] Emitting socket events...');
+			try {
+				const io = require('../../bootstrap/socket.bootstrap').getIO();
+				if (io) {
+					io.to(String(reg.userId)).emit('registration:change', { eventId: String(doc._id), status: 'REJECTED' });
+					io.to(String(organizerId)).emit('registration:change', { eventId: String(doc._id), status: 'REJECTED' });
+					console.log('[SERVICE] [ASYNC] Socket events emitted');
+				} else {
+					console.warn('[SERVICE] [ASYNC] Socket.io not available');
+				}
+			} catch (err) {
+				console.error('[SERVICE] [ASYNC] Socket emit failed:', err.message);
+			}
+		})().catch(err => console.error('[SERVICE] [ASYNC] Unexpected error:', err.message));
+
 		return reg;
 	},
 
@@ -481,7 +556,7 @@ const eventsService = {
 					metadata: { eventId: String(doc._id), kind: 'cancelled' },
 				});
 			}
-		} catch (e) {}
+		} catch (e) { }
 
 		// Emit socket update
 		const io = require('../../bootstrap/socket.bootstrap').getIO();
@@ -511,9 +586,9 @@ const eventsService = {
 			eventId: { $in: eventIds },
 			status: { $in: ['WAITING_PAYMENT', 'waiting_payment'] }
 		})
-		.populate('userId', 'fullName avatar')
-		.sort({ createdAt: -1 })
-		.lean();
+			.populate('userId', 'fullName avatar')
+			.sort({ createdAt: -1 })
+			.lean();
 
 		const groupedMap = new Map();
 		for (const reg of regs) {
