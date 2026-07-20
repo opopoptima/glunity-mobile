@@ -24,6 +24,10 @@ import { ConfirmationModal } from '../components/ConfirmationModal';
 import { ReactionsOverlayModal } from '../components/ReactionsOverlayModal';
 import { UserProfileBottomSheet } from '../components/UserProfileBottomSheet';
 import { ReactorsBottomSheet } from '../components/ReactorsBottomSheet';
+import LinkPreviewCard from '../components/LinkPreviewCard';
+import { useLinkPreview } from '../../hooks/useLinkPreview';
+import InlineMessageLinkPreview from '../components/InlineMessageLinkPreview';
+import { extractSupportedUrl } from '../../utils/url-parser';
 
 // Optional native BlurView
 let BlurView: any = null;
@@ -673,8 +677,18 @@ const MessageItem = React.memo(({
       );
     }
 
+    // Plain text message — detect & show an inline link preview below the text
+    const hasLinkPreview = !isDeleted && !!extractSupportedUrl(item.content || '');
     return (
-      <Text style={[styles.msgText, isMe ? { color: '#fff' } : undefined]}>{item.content}</Text>
+      <View>
+        <Text style={[styles.msgText, isMe ? { color: '#fff' } : undefined]}>{item.content}</Text>
+        {hasLinkPreview && (
+          <InlineMessageLinkPreview
+            messageContent={item.content || ''}
+            isMe={isMe}
+          />
+        )}
+      </View>
     );
   };
 
@@ -2086,6 +2100,10 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
             ? (chat.channel?.myRole === 'owner' ? t('Share an update...') : t('Write a message...'))
             : t('Message');
 
+          // ── Link preview hook (debounced URL detection + metadata fetch) ──────
+          // eslint-disable-next-line react-hooks/rules-of-hooks
+          const linkPreview = useLinkPreview(chat.input);
+
           return (
             <View style={[styles.inputBar, { paddingBottom: chat.isRecording ? 12 : insets.bottom + 12 }]}>
               {chat.typingUser ? (
@@ -2107,6 +2125,17 @@ export default function CommunityMessaging({ initialChannel, initialChannelId, n
                   </TouchableOpacity>
                 </View>
               ) : null}
+
+              {/* ── Link Preview Card ─────────────────────────────────────── */}
+              {!chat.isRecording && (
+                <LinkPreviewCard
+                  preview={linkPreview.preview}
+                  isLoading={linkPreview.isLoading}
+                  error={linkPreview.error}
+                  detectedUrl={linkPreview.detectedUrl}
+                  onDismiss={linkPreview.dismiss}
+                />
+              )}
 
               <View style={styles.inputRow}>
                 {!chat.isRecording && (

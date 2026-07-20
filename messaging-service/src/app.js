@@ -13,6 +13,7 @@ const errorHandler = require('./common/middleware/error.middleware');
 
 const channelsRoutes = require('./modules/channels/channels.routes');
 const messagesRoutesStandalone = require('./modules/messages/messages.routes.standalone');
+const linkPreviewRoutes = require('./modules/link-preview/link-preview.routes');
 
 const app = express();
 
@@ -82,6 +83,10 @@ app.use('/api/conversations', channelsRoutes);
 //   PATCH  /api/messages/:id
 //   DELETE /api/messages/:id
 app.use('/api/messages', messagesRoutesStandalone);
+
+// Social media link preview metadata fetcher
+//   POST /api/link-preview
+app.use('/api/link-preview', linkPreviewRoutes);
 
 // Internal socket bridge endpoint (called by the main api service to propagate events to the clients connected here)
 app.post('/api/internal/socket/emit', (req, res) => {
