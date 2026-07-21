@@ -151,3 +151,32 @@ node api/src/database/test_admin_flow.js
 4. **Database Latency**: Measures MongoDB roundtrip response times (typically 27–33ms).
 5. **Member Status Toggle**: Suspends and restores user account access cleanly.
 6. **Resource Operations**: Creates temporary patient resource, verifies creation, and deletes it.
+
+---
+
+## 🤝 8. Developer Handoff Instructions: Islem & Rayen
+
+### 👤 Islem — Domain Focus: Events, Users & Reels
+- **Events Module (`api/src/app/modules/events`, `mobile/src/modules/events`)**:
+  - **Moderation Integration**: The Admin Moderation Hub handles event approval/rejection (`type === 'event'`).
+  - **Database Status Schema**: Event statuses are `'pending'`, `'active'`, or `'cancelled'`.
+  - **Approval Pipeline**: Approving an event in Admin updates `status: 'active'`, `isApproved: true` and triggers an in-app notification + email to the event organizer.
+- **Users & Members Module (`api/src/database/models/user.model.js`, `AdminUsersScreen.tsx`)**:
+  - **Account Status Toggling**: Managed via `PATCH /api/admin/users/:id/status` (`'active'` ↔ `'suspended'`).
+  - **XP & Leaderboard**: Calculated dynamically using `user.points` with level formula `Math.floor(points / 100) + 1`.
+  - **Auth Method Breakdown**: Sourced directly from MongoDB `googleId`, `facebookId`, and `email` fields.
+- **Reels Module (`api/src/app/modules/reels`, `mobile/src/modules/reels`)**:
+  - **Moderation Queue**: Checks `status: 'processing' | 'pending'`.
+  - **Approval Pipeline**: Approving sets `status: 'ready'`; rejecting sets `status: 'rejected'`.
+
+### 👤 Rayen — Domain Focus: Boutiques, Seller Verifications, Products & Recipes
+- **Boutiques & Seller Verifications (`api/src/app/modules/admin`, `AdminSellerVerificationScreen.tsx`)**:
+  - **Pending Sellers Queue**: Queries `profileType: 'pro_commerce'` where `isSellerVerified: false` or `storeInfo.isVerified: false`.
+  - **Verification Pipeline**: Approving a seller updates `storeInfo.isVerified: true`, `isSellerVerified: true`, and dispatches approval notification + email. Requesting revision or rejecting updates `storeInfo.isVerified: false` with feedback notes sent to the seller.
+- **Products Module (`api/src/database/models/product.model.js`, `AdminModerationScreen.tsx`)**:
+  - **Moderation Query**: Selects products where `status: 'pending'` or `isApproved: { $ne: true }`.
+  - **1:1 Badge Synchronization**: `Product.countDocuments({ $or: [{ status: 'pending' }, { isApproved: false }, { isApproved: { $exists: false } }] })` matches the fetched list length 100% 1:1.
+- **Recipes Module (`api/src/database/models/recipe.model.js`, `AdminModerationScreen.tsx`)**:
+  - **Moderation Query**: Selects recipes where `status: 'pending'` or `isApproved: { $ne: true }`.
+  - **Approval Pipeline**: Approving sets `isApproved: true`, `status: 'approved'`; rejecting sets `isApproved: false`, `status: 'rejected'`.
+
