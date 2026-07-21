@@ -39,3 +39,28 @@ messaging-service/uploads/
 
 # Scrum Sheet
 scrum-sheet/
+
+# ==========================================
+# Repository Hygiene (auto-added)
+# ==========================================
+
+# Scratch & debug scripts
+scratch-*.js
+inspect-*.js
+
+# Compiler/build output dumps
+tsc-check.txt
+*.log
+
+# Transient script run artifacts
+*-report.json
+reverted-seed-run-*.json
+test-results.json
+reupload-results.json
+
+# Resolved/draft docs (working files)
+*.resolved
+
+# Installer/temp files
+*.tmp
+
