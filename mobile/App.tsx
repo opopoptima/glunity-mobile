@@ -85,6 +85,14 @@ const linking = {
       Community:      'Community',
       CommunityChat:  'CommunityChat/:initialChannelId?',
 
+      // ── Admin screens (temporary routes for UI testing) ───────────────────
+      AdminDashboard: 'admin',
+      AdminDashboardAlt: 'admin/dashboard',
+      AdminUsers: 'admin/users',
+      AdminVerification: 'admin/professional-verifications',
+      AdminEvents: 'admin/events',
+      AdminReels: 'admin/reels',
+
       // ── Reel Deep Link ────────────────────────────────────────────────────
       // https://myapp.com/reel/:reelId  →  ReelDetail screen
       // ReelDetailScreen immediately replaces itself with ReelsFeed(autoOpenReelId)

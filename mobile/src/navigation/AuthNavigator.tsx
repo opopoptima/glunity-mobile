@@ -34,6 +34,14 @@ export function AuthNavigator() {
       {/* ── Deep-link targets (from email links) ───────────────────────── */}
       <Stack.Screen name="ResetPassword"  component={ResetPasswordScreen}  options={{ animation: 'fade' }} />
       <Stack.Screen name="EmailVerified"  component={EmailVerifiedScreen}  options={{ animation: 'fade' }} />
+
+      {/* ── Admin Screens (temporary routes for UI testing) ───────────────── */}
+      <Stack.Screen name="AdminDashboard" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />
+      <Stack.Screen name="AdminDashboardAlt" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />
+      <Stack.Screen name="AdminUsers" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />
+      <Stack.Screen name="AdminVerification" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />
+      <Stack.Screen name="AdminEvents" component={require('../modules/admin/ui/screens/AdminEventsScreen').default} />
+      <Stack.Screen name="AdminReels" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />
     </Stack.Navigator>
   );
 }

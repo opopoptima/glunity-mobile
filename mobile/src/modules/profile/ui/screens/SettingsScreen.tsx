@@ -497,6 +497,26 @@ export default function SettingsScreen({ navigation }: Props) {
           />
         </View>
 
+        {/* ADMINISTRATION (Temporary bypass/direct route for UI testing) */}
+        <Text style={s.sectionLabel}>{t('ADMINISTRATION') || 'ADMINISTRATION'}</Text>
+        <View style={s.card}>
+          <SettingItem
+            theme={C}
+            iconName="shield-check-outline"
+            title={t('Professional Verification') || 'Professional Verification'}
+            subtitle={t('Review pending professional registrations') || 'Review pending professional registrations'}
+            onPress={() => navigation.navigate('AdminVerification')}
+          />
+          <SettingItem
+            theme={C}
+            iconName="calendar-check-outline"
+            title={t('Events Management') || 'Events Management'}
+            subtitle={t('Moderate and publish pro-commerce events') || 'Moderate and publish pro-commerce events'}
+            isLast
+            onPress={() => navigation.navigate('AdminEvents')}
+          />
+        </View>
+
         {/* LOGOUT */}
         <TouchableOpacity style={s.logoutBtn} onPress={logout}>
           <View style={s.logoutIconWrap}>

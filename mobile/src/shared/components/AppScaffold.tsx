@@ -28,6 +28,7 @@ interface AppScaffoldProps {
   onPressCenter?: () => void;
   onPressReels?: () => void;
   onPressProfile?: () => void;
+  fullWidth?: boolean;
 }
 
 export function AppScaffold({
@@ -49,6 +50,7 @@ export function AppScaffold({
   onPressCenter,
   onPressReels,
   onPressProfile,
+  fullWidth = false,
 }: AppScaffoldProps) {
   const { theme: C } = useTheme();
   const navigation = useNavigation<any>();
@@ -69,7 +71,7 @@ export function AppScaffold({
   });
 
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.safe, { backgroundColor: C.bg }]}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={[styles.safe, { backgroundColor: C.bg }, fullWidth && Platform.OS === 'web' && { maxWidth: '100%' }]}>
       <StatusBar barStyle={C.statusBar} backgroundColor={C.bg} />
       {showHeader ? (
         <AppHeader

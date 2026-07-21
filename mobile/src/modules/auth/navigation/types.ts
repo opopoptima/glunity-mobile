@@ -9,6 +9,12 @@ export type AuthStackParamList = {
   ForgotPassword: { email?: string } | undefined;
   ResetPassword:  { token: string };
   EmailVerified:  { success: boolean };
+  AdminDashboard: undefined;
+  AdminDashboardAlt: undefined;
+  AdminUsers: undefined;
+  AdminVerification: undefined;
+  AdminEvents: undefined;
+  AdminReels: undefined;
 };
 
 // ── App (authenticated) stack ─────────────────────────────────────────────────
@@ -51,5 +57,11 @@ export type AppStackParamList = {
   ReelAddCover:    undefined;
   EventRegistrationRequests: { eventId: string; title: string };
   ViewRegistrationForm: { eventId: string; registrationId: string };
+  AdminDashboard: undefined;
+  AdminDashboardAlt: undefined;
+  AdminUsers: undefined;
+  AdminVerification: undefined;
+  AdminEvents: undefined;
+  AdminReels: undefined;
 };
 
