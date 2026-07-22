@@ -11,6 +11,7 @@ import {
   Alert,
   Modal,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import {
   Ionicons,
@@ -34,6 +35,8 @@ import {
   ArticleCardSkeleton,
   VideoCardSkeleton,
 } from '@/shared/components/SkeletonLoader';
+import { ReelPlayerItem } from '@/modules/reels/ui/components/ReelPlayerItem';
+import type { Reel } from '@/modules/reels/services/reels.service';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PatientResources'>;
 
@@ -175,6 +178,7 @@ function ArticleIcon({
 export default function PatientResourcesScreen({ navigation }: Props) {
   const { theme: T } = useTheme();
   const { isRTL, t } = useLanguage();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const [featured, setFeatured] = useState<PatientArticle | null>(null);
   const [articles, setArticles] = useState<PatientArticle[]>([]);
@@ -183,7 +187,46 @@ export default function PatientResourcesScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<PatientArticle | null>(null);
+  const [selectedVideoReel, setSelectedVideoReel] = useState<ResourceVideo | PatientArticle | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  const activeReelData: Reel | null = useMemo(() => {
+    if (!selectedVideoReel) return null;
+    const isVid = 'videoUrl' in selectedVideoReel;
+    const vUrl = isVid
+      ? (selectedVideoReel as ResourceVideo).videoUrl
+      : (selectedVideoReel as any).fileUrl || (selectedVideoReel as any).videoUrl || '';
+    const thumbUrl = isVid
+      ? (selectedVideoReel as ResourceVideo).thumbnailUrl
+      : (selectedVideoReel as PatientArticle).coverImageUrl || CATEGORY_IMAGES[selectedVideoReel.category] || 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600&h=400&fit=crop';
+    const dur = isVid
+      ? (selectedVideoReel as ResourceVideo).durationMinutes || 5
+      : (selectedVideoReel as PatientArticle).readMinutes || 5;
+    const excerptText = 'excerpt' in selectedVideoReel ? (selectedVideoReel as PatientArticle).excerpt : '';
+
+    return {
+      id: selectedVideoReel.id || 'res-video',
+      videoUrl: vUrl,
+      thumbnailUrl: thumbUrl,
+      caption: `${selectedVideoReel.title}${excerptText ? `\n\n${excerptText}` : ''}`,
+      duration: dur * 60,
+      viewsCount: 1,
+      likesCount: 0,
+      commentsCount: 0,
+      sharesCount: 0,
+      isLiked: false,
+      status: 'ready',
+      category: 'lifestyle',
+      createdAt: new Date().toISOString(),
+      author: {
+        id: 'medical-team',
+        fullName: isVid
+          ? (selectedVideoReel as ResourceVideo).presenter
+          : (selectedVideoReel as PatientArticle).authorName || 'Équipe Médicale Glu10',
+        avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&h=150&fit=crop',
+      },
+    };
+  }, [selectedVideoReel]);
 
   const handleArticlePress = useCallback(async (article: PatientArticle) => {
     setDetailLoading(true);
@@ -1057,9 +1100,7 @@ export default function PatientResourcesScreen({ navigation }: Props) {
                     key={video.id}
                     style={s.videoCard}
                     activeOpacity={0.82}
-                    onPress={() =>
-                      Alert.alert(t('Video'), `${t(video.title)}\n${t('by')} ${t(video.presenter)}`)
-                    }
+                    onPress={() => setSelectedVideoReel(video)}
                   >
                     <View>
                       <FastImage
@@ -1216,6 +1257,47 @@ export default function PatientResourcesScreen({ navigation }: Props) {
             <ActivityIndicator size="large" color={T.green} />
           </View>
         )}
+
+        {/* ── Patient Resource Video Player Modal (ReelPlayerItem) ─────────────── */}
+        <Modal
+          visible={!!activeReelData}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => setSelectedVideoReel(null)}
+        >
+          <View style={{ flex: 1, backgroundColor: '#000' }}>
+            {activeReelData && (
+              <ReelPlayerItem
+                reel={activeReelData}
+                isActive={!!activeReelData}
+                containerWidth={windowWidth}
+                containerHeight={windowHeight}
+                onToggleLike={() => {}}
+                onRecordView={() => {}}
+                onRecordShare={() => {}}
+                onIncrementCommentsCount={() => {}}
+              />
+            )}
+            <TouchableOpacity
+              style={{
+                position: 'absolute',
+                top: Platform.OS === 'ios' ? 54 : 24,
+                left: 20,
+                zIndex: 9999,
+                backgroundColor: 'rgba(0,0,0,0.65)',
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              activeOpacity={0.8}
+              onPress={() => setSelectedVideoReel(null)}
+            >
+              <Feather name="x" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </Modal>
       </View>
     </AppScaffold>
   );

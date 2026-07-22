@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ScrollView, Switch, ActivityIndicator, Alert } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../../../shared/context/theme.context';
 import { Colors, Font, Radius, Spacing } from '../../../../shared/utils/theme';
 import { PatientResourceItem } from '../../api/admin.api';
+import { ReelsService } from '../../../reels/services/reels.service';
 
 interface ResourceFormModalProps {
   visible: boolean;
@@ -36,6 +38,81 @@ export function ResourceFormModal({ visible, onClose, initialData, onSave }: Res
   const [isFeatured, setIsFeatured] = useState(false);
   const [isPublished, setIsPublished] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+
+  const handlePickVideoFromGallery = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission requise', "Veuillez autoriser l'accès à la galerie pour sélectionner une vidéo.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      const asset = result.assets[0];
+      setUploadingVideo(true);
+
+      const localFormData = new FormData();
+      const filename = asset.uri.split('/').pop() || `video_${Date.now()}.mp4`;
+      const mimeType = asset.mimeType || 'video/mp4';
+
+      localFormData.append('video', {
+        uri: asset.uri,
+        name: filename,
+        type: mimeType,
+      } as any);
+
+      try {
+        const uploadRes = await ReelsService.uploadVideoLocal(localFormData);
+        if (uploadRes.success && uploadRes.data?.videoUrl) {
+          setVideoUrl(uploadRes.data.videoUrl);
+          if (uploadRes.data.thumbnailUrl && !coverImageUrl) {
+            setCoverImageUrl(uploadRes.data.thumbnailUrl);
+          }
+          if (uploadRes.data.duration && (!readMinutes || readMinutes === '5')) {
+            setReadMinutes(String(Math.max(1, Math.round(uploadRes.data.duration / 60))));
+          }
+        } else {
+          setVideoUrl(asset.uri);
+        }
+      } catch (uploadError) {
+        console.warn('[ResourceFormModal] Backend upload fallback to local URI:', uploadError);
+        setVideoUrl(asset.uri);
+      }
+    } catch (err: any) {
+      console.error('[ResourceFormModal] Video upload error:', err);
+      Alert.alert('Erreur', 'Impossible de sélectionner la vidéo.');
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
+  const handlePickCoverImage = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission requise', "Veuillez autoriser l'accès à la galerie pour choisir une image.");
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: true,
+      });
+      if (!res.canceled && res.assets?.[0]?.uri) {
+        setCoverImageUrl(res.assets[0].uri);
+      }
+    } catch (e) {
+      console.warn('[ResourceFormModal] Cover image picker error:', e);
+    }
+  };
 
   useEffect(() => {
     if (initialData) {
@@ -223,19 +300,50 @@ export function ResourceFormModal({ visible, onClose, initialData, onSave }: Res
             )}
 
             {type === 'video' && (
-              <>
-                <Text style={[styles.fieldLabel, { color: T.text }]}>Lien URL de la Vidéo (MP4 / Streaming)</Text>
+              <View style={{ gap: 8, marginBottom: Spacing.sm }}>
+                <Text style={[styles.fieldLabel, { color: T.text }]}>Lien URL ou Fichier de la Vidéo (MP4 / Streaming)</Text>
                 <TextInput
                   style={[
                     styles.input,
                     { color: T.text, backgroundColor: isDark ? '#2C2C2E' : 'rgba(46,46,46,0.06)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(46,46,46,0.2)' },
                   ]}
-                  placeholder="https://example.com/video.mp4"
+                  placeholder="https://example.com/video.mp4 ou vidéo téléversée"
                   placeholderTextColor={T.textMuted}
                   value={videoUrl}
                   onChangeText={setVideoUrl}
                 />
-              </>
+
+                <TouchableOpacity
+                  style={[
+                    styles.uploadGalleryBtn,
+                    {
+                      backgroundColor: isDark ? '#2C2C2E' : 'rgba(139, 92, 246, 0.08)',
+                      borderColor: '#8B5CF6',
+                    },
+                  ]}
+                  onPress={handlePickVideoFromGallery}
+                  disabled={uploadingVideo}
+                  activeOpacity={0.8}
+                >
+                  {uploadingVideo ? (
+                    <ActivityIndicator size="small" color="#8B5CF6" />
+                  ) : (
+                    <Ionicons name="film-outline" size={18} color="#8B5CF6" />
+                  )}
+                  <Text style={[styles.uploadGalleryText, { color: isDark ? '#A78BFA' : '#7C3AED' }]}>
+                    {uploadingVideo ? 'Téléversement en cours...' : 'Importer une vidéo depuis la galerie'}
+                  </Text>
+                </TouchableOpacity>
+
+                {videoUrl ? (
+                  <View style={styles.videoPreviewSuccess}>
+                    <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                    <Text style={[styles.videoPreviewText, { color: T.text }]} numberOfLines={1}>
+                      Vidéo prête : {videoUrl.split('/').pop() || videoUrl}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             )}
 
             {/* Author & Read Time */}
@@ -269,18 +377,27 @@ export function ResourceFormModal({ visible, onClose, initialData, onSave }: Res
               </View>
             </View>
 
-            {/* Cover Image URL */}
+            {/* Cover Image URL & Picker */}
             <Text style={[styles.fieldLabel, { color: T.text }]}>URL Image de Couverture / Miniature</Text>
-            <TextInput
-              style={[
-                styles.input,
-                { color: T.text, backgroundColor: isDark ? '#2C2C2E' : 'rgba(46,46,46,0.06)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(46,46,46,0.2)' },
-              ]}
-              placeholder="https://images.unsplash.com/photo-..."
-              placeholderTextColor={T.textMuted}
-              value={coverImageUrl}
-              onChangeText={setCoverImageUrl}
-            />
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <TextInput
+                style={[
+                  styles.input,
+                  { flex: 1, color: T.text, backgroundColor: isDark ? '#2C2C2E' : 'rgba(46,46,46,0.06)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(46,46,46,0.2)' },
+                ]}
+                placeholder="https://images.unsplash.com/photo-..."
+                placeholderTextColor={T.textMuted}
+                value={coverImageUrl}
+                onChangeText={setCoverImageUrl}
+              />
+              <TouchableOpacity
+                style={[styles.btnPickImage, { backgroundColor: isDark ? '#2C2C2E' : 'rgba(46,46,46,0.08)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(46,46,46,0.2)' }]}
+                onPress={handlePickCoverImage}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="image-outline" size={18} color={primaryGreen} />
+              </TouchableOpacity>
+            </View>
 
             {/* Switches Row */}
             <View style={styles.switchesContainer}>
@@ -382,4 +499,41 @@ const styles = StyleSheet.create({
   modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: Spacing.md, marginTop: Spacing.md, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
   btnCancel: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: Radius.md },
   btnSubmit: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 22, borderRadius: Radius.md },
+  uploadGalleryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    gap: 8,
+    marginTop: 4,
+  },
+  uploadGalleryText: {
+    fontFamily: Font.bold,
+    fontSize: 13,
+  },
+  videoPreviewSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+  },
+  videoPreviewText: {
+    fontFamily: Font.medium,
+    fontSize: 11,
+  },
+  btnPickImage: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
