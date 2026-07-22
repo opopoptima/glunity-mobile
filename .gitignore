@@ -62,3 +62,17 @@ reupload-results.json
 
 # Installer/temp files
 *.tmp
+
+# Unrelated Documentation Filters
+docs/next/
+docs/runbooks/
+docs/specs/
+docs/*.pdf
+
+# Ignore all audit files except --@admin_handoff_documentation.md
+docs/audits/*
+!docs/audits/--@admin_handoff_documentation.md
+
+# Ignore intermediate audit notes in architecture
+docs/architecture/messagerie/messaging_module_audit*.md
+
