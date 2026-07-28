@@ -12,6 +12,7 @@ import {
   FlatList,
   Platform,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -19,6 +20,7 @@ import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
 import { AppScaffold } from '@/shared/components/AppScaffold';
 import { SkeletonLoader } from '@/shared/components/SkeletonLoader';
+import { useAuth } from '@/modules/auth/state/auth.context';
 
 const { width } = Dimensions.get('window');
 
@@ -128,6 +130,26 @@ export default function AdminEventsScreen() {
   const { t, isRTL } = useLanguage();
   const navigation = useNavigation<any>();
   const { width: windowWidth } = useWindowDimensions();
+
+  const { isAuthenticated, isInitialized, user } = useAuth();
+
+  useEffect(() => {
+    if (isInitialized) {
+      if (!isAuthenticated) {
+        navigation.navigate('Login');
+      } else if (user?.profileType !== 'admin') {
+        navigation.navigate('Home');
+      }
+    }
+  }, [isInitialized, isAuthenticated, user, navigation]);
+
+  if (!isInitialized || !isAuthenticated || user?.profileType !== 'admin') {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg }}>
+        <ActivityIndicator size="large" color="#8BC34A" />
+      </View>
+    );
+  }
 
   const numColumns = useMemo(() => {
     if (windowWidth > 1100) return 3;

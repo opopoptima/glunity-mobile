@@ -181,6 +181,16 @@ export default function AddEventScreen({ navigation }: Props) {
   const { width: windowWidth } = useWindowDimensions();
   const screenWidth = Math.min(windowWidth, 600);
 
+  useEffect(() => {
+    if (user && user.profileType !== 'pro_commerce') {
+      Alert.alert(
+        t('Permission Denied') || 'Permission Denied',
+        t('Only Pro-Commerce users can create events.') || 'Only Pro-Commerce users can create events.'
+      );
+      navigation.goBack();
+    }
+  }, [user, navigation, t]);
+
   const defaultValues: AddEventFormValues = {
     title: '',
     type: 'meetup',
@@ -312,6 +322,18 @@ export default function AddEventScreen({ navigation }: Props) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const [idempotencyKey, setIdempotencyKey] = useState('');
+
+  useEffect(() => {
+    setIdempotencyKey(`${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
+  }, []);
+
+  useEffect(() => {
+    navigation.setOptions({
+      gestureEnabled: !isSubmitting,
+    });
+  }, [isSubmitting, navigation]);
 
   // Local drafts setup
   useEffect(() => {
@@ -546,6 +568,8 @@ export default function AddEventScreen({ navigation }: Props) {
   };
 
   const onSubmit = async (vals: AddEventFormValues) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
       const payload = {
@@ -598,22 +622,40 @@ export default function AddEventScreen({ navigation }: Props) {
         payLng: vals.pricing === 'paid' && vals.paymentMethod === 'presentiel' ? (vals.payLng || undefined) : undefined,
         payInstructions: vals.pricing === 'paid' && vals.paymentMethod === 'presentiel' ? vals.payInstructions.trim() : undefined,
         payDeadline: vals.pricing === 'paid' && vals.paymentMethod === 'presentiel' ? vals.payDeadline.toISOString() : undefined,
+        idempotencyKey,
       };
 
       await eventsApi.create(payload as any);
       await AsyncStorage.removeItem('@event_draft');
       setIsSubmitting(false);
+      isSubmittingRef.current = false;
       setShowSuccessModal(true);
     } catch (err: any) {
       setIsSubmitting(false);
-      Alert.alert(t('Error'), err.message || t('Error occurred while creating event.'));
+      isSubmittingRef.current = false;
+      Alert.alert(
+        t('Publishing Failed') || 'Publishing Failed',
+        t("We couldn't submit your event. Please check your internet connection and try again.") || "We couldn't submit your event. Please check your internet connection and try again."
+      );
     }
+  };
+
+  const handleSuccessClose = () => {
+    setShowSuccessModal(false);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Home' }, { name: 'Events' }],
+    });
   };
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (isSubmitting) {
+        e.preventDefault();
+        return;
+      }
       const isDirty = getValues('title').trim() || getValues('description').trim() || getValues('address').trim();
-      if (!isDirty || isSubmitting || showSuccessModal) {
+      if (!isDirty || showSuccessModal) {
         return;
       }
       e.preventDefault();
@@ -640,10 +682,7 @@ export default function AddEventScreen({ navigation }: Props) {
     return unsubscribe;
   }, [navigation, isSubmitting, showSuccessModal]);
 
-  const handleSuccessClose = () => {
-    setShowSuccessModal(false);
-    navigation.navigate('Events');
-  };
+
 
   const selectedTypeObj = EVENT_TYPES.find(t => t.value === type);
 
@@ -1246,11 +1285,21 @@ export default function AddEventScreen({ navigation }: Props) {
       >
         {/* Wizard Top Bar */}
         <View style={s.header}>
-          <TouchableOpacity style={s.closeBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={[s.closeBtn, isSubmitting && { opacity: 0.5 }]}
+            onPress={() => !isSubmitting && navigation.goBack()}
+            disabled={isSubmitting}
+            activeOpacity={0.85}
+          >
             <Feather name="x" size={20} color={T.text} />
           </TouchableOpacity>
           <Text style={s.headerTitle}>{t('Create Event')}</Text>
-          <TouchableOpacity style={s.saveDraftBtn} onPress={handleSaveDraft} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={[s.saveDraftBtn, isSubmitting && { opacity: 0.5 }]}
+            onPress={() => !isSubmitting && handleSaveDraft()}
+            disabled={isSubmitting}
+            activeOpacity={0.85}
+          >
             <Text style={s.saveDraftText}>{t('Save Draft')}</Text>
           </TouchableOpacity>
         </View>
@@ -2618,7 +2667,12 @@ export default function AddEventScreen({ navigation }: Props) {
         {/* Wizard Navigation Footer */}
         <View style={s.bottomNav}>
           {step > 1 ? (
-            <TouchableOpacity style={[s.navBtn, s.backNavBtn]} onPress={handleBack} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={[s.navBtn, s.backNavBtn, isSubmitting && { opacity: 0.5 }]}
+              onPress={handleBack}
+              disabled={isSubmitting}
+              activeOpacity={0.8}
+            >
               <Feather name="arrow-left" size={16} color={T.text} />
               <Text style={[s.navBtnText, s.backNavText]}>{t('Back')}</Text>
             </TouchableOpacity>
@@ -2696,10 +2750,22 @@ export default function AddEventScreen({ navigation }: Props) {
               <View style={s.successCircle}>
                 <Feather name="check" size={32} color="#FFFFFF" />
               </View>
-              <Text style={s.modalTitle}>{t('Event Published!')}</Text>
-              <Text style={s.modalSub}>{t('Your gluten-free event is now live and visible on the calendar.')}</Text>
+              <Text style={s.modalTitle}>{t('Event Submitted Successfully')}</Text>
+              
+              <View style={{ width: '100%', alignItems: 'center', marginBottom: 20 }}>
+                <Text style={[s.modalSub, { marginBottom: 8 }]}>
+                  {t('Your event has been submitted for review.')}
+                </Text>
+                <Text style={[s.modalSub, { marginBottom: 8 }]}>
+                  {t('An administrator will review your event and respond as soon as possible.')}
+                </Text>
+                <Text style={[s.modalSub, { marginBottom: 0 }]}>
+                  {t('You will be notified once your event has been approved or rejected.')}
+                </Text>
+              </View>
+
               <TouchableOpacity style={s.okBtn} onPress={handleSuccessClose} activeOpacity={0.85}>
-                <Text style={s.okBtnText}>{t('Go to Calendar')}</Text>
+                <Text style={s.okBtnText}>{t('OK')}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import frTranslation from '../translations/fr';
+import enTranslation from '../translations/en';
+import arTranslation from '../translations/ar';
 
 export type Language = 'fr' | 'en' | 'ar';
 
@@ -15,6 +18,7 @@ interface LanguageContextType {
 
 const translations: Record<Language, Record<string, string>> = {
   fr: {
+    ...frTranslation,
     // Admin Header & Navigation
     'admin.title': 'Glu10',
     'admin.subtitle': 'Super Administrateur',
@@ -174,6 +178,7 @@ const translations: Record<Language, Record<string, string>> = {
     'back': 'Retour',
   },
   en: {
+    ...enTranslation,
     // Admin Header & Navigation
     'admin.title': 'Glu10',
     'admin.subtitle': 'Super Administrator',
@@ -333,6 +338,7 @@ const translations: Record<Language, Record<string, string>> = {
     'back': 'Back',
   },
   ar: {
+    ...arTranslation,
     // Admin Header & Navigation
     'admin.title': 'Glu10',
     'admin.subtitle': 'Super Administrateur',

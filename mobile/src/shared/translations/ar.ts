@@ -743,6 +743,13 @@ const ar = {
   'Empowering the gluten-free community 🏆': 'دعم مجتمع الخالي من الغلوتين 🏆',
   'Pro User': 'حساب احترافي',
   'Anonymous': 'مجهول',
+  'You should wait for the admin approval. The response will be soon.': 'يجب عليك انتظار موافقة المسؤول. سيتم الرد قريباً.',
+  'Event Submitted Successfully': 'تم تقديم الفعالية بنجاح',
+  'Your event has been submitted for review.': 'لقد تم تقديم الفعالية للمراجعة.',
+  'An administrator will review your event and respond as soon as possible.': 'سيقوم المسؤول بمراجعة فعاليتك والرد في أقرب وقت ممكن.',
+  'You will be notified once your event has been approved or rejected.': 'سيتم إخطارك بمجرد الموافقة على فعاليتك أو رفضها.',
+  'Publishing Failed': 'فشل النشر',
+  "We couldn't submit your event. Please check your internet connection and try again.": 'لم نتمكن من تقديم فعاليتك. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.',
 };
 
 export default ar;

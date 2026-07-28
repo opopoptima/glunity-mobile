@@ -15,6 +15,7 @@ export type AuthStackParamList = {
   AdminVerification: undefined;
   AdminEvents: undefined;
   AdminReels: undefined;
+  AdminEventDetail: { eventId: string };
 };
 
 // ── App (authenticated) stack ─────────────────────────────────────────────────
@@ -63,5 +64,6 @@ export type AppStackParamList = {
   AdminVerification: undefined;
   AdminEvents: undefined;
   AdminReels: undefined;
+  AdminEventDetail: { eventId: string };
 };
 

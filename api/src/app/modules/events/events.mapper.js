@@ -30,6 +30,7 @@ function toEventDto(doc) {
 		currency: doc.currency || 'TND',
 		isCancelled: doc.isCancelled || false,
 		status: doc.status || 'active',
+		rejectionReason: doc.rejectionReason || '',
 		format: doc.format || 'presentiel',
 		meetingUrl: doc.meetingUrl || '',
 		platform: doc.platform || '',

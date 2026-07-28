@@ -31,7 +31,8 @@ class AdminController {
     try {
       const { type, id, action } = req.params;
       const { reason } = req.body;
-      const result = await adminService.moderateItem(id, type, action, reason);
+      const adminId = req.user ? req.user._id : 'unknown';
+      const result = await adminService.moderateItem(id, type, action, reason, adminId);
       return res.status(200).json({ success: true, data: result });
     } catch (err) { next(err); }
   }
@@ -44,12 +45,33 @@ class AdminController {
     } catch (err) { next(err); }
   }
 
+  async getUserModerationDetails(req, res, next) {
+    try {
+      const { id } = req.params;
+      const details = await adminService.getUserModerationDetails(id);
+      return res.status(200).json({ success: true, data: details });
+    } catch (err) { next(err); }
+  }
+
   async toggleUserStatus(req, res, next) {
     try {
       const { id } = req.params;
-      const { status } = req.body;
-      const user = await adminService.toggleUserStatus(id, status);
+      const { status, reason, duration, notes } = req.body;
+      const adminId = req.user ? req.user._id : null;
+      const adminName = req.user ? req.user.fullName : 'Administrateur';
+      const user = await adminService.toggleUserStatus(id, status, adminId, adminName, reason, duration, notes);
       return res.status(200).json({ success: true, data: user });
+    } catch (err) { next(err); }
+  }
+
+  async warnUser(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { message } = req.body;
+      const adminId = req.user ? req.user._id : null;
+      const adminName = req.user ? req.user.fullName : 'Administrateur';
+      const log = await adminService.warnUser(id, message, adminId, adminName);
+      return res.status(200).json({ success: true, data: log });
     } catch (err) { next(err); }
   }
 

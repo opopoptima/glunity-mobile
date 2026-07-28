@@ -15,7 +15,7 @@ const reelsRepository = {
 	 * accumulate enough engagement to rise organically.
 	 */
 	async findFeed({ limit = 20, skip = 0, category, authorId } = {}) {
-		const filter = { status: 'ready' };
+		const filter = { status: { $in: ['ready', 'published'] } };
 		if (category && category !== 'all') {
 			filter.category = category;
 		}

@@ -40,6 +40,11 @@ export interface GlunityEvent {
   ownerId?: string;
   createdBy?: string;
   pendingRequestsCount?: number;
+  organizer?: {
+    name?: string;
+    contact?: string;
+    organizerId?: string;
+  };
 }
 
 export interface HomeScreenProps {
@@ -56,7 +61,6 @@ export interface HomeScreenProps {
   recipes: Recipe[];
   onPressRecipesSeeAll: () => void;
   events: GlunityEvent[];
-  isLoadingEvents?: boolean;
   onPressEventsSeeAll: () => void;
   onPressNavHome?: () => void;
   onPressNavEvents?: () => void;

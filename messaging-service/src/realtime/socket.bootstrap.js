@@ -53,6 +53,10 @@ function bootstrap(httpServer) {
     socket.data.io = io;
     if (userId !== 'unknown') {
       socket.join(userId);
+      if (socket.data.user?.profileType === 'admin') {
+        socket.join('admin');
+        logger.info('[socket.io] Admin client joined admin room', { userId });
+      }
     }
 
     channelHandler (io, socket);

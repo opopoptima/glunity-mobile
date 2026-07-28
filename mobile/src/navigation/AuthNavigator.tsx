@@ -38,7 +38,7 @@ export function AuthNavigator() {
       {/* ── Admin Screens (temporary routes for UI testing) ───────────────── */}
       <Stack.Screen name="AdminDashboard" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />
       <Stack.Screen name="AdminDashboardAlt" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />
-      <Stack.Screen name="AdminUsers" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />
+      <Stack.Screen name="AdminUsers" component={require('../modules/admin/ui/screens/AdminUsersScreen').AdminUsersScreen} />
       <Stack.Screen name="AdminVerification" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />
       <Stack.Screen name="AdminEvents" component={require('../modules/admin/ui/screens/AdminEventsScreen').default} />
       <Stack.Screen name="AdminReels" component={require('../modules/admin/ui/screens/AdminVerificationScreen').default} />

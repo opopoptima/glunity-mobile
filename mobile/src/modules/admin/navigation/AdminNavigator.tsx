@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { useTheme } from '../../../shared/context/theme.context';
 import { Colors, Font, Radius } from '../../../shared/utils/theme';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AdminHomeScreen } from '../ui/screens/AdminHomeScreen';
 import { AdminModerationScreen } from '../ui/screens/AdminModerationScreen';
@@ -10,6 +11,12 @@ import { AdminSellerVerificationScreen } from '../ui/screens/AdminSellerVerifica
 import { AdminUsersScreen } from '../ui/screens/AdminUsersScreen';
 import { AdminResourcesScreen } from '../ui/screens/AdminResourcesScreen';
 import { useAdminDashboard } from '../hooks/useAdminDashboard';
+import AdminEventsScreen from '../ui/screens/AdminEventsScreen';
+import AdminVerificationScreen from '../ui/screens/AdminVerificationScreen';
+import { AdminEventDetailScreen } from '../ui/screens/AdminEventDetailScreen';
+import { AdminReelDetailScreen } from '../ui/screens/AdminReelDetailScreen';
+import { AdminUserModerationScreen } from '../ui/screens/AdminUserModerationScreen';
+import { useSocket } from '../../../shared/context/socket.context';
 
 import { LanguageProvider, useLanguage } from '../../../shared/context/language.context';
 
@@ -17,9 +24,44 @@ function AdminNavigatorContent() {
   const [activeTab, setActiveTab] = useState<'home' | 'moderation' | 'sellers' | 'users' | 'resources'>('home');
   const { theme: T, isDark } = useTheme();
   const { t } = useLanguage();
-  const { stats } = useAdminDashboard();
+  const { stats, refresh } = useAdminDashboard();
+  const { socket } = useSocket();
+  const [extraReelCount, setExtraReelCount] = useState(0);
 
-  const moderationCount = stats?.pendingModeration?.total ?? 0;
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewReel = () => {
+      setExtraReelCount(prev => prev + 1);
+      refresh();
+    };
+
+    const handleReelReviewed = () => {
+      setExtraReelCount(prev => Math.max(0, prev - 1));
+      refresh();
+    };
+
+    const handleReelRemoved = () => {
+      setExtraReelCount(prev => Math.max(0, prev - 1));
+      refresh();
+    };
+
+    socket.on('NEW_REEL_PUBLISHED', handleNewReel);
+    socket.on('REEL_REVIEWED', handleReelReviewed);
+    socket.on('REEL_REMOVED', handleReelRemoved);
+
+    return () => {
+      socket.off('NEW_REEL_PUBLISHED', handleNewReel);
+      socket.off('REEL_REVIEWED', handleReelReviewed);
+      socket.off('REEL_REMOVED', handleReelRemoved);
+    };
+  }, [socket, refresh]);
+
+  useEffect(() => {
+    setExtraReelCount(0);
+  }, [stats]);
+
+  const moderationCount = (stats?.pendingModeration?.total ?? 0) + extraReelCount;
   const pendingSellersCount = stats?.pendingSellersCount ?? 0;
 
   const primaryGreen = Colors.green || '#8BC34A';
@@ -299,10 +341,23 @@ function AdminNavigatorContent() {
   );
 }
 
+const Stack = createNativeStackNavigator();
+
 export function AdminNavigator() {
   return (
     <LanguageProvider>
-      <AdminNavigatorContent />
+      <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+        <Stack.Screen name="AdminTabs" component={AdminNavigatorContent} />
+        <Stack.Screen name="AdminEvents" component={AdminEventsScreen} />
+        <Stack.Screen name="AdminUsers" component={AdminUsersScreen} />
+        <Stack.Screen name="AdminVerification" component={AdminVerificationScreen} />
+        <Stack.Screen name="AdminDashboard" component={AdminVerificationScreen} />
+        <Stack.Screen name="AdminDashboardAlt" component={AdminVerificationScreen} />
+        <Stack.Screen name="AdminReels" component={AdminVerificationScreen} />
+        <Stack.Screen name="AdminEventDetail" component={AdminEventDetailScreen} />
+        <Stack.Screen name="AdminReelDetail" component={AdminReelDetailScreen} />
+        <Stack.Screen name="AdminUserModeration" component={AdminUserModerationScreen} />
+      </Stack.Navigator>
     </LanguageProvider>
   );
 }

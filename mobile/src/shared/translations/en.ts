@@ -749,6 +749,13 @@ const en = {
   'CANCELLED': 'User Cancelled',
   'REJECTED': 'User Cancelled',
   'Accept Payment': 'Accept Payment',
+  'You should wait for the admin approval. The response will be soon.': 'You should wait for the admin approval. The response will be soon.',
+  'Event Submitted Successfully': 'Event Submitted Successfully',
+  'Your event has been submitted for review.': 'Your event has been submitted for review.',
+  'An administrator will review your event and respond as soon as possible.': 'An administrator will review your event and respond as soon as possible.',
+  'You will be notified once your event has been approved or rejected.': 'You will be notified once your event has been approved or rejected.',
+  'Publishing Failed': 'Publishing Failed',
+  "We couldn't submit your event. Please check your internet connection and try again.": "We couldn't submit your event. Please check your internet connection and try again.",
 };
 
 export default en;

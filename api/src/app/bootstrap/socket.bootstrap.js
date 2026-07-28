@@ -81,6 +81,10 @@ function init(httpServer) {
 
 		if (userId !== 'unknown') {
 			socket.join(userId);
+			if (socket.data.user?.profileType === 'admin') {
+				socket.join('admin');
+				logger.info('[api:socket.io] Admin client joined admin room', { userId });
+			}
 		}
 
 		socket.on('disconnect', (reason) => {

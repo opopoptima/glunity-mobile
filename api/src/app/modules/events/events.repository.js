@@ -65,6 +65,10 @@ const eventsRepository = {
 		return doc;
 	},
 
+	findOne(query) {
+		return Event.findOne(query).lean();
+	},
+
 	create(payload) {
 		return Event.create(payload);
 	},

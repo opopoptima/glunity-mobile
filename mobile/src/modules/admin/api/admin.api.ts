@@ -1,6 +1,6 @@
 import http from '../../../core/network/http.client';
 
-import { AdminDashboardStats, ModerationItem, SellerVerificationDossier, AdminUserListItem, PatientResourceItem } from './admin.types';
+import { AdminDashboardStats, ModerationItem, SellerVerificationDossier, AdminUserListItem, PatientResourceItem, EnrichedUserDetail } from './admin.types';
 export * from './admin.types';
 
 export const adminApi = {
@@ -16,8 +16,7 @@ export const adminApi = {
     return res.data?.data || res.data;
   },
 
-  // Approve or Reject Content Item (Triggers In-App + Email)
-  async moderateItem(id: string, type: 'product' | 'event' | 'recipe' | 'reel', action: 'approve' | 'reject', reason?: string): Promise<boolean> {
+  async moderateItem(id: string, type: 'product' | 'event' | 'recipe' | 'reel', action: 'approve' | 'reject' | 'review' | 'remove', reason?: string): Promise<boolean> {
     const res = await http.post(`/admin/moderation/${type}/${id}/${action}`, { reason });
     return res.data?.success;
   },
@@ -40,9 +39,19 @@ export const adminApi = {
     return res.data?.data || res.data;
   },
 
+  // Fetch Enriched User Moderation Details
+  async getUserModerationDetails(id: string): Promise<EnrichedUserDetail> {
+    const res = await http.get(`/admin/users/${id}/moderation-details`);
+    return res.data?.data || res.data;
+  },
+
   // Suspend / Reactivate User
-  async toggleUserStatus(id: string, status: 'active' | 'suspended') {
-    return http.patch(`/admin/users/${id}/status`, { status });
+  async toggleUserStatus(id: string, status: 'active' | 'suspended', reason?: string, duration?: string, notes?: string) {
+    return http.patch(`/admin/users/${id}/status`, { status, reason, duration, notes });
+  },
+  
+  async warnUser(id: string, message: string) {
+    return http.post(`/admin/users/${id}/warn`, { message });
   },
 
   // Fetch Patient Resources (with optional category, type, status filters)

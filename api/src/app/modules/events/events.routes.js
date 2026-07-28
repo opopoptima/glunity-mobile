@@ -14,7 +14,7 @@ router.get('/owner/registration-notifications', authMiddleware, controller.getOw
 router.get('/owner/stats', authMiddleware, controller.getOwnerStats);
 router.get('/', listEventsSchema, validate, controller.list);
 router.get('/:id', getEventSchema, validate, controller.getOne);
-router.post('/', authMiddleware, createEventSchema, validate, controller.create);
+router.post('/', authMiddleware, authorize('pro_commerce'), createEventSchema, validate, controller.create);
 router.post('/:id/join', authMiddleware, getEventSchema, validate, controller.join);
 router.post('/:id/leave', authMiddleware, getEventSchema, validate, controller.leave);
 router.post('/:id/cancel', authMiddleware, getEventSchema, validate, controller.cancel);

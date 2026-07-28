@@ -63,7 +63,6 @@ export function HomeScreen({
   recipes,
   onPressRecipesSeeAll,
   events,
-  isLoadingEvents = false,
   onPressEventsSeeAll,
   onPressProfilePhoto,
   onPressNavHome,
@@ -75,6 +74,7 @@ export function HomeScreen({
   const insets = useSafeAreaInsets();
   const { theme: T } = useTheme();
   const { isRTL, t } = useLanguage();
+  const isLoadingEvents = false;
   const styles = React.useMemo(() => StyleSheet.create({
     root: {
       flex: 1,

@@ -182,6 +182,11 @@ export const eventsApi = {
       payInstructions: it.payInstructions || '',
       payDeadline: it.payDeadline,
       locationDetails: it.locationDetails,
+      organizer: it.organizer ? {
+        name: it.organizer.name,
+        contact: it.organizer.contact,
+        organizerId: it.organizer.organizerId
+      } : undefined,
       onPress: () => { },
     } as any;
   },
@@ -297,6 +302,7 @@ export const eventsApi = {
     };
     maxCapacity?: number;
     price?: number;
+    idempotencyKey?: string;
   }): Promise<GlunityEvent> {
     const res = await http.post<{ success: boolean; data: any }>('/events', payload);
     const it = res.data?.data;
@@ -342,10 +348,10 @@ export const eventsApi = {
     const res = await http.get<{ success: boolean; data: any }>(`/events/${id}/my-registration`);
     return res.data?.data ?? null;
   },
-  async confirmRegistration(eventId: string, registrationId: string): Promise<any> {
-    const res = await http.patch<any>(`/events/${eventId}/registrations/${registrationId}/approve`);
+  async confirmRegistration(regId: string): Promise<any> {
+    const res = await http.post<{ success: boolean; data: any }>(`/events/registrations/${regId}/confirm`);
     clearEventsCache();
-    return res.data;
+    return res.data?.data;
   },
   async cancelRegistration(regId: string): Promise<any> {
     const res = await http.post<{ success: boolean; data: any }>(`/events/registrations/${regId}/cancel`);
@@ -361,7 +367,7 @@ export const eventsApi = {
     return res.data?.data;
   },
   async approveRegistration(eventId: string, registrationId: string): Promise<any> {
-    const res = await http.patch<any>(`/events/${eventId}/registrations/${registrationId}/approve`);
+    const res = await http.patch<any>(`/events/${eventId}/registrations/${registrationId}/approve`, {});
     clearEventsCache();
     return res.data;
   },

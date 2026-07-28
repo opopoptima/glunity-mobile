@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, Animated } from 'react-native';
 import FastImage from '@/shared/components/FastImage';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
+import { useAuth } from '@/modules/auth/state/auth.context';
 import type { GlunityEvent } from '../../home/domain/home.types';
 
 type Props = {
@@ -14,7 +15,33 @@ type Props = {
 function EventCard({ event, onPress }: Props) {
   const { theme: T } = useTheme();
   const { isRTL } = useLanguage();
+  const { user } = useAuth();
 
+  const badgeScale = React.useRef(new Animated.Value(1)).current;
+  const prevPendingCount = React.useRef(event.pendingRequestsCount || 0);
+
+  React.useEffect(() => {
+    const currentCount = event.pendingRequestsCount || 0;
+    if (currentCount > 0 && currentCount !== prevPendingCount.current) {
+      Animated.sequence([
+        Animated.timing(badgeScale, {
+          toValue: 1.25,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.spring(badgeScale, {
+          toValue: 1,
+          friction: 4,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+    prevPendingCount.current = currentCount;
+  }, [event.pendingRequestsCount]);
+
+  const ownerId = event.createdBy || event.ownerId;
+  const isOwner = user && ownerId && String(user._id) === String(ownerId);
 
   const [loaded, setLoaded] = React.useState(false);
   const loadStartRef = React.useRef<number | null>(null);
@@ -106,52 +133,83 @@ function EventCard({ event, onPress }: Props) {
   }), [T, isRTL]);
 
   return (
-    <TouchableOpacity
-      style={[styles.card, { backgroundColor: T.surface }]}
-      onPress={onPress}
-      activeOpacity={0.85}
-    >
-      <View style={{ position: 'relative' }}>
-        {optimizedSource ? (
-          <FastImage
-            source={optimizedSource}
-            style={styles.cardImage}
-            contentFit="cover"
-            transition={150}
-            cachePolicy="disk"
-            priority="high"
-            onError={() => { /* ignore image error */ }}
-          />
-        ) : (
-          <View style={styles.cardImage} />
-        )}
-      </View>
-      {event.type ? (
-        <View style={[styles.typePill, { backgroundColor: T.surface }]}>
-          <Text style={[styles.typePillText, { color: T.red || '#EF4444' }]}>{event.type}</Text>
+    <View style={{ position: 'relative' }}>
+      <TouchableOpacity
+        style={[styles.card, { backgroundColor: T.surface }]}
+        onPress={onPress}
+        activeOpacity={0.85}
+      >
+        <View style={{ position: 'relative' }}>
+          {optimizedSource ? (
+            <FastImage
+              source={optimizedSource}
+              style={styles.cardImage}
+              contentFit="cover"
+              transition={150}
+              cachePolicy="disk"
+              priority="high"
+              onError={() => { /* ignore image error */ }}
+            />
+          ) : (
+            <View style={styles.cardImage} />
+          )}
         </View>
-      ) : null}
-      <View style={styles.cardBody}>
-        <Text style={[styles.cardTitle, { color: T.text }]} numberOfLines={1} ellipsizeMode="tail">{event.title}</Text>
-
-        <View style={styles.metaRow}>
-          <Ionicons name="calendar-outline" size={16} color={T.green} style={styles.metaIcon} />
-          <Text style={[styles.cardMeta, { color: T.textSub }]}>{formatDateFast(event.startsAt)}{event.startsAt ? ` • ${formatTimeFast(event.startsAt)}` : ''}</Text>
-        </View>
-        {/* location moved to footer to match requested design */}
-
-        <View style={styles.cardFooter}>
-          <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={14} color={T.textSub} style={styles.metaIcon} />
-            <Text style={[styles.cardMeta, { color: T.textSub }]} numberOfLines={1}>{typeof event.location === 'object' && event.location ? (event.location.name || event.location.address || '') : event.location}</Text>
+        {event.type ? (
+          <View style={[styles.typePill, { backgroundColor: T.surface }]}>
+            <Text style={[styles.typePillText, { color: T.red || '#EF4444' }]}>{event.type}</Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: T.greenLight }]}>
-            <Ionicons name="people" size={14} color={T.green} />
-            <Text style={[styles.badgeText, { color: T.green }]}>{event.attendeesCount || 0} going</Text>
+        ) : null}
+        <View style={styles.cardBody}>
+          <Text style={[styles.cardTitle, { color: T.text }]} numberOfLines={1} ellipsizeMode="tail">{event.title}</Text>
+  
+          <View style={styles.metaRow}>
+            <Ionicons name="calendar-outline" size={16} color={T.green} style={styles.metaIcon} />
+            <Text style={[styles.cardMeta, { color: T.textSub }]}>{formatDateFast(event.startsAt)}{event.startsAt ? ` • ${formatTimeFast(event.startsAt)}` : ''}</Text>
+          </View>
+          {/* location moved to footer to match requested design */}
+  
+          <View style={styles.cardFooter}>
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={14} color={T.textSub} style={styles.metaIcon} />
+              <Text style={[styles.cardMeta, { color: T.textSub }]} numberOfLines={1}>{typeof event.location === 'object' && event.location ? (event.location.name || event.location.address || '') : event.location}</Text>
+            </View>
+            <View style={[styles.badge, { backgroundColor: T.greenLight }]}>
+              <Ionicons name="people" size={14} color={T.green} />
+              <Text style={[styles.badgeText, { color: T.green }]}>{event.attendeesCount || 0} going</Text>
+            </View>
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+      {isOwner && event.pendingRequestsCount !== undefined && event.pendingRequestsCount > 0 && (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            top: -6,
+            right: -6,
+            backgroundColor: '#FF3B30',
+            borderRadius: 11,
+            minWidth: 22,
+            height: 22,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderWidth: 2,
+            borderColor: '#FFFFFF',
+            paddingHorizontal: 4,
+            shadowColor: '#000000',
+            shadowOpacity: 0.25,
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 3,
+            elevation: 5,
+            zIndex: 99,
+            transform: [{ scale: badgeScale }],
+          }}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700', fontFamily: 'Poppins_700Bold' }}>
+            {event.pendingRequestsCount > 99 ? '99+' : String(event.pendingRequestsCount)}
+          </Text>
+        </Animated.View>
+      )}
+    </View>
   );
 }
 

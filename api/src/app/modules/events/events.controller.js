@@ -27,11 +27,13 @@ const eventsController = {
 	create: asyncHandler(async (req, res) => {
 		const userId = req.user?._id;
 		const doc = await service.create(req.body, userId);
-		try {
-			const badgesService = require('../badges/badges.service');
-			await badgesService.awardPointsAndCheckBadges(userId, 15);
-		} catch (err) {
-			console.error('[gamification] Failed to award points for creating event:', err.message);
+		if (doc && !doc.isDuplicate) {
+			try {
+				const badgesService = require('../badges/badges.service');
+				await badgesService.awardPointsAndCheckBadges(userId, 15);
+			} catch (err) {
+				console.error('[gamification] Failed to award points for creating event:', err.message);
+			}
 		}
 		res.status(201).json(mapper.toEventResponse(doc));
 	}),

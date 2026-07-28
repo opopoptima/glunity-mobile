@@ -16,7 +16,7 @@ import { useLanguage } from '@/shared/context/language.context';
 import { eventsApi } from '../../../home/api/events.api';
 import { useSocket } from '@/shared/context/socket.context';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { Avatar } from '@/shared/components/Avatar';
+import FastImage from '@/shared/components/FastImage';
 
 export default function EventRegistrationRequestsScreen({ route, navigation }: any) {
   const { eventId, title } = route.params;
@@ -115,8 +115,9 @@ export default function EventRegistrationRequestsScreen({ route, navigation }: a
   const renderItem = ({ item }: { item: any }) => {
     const form = item.registrationForm || {};
     const { text: statusText, color: statusColor } = getStatusTextAndColor(item.status);
-
-    const avatarName = [form.firstName, form.lastName].filter(Boolean).join(' ') || item.userId?.fullName || item.fullName || item.userId?.email || 'User';
+    const avatarUrl = item.userId?.avatarUrl || item.userId?.avatar?.url;
+    const displayName = item.userId?.username || form.firstName || item.fullName || 'User';
+    const firstLetter = displayName.charAt(0).toUpperCase();
 
     return (
       <TouchableOpacity
@@ -124,12 +125,37 @@ export default function EventRegistrationRequestsScreen({ route, navigation }: a
         onPress={() => navigation.navigate('ViewRegistrationForm', { eventId, registrationId: item._id })}
         style={[s.itemRow, { borderBottomColor: T.border }]}
       >
-        <Avatar
-          url={item.userId?.avatar?.url}
-          name={avatarName}
-          size={44}
-          style={s.avatar}
-        />
+        {avatarUrl ? (
+          <FastImage
+            source={{ uri: avatarUrl }}
+            style={s.avatar}
+            contentFit="cover"
+          />
+        ) : (
+          <View
+            style={[
+              s.avatar,
+              {
+                backgroundColor: T.greenLight || '#E8F5E9',
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderWidth: 1.5,
+                borderColor: T.green || '#4CAF50',
+              },
+            ]}
+          >
+            <Text
+              style={{
+                color: T.green || '#4CAF50',
+                fontSize: 16,
+                fontWeight: '700',
+                fontFamily: 'Poppins_700Bold',
+              }}
+            >
+              {firstLetter}
+            </Text>
+          </View>
+        )}
         <View style={s.textContainer}>
           <Text style={[s.fullName, { color: T.text }]}>
             {form.firstName || item.fullName} {form.lastName || ''}

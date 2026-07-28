@@ -110,6 +110,16 @@ export interface ModerationItem {
   price?: string;
   eventDate?: string;
   location?: string;
+  reelId?: string;
+  reviewStatus?: 'unreviewed' | 'reviewed' | 'removed';
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  authorAvatar?: string;
+  authorUsername?: string;
+  caption?: string;
+  viewsCount?: number;
+  likesCount?: number;
+  commentsCount?: number;
 }
 
 export interface SellerVerificationDossier {
@@ -164,4 +174,87 @@ export interface ResourceAnalyticsDTO {
   videosCount: number;
   totalViews: number;
   totalClicks: number;
+}
+
+export interface UserStats {
+  posts: number;
+  comments: number;
+  events: number;
+  followers: number;
+  reports: number;
+  warnings: number;
+  deletedContent: number;
+  logins: number;
+  purchases: number;
+  reviews: number;
+}
+
+export interface RiskAnalysis {
+  score: 'low' | 'medium' | 'high';
+  scoreLabel: string;
+  reports: number;
+  spamFlags: number;
+  deletedPosts: number;
+  prevSuspensions: number;
+  toxicityScore: number;
+  fakeAccountIndicator: 'low' | 'medium' | 'high';
+}
+
+export interface ActivityTimelineItem {
+  id: string;
+  type: 'event' | 'post' | 'comment' | 'profile' | 'purchase' | 'login' | 'report' | 'delete' | 'warning' | 'suspension';
+  title: string;
+  description: string;
+  date: string;
+  icon: string;
+  color: string;
+}
+
+export interface ContentPreviewItem {
+  id: string;
+  title: string;
+  previewText: string;
+  date: string;
+  status?: string;
+  extraInfo?: string;
+}
+
+export interface ReportItem {
+  id: string;
+  reporter: string;
+  category: string;
+  description: string;
+  date: string;
+  evidence: string;
+  status: 'pending' | 'resolved' | 'dismissed' | 'escalated';
+}
+
+export interface ModerationHistoryItem {
+  id: string;
+  action: string;
+  adminName: string;
+  date: string;
+  reason: string;
+  duration?: string;
+}
+
+export interface EnrichedUserDetail {
+  user: AdminUserListItem;
+  phone: string;
+  location: string;
+  accountAge: string;
+  lastActiveLabel: string;
+  stats: UserStats;
+  risk: RiskAnalysis;
+  timeline: ActivityTimelineItem[];
+  tabsData: {
+    posts: ContentPreviewItem[];
+    comments: ContentPreviewItem[];
+    events: ContentPreviewItem[];
+    marketplace: ContentPreviewItem[];
+    reviews: ContentPreviewItem[];
+    purchases: ContentPreviewItem[];
+  };
+  reports: ReportItem[];
+  history: ModerationHistoryItem[];
 }

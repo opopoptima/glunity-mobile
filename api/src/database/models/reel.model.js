@@ -23,7 +23,7 @@ const reelSchema = new Schema(
 		// Pre-computed trending score. Recomputed after every interaction so that
 		// the feed query is a simple sort — no in-query arithmetic.
 		trendingScore: { type: Number, default: 0, index: true },
-		status: { type: String, enum: ['processing', 'ready', 'failed'], default: 'ready', index: true },
+		status: { type: String, enum: ['processing', 'ready', 'published', 'failed', 'removed'], default: 'published', index: true },
 		category: { type: String, enum: ['all', 'recipes', 'tips', 'products', 'lifestyle'], default: 'all', index: true },
 		channelRef: { type: Types.ObjectId, ref: 'Channel', default: null, index: true },
 		taggedUsers: [{ type: Schema.Types.ObjectId, ref: 'User', default: [] }],

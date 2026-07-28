@@ -38,6 +38,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = React.useState('');
   const searchAnim = React.useRef(new Animated.Value(0)).current;
   const inputRef = React.useRef<any>(null);
+  const isFirstLoad = React.useRef(true);
 
   const toggleSearch = React.useCallback(() => {
     const next = !searchOpen;
@@ -99,7 +100,6 @@ export default function EventsCalendarScreen({ navigation }: any) {
     try {
       const apiType = TYPE_MAP[filter as keyof typeof TYPE_MAP];
       const skip = (pageNum - 1) * LIMIT;
-
       const { items, total } = await eventsApi.list({
         type: apiType,
         search: searchQuery.trim() || undefined,
@@ -107,11 +107,7 @@ export default function EventsCalendarScreen({ navigation }: any) {
         skip,
       }, { signal });
 
-      if (pageNum === 1) {
-        setEvents(items);
-      } else {
-        setEvents(prev => [...prev, ...items]);
-      }
+      setEvents(items);
       setTotalPages(Math.max(1, Math.ceil(total / LIMIT)));
     } catch (err: any) {
       if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
@@ -135,18 +131,35 @@ export default function EventsCalendarScreen({ navigation }: any) {
     };
   }, [filter, searchQuery, fetchEvents]);
 
+  // Real-time updates via Socket.IO
+  React.useEffect(() => {
+    if (!socket) return;
+    const onRegChange = () => {
+      fetchEvents(page, true);
+    };
+    socket.on('registration:change', onRegChange);
+    return () => {
+      socket.off('registration:change', onRegChange);
+    };
+  }, [socket, fetchEvents, page]);
+
+  // Refresh calendar events list when returning to this screen
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (isFirstLoad.current) {
+        isFirstLoad.current = false;
+        return;
+      }
+      fetchEvents(page, true);
+    });
+    return unsubscribe;
+  }, [navigation, fetchEvents, page]);
+
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
     setPage(1);
     fetchEvents(1, true);
   }, [fetchEvents]);
-
-  const handleLoadMore = React.useCallback(() => {
-    if (isLoading || loadingMore || page >= totalPages) return;
-    const nextPage = page + 1;
-    setPage(nextPage);
-    fetchEvents(nextPage);
-  }, [isLoading, loadingMore, page, totalPages, fetchEvents]);
 
   const filtered = React.useMemo(() => events, [events]);
 
@@ -416,15 +429,19 @@ export default function EventsCalendarScreen({ navigation }: any) {
             windowSize={7}
             updateCellsBatchingPeriod={50}
             removeClippedSubviews
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.5}
             ListFooterComponent={() => (
-              loadingMore ? (
-                <View style={{ paddingVertical: 20, alignItems: 'center', justifyContent: 'center' }}>
-                  <ActivityIndicator size="small" color={T.green} />
+              isLoading ? null : (
+                <View style={{ paddingBottom: 116 + insets.bottom }}>
+                  <PaginationBar
+                    page={page}
+                    totalPages={totalPages}
+                    loading={loadingMore}
+                    onPageChange={(p) => {
+                      setPage(p);
+                      fetchEvents(p);
+                    }}
+                  />
                 </View>
-              ) : (
-                <View style={{ height: 116 + insets.bottom }} />
               )
             )}
             ItemSeparatorComponent={() => <View style={{ height: 12 }} />}

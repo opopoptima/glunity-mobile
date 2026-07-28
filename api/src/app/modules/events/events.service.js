@@ -5,6 +5,10 @@ const AppError = require('../../common/errors/app-error');
 const notificationsService = require('../notifications/notifications.service');
 
 const User = require('../../../database/models/user.model');
+
+function escapeRegExp(string) {
+	return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 const Notification = require('../../../database/models/notification.model');
 const Registration = require('../../../database/models/registration.model');
 
@@ -33,35 +37,6 @@ function clearCache() {
 	listCache.clear();
 }
 
-const cloudinaryClient = require('../../integrations/cloudinary/cloudinary.client');
-
-function parseBase64DataUri(dataUri) {
-	if (!dataUri || typeof dataUri !== 'string' || !dataUri.startsWith('data:')) return null;
-	const match = dataUri.match(/^data:([^;]+);base64,(.+)$/);
-	if (!match) return null;
-	return {
-		mimetype: match[1],
-		base64Data: match[2]
-	};
-}
-
-async function uploadBase64IfPresent(url) {
-	const parsed = parseBase64DataUri(url);
-	if (!parsed) return url;
-	try {
-		const buffer = Buffer.from(parsed.base64Data, 'base64');
-		const uploadRes = await cloudinaryClient.uploadBuffer(buffer, {
-			resource_type: 'image',
-			mimetype: parsed.mimetype,
-			folder: 'events'
-		});
-		return uploadRes.secure_url || uploadRes.url;
-	} catch (err) {
-		console.error('[events.service] Failed to upload base64 image:', err);
-		return url;
-	}
-}
-
 const eventsService = {
 	async list(query) {
 		const cached = getCachedList(query);
@@ -80,48 +55,41 @@ const eventsService = {
 	},
 
 	async create(payload, userId) {
-		if (payload && payload.imageUrl) {
-			payload.imageUrl = await uploadBase64IfPresent(payload.imageUrl);
+		// 1. Check idempotencyKey if provided
+		if (payload && payload.idempotencyKey) {
+			const existing = await repo.findOne({ idempotencyKey: payload.idempotencyKey });
+			if (existing) {
+				return { ...existing, isDuplicate: true };
+			}
 		}
-		if (payload && payload.images && payload.images.length > 0) {
-			for (let i = 0; i < payload.images.length; i++) {
-				if (payload.images[i] && payload.images[i].url) {
-					payload.images[i].url = await uploadBase64IfPresent(payload.images[i].url);
-				}
+
+		// 2. Check duplicate title + startsAt + createdBy within last 2 minutes as fallback
+		if (payload && payload.title && payload.startsAt && userId) {
+			const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+			const escapedTitle = escapeRegExp(payload.title.trim());
+			const existing = await repo.findOne({
+				createdBy: userId,
+				title: { $regex: new RegExp(`^${escapedTitle}$`, 'i') },
+				startsAt: new Date(payload.startsAt),
+				createdAt: { $gte: twoMinutesAgo }
+			});
+			if (existing) {
+				return { ...existing, isDuplicate: true };
 			}
 		}
 
 		// Normalize incoming imageUrl into images array so the mapper can read images[0].url
 		const images = [];
 		if (payload && payload.imageUrl) images.push({ url: payload.imageUrl });
-		const createPayload = { ...payload, images: images.length ? images : payload.images || undefined, createdBy: userId || undefined };
+		const createPayload = {
+			...payload,
+			images: images.length ? images : payload.images || undefined,
+			createdBy: userId || undefined,
+			isPublished: false,
+			status: 'pending'
+		};
 		const doc = await repo.create(createPayload);
 		const eventObj = doc.toObject();
-
-
-		// Dispatch notification to other users in background
-		(async () => {
-			try {
-				const users = await User.find({ _id: { $ne: userId } }, '_id pushEnabled').lean();
-				if (users.length > 0) {
-					const notifs = users
-						.filter(u => u.pushEnabled !== false)
-						.map(u => ({
-							userId: u._id,
-							title: 'New Event Published! 📅',
-							body: `A new event was published: "${eventObj.title}". Tap to check details!`,
-							type: 'event',
-							isRead: false,
-							metadata: { eventId: String(eventObj._id) },
-						}));
-					if (notifs.length > 0) {
-						await Notification.insertMany(notifs);
-					}
-				}
-			} catch (err) {
-				console.error('Failed to dispatch new event notifications:', err);
-			}
-		})();
 
 		clearCache();
 		return eventObj;
@@ -271,19 +239,13 @@ const eventsService = {
 			throw AppError.badRequest('Required fields: First Name, Last Name, Email, Phone, Gender');
 		}
 
-		const normalizedPhone = phone.trim();
-
+		// Enforce unique phone per event check
 		const existingReg = await Registration.findOne({
 			eventId,
-			status: { $nin: ['CANCELLED', 'cancelled'] },
-			$or: [
-				...(userId ? [{ userId }] : []),
-				{ phone: normalizedPhone },
-				{ 'registrationForm.phone': normalizedPhone }
-			]
+			phone: phone.trim()
 		});
 		if (existingReg) {
-			throw AppError.badRequest('This phone number or user is already registered for this event.');
+			throw AppError.badRequest('This phone number is already registered for this event.');
 		}
 
 		// Every participant can register for only one ticket per event
@@ -405,7 +367,7 @@ const eventsService = {
 	},
 
 	async getMyRegistration(eventId, userId) {
-		return Registration.findOne({ eventId, userId }).sort({ createdAt: -1 }).lean();
+		return Registration.findOne({ eventId, userId }).lean();
 	},
 
 	async approveRegistration(regId, userId) {
@@ -415,7 +377,7 @@ const eventsService = {
 		if (!reg) throw AppError.notFound('Registration');
 
 		const currentStatus = String(reg.status || '').toUpperCase();
-		if (['APPROVED', 'CONFIRMED', 'PAID', 'REJECTED', 'CANCELLED'].includes(currentStatus)) {
+		if (currentStatus === 'APPROVED' || currentStatus === 'CONFIRMED' || currentStatus === 'REJECTED' || currentStatus === 'CANCELLED') {
 			throw AppError.badRequest('Registration has already been processed.', 'REGISTRATION_ALREADY_PROCESSED');
 		}
 
@@ -429,7 +391,7 @@ const eventsService = {
 			throw AppError.forbidden('You are not allowed to perform this action.');
 		}
 
-		reg.status = 'CONFIRMED';
+		reg.status = 'APPROVED';
 		reg.paidAt = new Date();
 		reg.approvedAt = new Date();
 		reg.approvedBy = userId;
@@ -448,24 +410,16 @@ const eventsService = {
 		// Fire async notification and socket broadcasts in the background
 		(async () => {
 			try {
-				const existingNotification = await Notification.findOne({
+				console.log('[SERVICE] [ASYNC] Creating notification...');
+				await notificationsService.create({
 					userId: reg.userId,
-					'metadata.eventId': String(doc._id),
-					'metadata.registrationId': String(reg._id),
-					'metadata.kind': 'payment_confirmed',
+					title: `Registration approved.`,
+					body: `Your registration has been approved.`,
+					type: 'event',
+					metadata: { eventId: String(doc._id), kind: 'confirmed' },
 				});
-				if (!existingNotification) {
-					console.log('[SERVICE] [ASYNC] Creating notification...');
-					await notificationsService.create({
-						userId: reg.userId,
-						title: 'Payment confirmed',
-						body: 'Your payment has been confirmed. You have successfully joined the event.',
-						type: 'event',
-						metadata: { eventId: String(doc._id), registrationId: String(reg._id), kind: 'payment_confirmed' },
-					});
-					console.log('[SERVICE] [ASYNC] Notification created');
-				}
-			} catch (e) {
+				console.log('[SERVICE] [ASYNC] Notification created');
+			} catch (e) { 
 				console.error('[SERVICE] [ASYNC] Notification creation failed:', e.message);
 			}
 
@@ -474,8 +428,8 @@ const eventsService = {
 			try {
 				const io = require('../../bootstrap/socket.bootstrap').getIO();
 				if (io) {
-					io.to(String(reg.userId)).emit('registration:change', { eventId: String(doc._id), status: 'CONFIRMED' });
-					io.to(String(organizerId)).emit('registration:change', { eventId: String(doc._id), status: 'CONFIRMED' });
+					io.to(String(reg.userId)).emit('registration:change', { eventId: String(doc._id), status: 'APPROVED' });
+					io.to(String(organizerId)).emit('registration:change', { eventId: String(doc._id), status: 'APPROVED' });
 					console.log('[SERVICE] [ASYNC] Socket events emitted');
 				} else {
 					console.warn('[SERVICE] [ASYNC] Socket.io not available');

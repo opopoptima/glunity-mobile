@@ -96,13 +96,50 @@ const reelsService = {
 			...rest,
 			taggedUsers: taggedUserIds || [],
 			authorId: userId,
-			status: 'ready'
+			status: 'published'
 		});
 
 		// Compute initial trendingScore immediately so the reel is never
 		// stranded at score=0 in the feed. Fresh videos start with
 		// freshnessBoost ~100 which gives them strong initial visibility.
 		await this.recomputeScore(reel._id);
+
+		// Create ReelModeration item for post-publication review and notify admin in real-time
+		try {
+			const ReelModeration = require('../../../database/models/reel-moderation.model');
+			const modItem = await ReelModeration.create({
+				reelId: reel._id,
+				reviewStatus: 'unreviewed',
+			});
+
+			const socketBootstrap = require('../../bootstrap/socket.bootstrap');
+			const io = socketBootstrap.getIO();
+			if (io) {
+				const populated = await Reel.findById(reel._id).populate('authorId', 'fullName avatar').lean();
+				if (populated) {
+					const socketPayload = {
+						id: modItem._id.toString(),
+						reelId: reel._id.toString(),
+						title: populated.caption || 'Reel',
+						type: 'reel',
+						authorOrSeller: populated.authorId?.fullName || 'Inconnu',
+						authorAvatar: populated.authorId?.avatar?.url || '',
+						authorUsername: populated.authorId?.fullName || 'Inconnu',
+						thumbnailUrl: populated.thumbnailUrl || '',
+						videoUrl: populated.videoUrl || '',
+						date: populated.createdAt,
+						reviewStatus: 'unreviewed',
+						caption: populated.caption || '',
+						viewsCount: populated.viewsCount || 0,
+						likesCount: populated.likesCount || 0,
+						commentsCount: populated.commentsCount || 0,
+					};
+					io.to('admin').emit('NEW_REEL_PUBLISHED', socketPayload);
+				}
+			}
+		} catch (err) {
+			console.error('Failed to create moderation item or notify admin:', err);
+		}
 
 		// Send notifications to tagged users
 		if (taggedUserIds && taggedUserIds.length > 0) {

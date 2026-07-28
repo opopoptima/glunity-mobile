@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { adminApi, AdminUserListItem } from '../api/admin.api';
 
-export type UserFilter = 'all' | 'celiac' | 'pro_commerce' | 'pro_health' | 'suspended';
+export type UserFilter = 'all' | 'celiac' | 'pro_commerce' | 'pro_health' | 'admin' | 'suspended';
 
 export function useAdminUsers() {
   const [filter, setFilter] = useState<UserFilter>('all');

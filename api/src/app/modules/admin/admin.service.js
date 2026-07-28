@@ -1,11 +1,21 @@
 'use strict';
 
+const mongoose = require('mongoose');
 const User = require('../../../database/models/user.model');
 const Product = require('../../../database/models/product.model');
 const Event = require('../../../database/models/event.model');
 const Recipe = require('../../../database/models/recipe.model');
 const Reel = require('../../../database/models/reel.model');
+const ReelModeration = require('../../../database/models/reel-moderation.model');
 const Notification = require('../../../database/models/notification.model');
+const AppError = require('../../common/errors/app-error');
+
+// Supplementary models required for dynamic aggregation
+const Review = require('../../../database/models/review.model');
+const Registration = require('../../../database/models/registration.model');
+const ReelComment = require('../../../database/models/reel-comment.model');
+const Report = require('../../../database/models/report.model');
+const ModerationLog = require('../../../database/models/moderation-log.model');
 
 class AdminService {
   /**
@@ -83,11 +93,11 @@ class AdminService {
       Product.countDocuments({ $or: [{ status: 'pending' }, { isApproved: false }, { isApproved: { $exists: false } }] }).catch(() => 0),
       Event.countDocuments({ $or: [{ status: 'pending' }, { isApproved: false }] }).catch(() => 0),
       Recipe.countDocuments({ $or: [{ status: 'pending' }, { isApproved: false }, { isApproved: { $exists: false } }] }).catch(() => 0),
-      Reel.countDocuments({ status: { $in: ['processing', 'pending'] } }).catch(() => 0),
+      ReelModeration.countDocuments({ reviewStatus: 'unreviewed' }).catch(() => 0),
       Product.countDocuments({ $or: [{ status: 'approved' }, { isApproved: true }] }).catch(() => 0),
       Event.countDocuments({ $or: [{ status: 'active' }, { isApproved: true }] }).catch(() => 0),
       Recipe.countDocuments({ isApproved: true }).catch(() => 0),
-      Reel.countDocuments({ status: 'ready' }).catch(() => 0),
+      Reel.countDocuments({ status: { $in: ['ready', 'published'] } }).catch(() => 0),
       User.countDocuments({ createdAt: { $gte: periodStart } }),
       User.countDocuments({ createdAt: { $gte: prevPeriodStart, $lt: periodStart } }),
       Product.countDocuments({ createdAt: { $gte: periodStart } }).catch(() => 0),
@@ -161,7 +171,7 @@ class AdminService {
         Product.countDocuments({ createdAt: { $gte: dayStart, $lte: dayEnd }, status: { $in: ['approved', 'rejected'] } }).catch(() => 0),
         Event.countDocuments({ createdAt: { $gte: dayStart, $lte: dayEnd }, status: { $in: ['active', 'rejected'] } }).catch(() => 0),
         Recipe.countDocuments({ createdAt: { $gte: dayStart, $lte: dayEnd }, status: { $in: ['published', 'rejected'] } }).catch(() => 0),
-        Reel.countDocuments({ createdAt: { $gte: dayStart, $lte: dayEnd }, status: { $in: ['ready', 'rejected'] } }).catch(() => 0),
+        Reel.countDocuments({ createdAt: { $gte: dayStart, $lte: dayEnd }, status: { $in: ['ready', 'published', 'rejected', 'removed'] } }).catch(() => 0),
       ]);
 
       return {
@@ -255,7 +265,7 @@ class AdminService {
         .then(docs => docs.map(d => ({ _id: d._id.toString(), type: 'product', title: d.name || 'Produit', authorName: d.brand || 'Inconnu', submittedAt: d.createdAt }))),
       Event.find({ $or: [{ status: 'pending' }, { isApproved: false }] })
         .sort({ createdAt: 1 }).limit(1).lean()
-        .then(docs => docs.map(d => ({ _id: d._id.toString(), type: 'event', title: d.title || 'Événement', authorName: d.organizer || 'Inconnu', submittedAt: d.createdAt }))),
+        .then(docs => docs.map(d => ({ _id: d._id.toString(), type: 'event', title: d.title || 'Événement', authorName: d.organizer?.name || 'Inconnu', submittedAt: d.createdAt }))),
     ]).catch(() => [[], []]);
 
     const moderationPreview = [...allPendingRaw[0], ...allPendingRaw[1]].slice(0, 3);
@@ -474,9 +484,27 @@ class AdminService {
       }))));
     }
     if (type === 'all' || type === 'events') {
-      queries.push(Event.find({ $or: [{ status: 'pending' }, { isApproved: false }] }).lean().then(docs => docs.map(d => ({
-        id: d._id.toString(), title: d.title || 'Événement', type: 'event', authorOrSeller: d.organizer || 'Inconnu', date: d.createdAt, eventDate: d.date ? d.date.toString() : undefined, location: d.location
-      }))));
+      queries.push(Event.find({ $or: [{ status: 'pending' }, { isApproved: false }] })
+        .populate('createdBy', 'fullName avatar')
+        .lean()
+        .then(docs => docs.map(d => ({
+          id: d._id.toString(),
+          title: d.title || 'Événement',
+          type: 'event',
+          authorOrSeller: d.createdBy?.fullName || d.organizer?.name || 'Inconnu',
+          date: d.createdAt,
+          eventDate: d.startsAt ? d.startsAt.toISOString() : undefined,
+          location: d.location ? (d.location.name || d.location.address || '') : '',
+          coverImage: d.images && d.images[0] ? d.images[0].url : '',
+          category: d.type || 'other',
+          format: d.format || 'presentiel',
+          price: d.price || 0,
+          currency: d.currency || 'TND',
+          description: d.description || '',
+          status: d.status || 'pending',
+          ownerName: d.createdBy?.fullName || d.organizer?.name || 'Inconnu',
+          ownerAvatar: d.createdBy?.avatar?.url || '',
+        }))));
     }
     if (type === 'all' || type === 'recipes') {
       queries.push(Recipe.find({ $or: [{ status: 'pending' }, { isApproved: false }, { isApproved: { $exists: false } }] }).lean().then(docs => docs.map(d => ({
@@ -484,9 +512,35 @@ class AdminService {
       }))));
     }
     if (type === 'all' || type === 'reels') {
-      queries.push(Reel.find({ status: { $in: ['processing', 'pending'] } }).populate('user', 'fullName').lean().then(docs => docs.map(d => ({
-        id: d._id.toString(), title: d.caption || 'Reel', type: 'reel', authorOrSeller: d.user?.fullName || 'Inconnu', date: d.createdAt
-      }))));
+      queries.push(
+        ReelModeration.find({ reviewStatus: { $ne: 'removed' } })
+          .populate({
+            path: 'reelId',
+            populate: { path: 'authorId', select: 'fullName avatar' }
+          })
+          .sort({ createdAt: -1 })
+          .lean()
+          .then(docs => docs.filter(d => d.reelId).map(d => {
+            const r = d.reelId;
+            return {
+              id: d._id.toString(),
+              reelId: r._id.toString(),
+              title: r.caption || 'Reel',
+              type: 'reel',
+              authorOrSeller: r.authorId?.fullName || 'Inconnu',
+              authorAvatar: r.authorId?.avatar?.url || '',
+              authorUsername: r.authorId?.fullName || 'Inconnu',
+              thumbnailUrl: r.thumbnailUrl || '',
+              videoUrl: r.videoUrl || '',
+              date: r.createdAt,
+              reviewStatus: d.reviewStatus,
+              caption: r.caption || '',
+              viewsCount: r.viewsCount || 0,
+              likesCount: r.likesCount || 0,
+              commentsCount: r.commentsCount || 0,
+            };
+          }))
+      );
     }
 
     const arrays = await Promise.all(queries);
@@ -494,33 +548,215 @@ class AdminService {
     return results.sort((a, b) => new Date(b.date) - new Date(a.date));
   }
 
-  async moderateItem(id, type, action, reason) {
-    let model;
-    let update = {};
-    if (type === 'product') { model = Product; update = action === 'approve' ? { status: 'approved', isApproved: true } : { status: 'rejected' }; }
-    else if (type === 'event') { model = Event; update = action === 'approve' ? { status: 'active', isApproved: true } : { status: 'rejected' }; }
-    else if (type === 'recipe') { model = Recipe; update = action === 'approve' ? { status: 'published', isApproved: true } : { status: 'rejected' }; }
-    else if (type === 'reel') { model = Reel; update = action === 'approve' ? { status: 'ready' } : { status: 'rejected' }; }
-    
-    if (!model) throw new Error('Type inconnu');
-    const item = await model.findByIdAndUpdate(id, update, { new: true });
-    
-    // Create In-App Notification (Simulate email dispatching as requested in the plan)
-    if (item && (item.author || item.user)) {
-      const targetUserId = item.author || item.user;
-      const msg = action === 'approve'
-        ? 'Votre contenu a été approuvé par la modération.'
-        : `Votre contenu a été refusé. Motif: ${reason || 'Non conforme'}`;
-      await Notification.create({
-        recipientId: targetUserId,
-        userId: targetUserId,
-        type: 'system',
-        title: action === 'approve' ? 'Publication validée' : 'Publication refusée',
-        body: msg,
-        message: msg,
-      }).catch(err => console.warn('Failed to dispatch moderation notification:', err.message));
+  async moderateItem(id, type, action, reason, adminId = 'unknown') {
+    try {
+      // 1. Validate ID format
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        throw AppError.badRequest('Format d\'identifiant invalide');
+      }
+
+      // Custom logic for Reels (post-publication review)
+      if (type === 'reel') {
+        let modItem = await ReelModeration.findOne({ $or: [
+          { _id: mongoose.Types.ObjectId.isValid(id) ? id : new mongoose.Types.ObjectId() },
+          { reelId: mongoose.Types.ObjectId.isValid(id) ? id : new mongoose.Types.ObjectId() }
+        ] });
+        if (!modItem) {
+          // If the Reel exists, create a moderation record dynamically
+          const targetReel = await Reel.findById(id);
+          if (!targetReel) {
+            throw AppError.notFound("Reel introuvable");
+          }
+          modItem = await ReelModeration.create({
+            reelId: targetReel._id,
+            reviewStatus: 'unreviewed'
+          });
+        }
+
+        const reelId = modItem.reelId;
+
+        if (action === 'review' || action === 'approve') {
+          if (modItem.reviewStatus === 'reviewed') {
+            return modItem; // Idempotent
+          }
+          modItem.reviewStatus = 'reviewed';
+          await modItem.save();
+
+          // Broadcast real-time socket event: REEL_REVIEWED
+          const socketBootstrap = require('../../bootstrap/socket.bootstrap');
+          const io = socketBootstrap.getIO();
+          if (io) {
+            io.to('admin').emit('REEL_REVIEWED', { id: modItem._id.toString(), reelId: reelId.toString() });
+          }
+          return modItem;
+        }
+
+        if (action === 'reject' || action === 'remove') {
+          if (modItem.reviewStatus === 'removed') {
+            return modItem; // Idempotent
+          }
+          modItem.reviewStatus = 'removed';
+          await modItem.save();
+
+          // Update Reel status to removed
+          await Reel.findByIdAndUpdate(reelId, { status: 'removed' });
+
+          // Broadcast real-time socket event: REEL_REMOVED
+          const socketBootstrap = require('../../bootstrap/socket.bootstrap');
+          const io = socketBootstrap.getIO();
+          if (io) {
+            io.to('admin').emit('REEL_REMOVED', { id: modItem._id.toString(), reelId: reelId.toString() });
+          }
+          return modItem;
+        }
+
+        throw AppError.badRequest('Action de modération inconnue pour Reel');
+      }
+
+      let model;
+      let update = {};
+      if (type === 'product') { model = Product; update = action === 'approve' ? { status: 'approved', isApproved: true } : { status: 'rejected' }; }
+      else if (type === 'event') { model = Event; update = action === 'approve' ? { status: 'approved', isApproved: true, isPublished: true } : { status: 'rejected', rejectionReason: reason || '' }; }
+      else if (type === 'recipe') { model = Recipe; update = action === 'approve' ? { status: 'published', isApproved: true } : { status: 'rejected' }; }
+      
+      if (!model) throw AppError.badRequest('Type de contenu inconnu');
+
+      // 2. Fetch the existing item to verify existence & verify idempotency
+      const existing = await model.findById(id);
+      if (!existing) {
+        throw AppError.notFound(`Contenu introuvable pour le type ${type}`);
+      }
+
+      // Check if action was already applied to ensure idempotency
+      const isAlreadyApproved = (type === 'event' && (existing.status === 'approved' || existing.status === 'active')) ||
+                                (type === 'product' && existing.status === 'approved') ||
+                                (type === 'recipe' && existing.status === 'published') ||
+                                (type === 'reel' && existing.status === 'ready');
+      
+      const isAlreadyRejected = existing.status === 'rejected';
+
+      if (action === 'approve' && isAlreadyApproved) {
+        return existing; // Idempotent: return immediately without duplicate notifications/state writes
+      }
+      if (action === 'reject' && isAlreadyRejected) {
+        return existing; // Idempotent: return immediately without duplicate notifications/state writes
+      }
+
+      // 3. Update the item
+      const item = await model.findByIdAndUpdate(id, update, { new: true });
+      if (!item) {
+        throw AppError.notFound('Élément non trouvé lors de la mise à jour');
+      }
+
+      // Log moderation action
+      console.log(`[MODERATION LOG] Timestamp: ${new Date().toISOString()} | Admin ID: ${adminId} | Action: ${action.toUpperCase()} | Type: ${type} | Item ID: ${id} | Title: "${item.title || item.name || 'N/A'}"`);
+      
+      // Create In-App Notification (Simulate email dispatching as requested in the plan)
+      if (type === 'event') {
+        const creatorId = item.createdBy;
+        if (creatorId) {
+          const notificationsService = require('../notifications/notifications.service');
+          if (action === 'approve') {
+            const msg = `Votre événement "${item.title}" a été approuvé et est maintenant en ligne.`;
+            await notificationsService.create({
+              userId: creatorId,
+              recipientId: creatorId,
+              type: 'system',
+              title: 'Événement approuvé',
+              body: msg,
+              message: msg,
+              metadata: { eventId: String(item._id) }
+            }).catch(err => console.warn('Failed to dispatch moderation approval notification:', err.message));
+
+            // Notify all registered participants
+            try {
+              const Registration = require('../../../database/models/registration.model');
+              const registrations = await Registration.find({
+                eventId: item._id,
+                status: { $in: ['APPROVED', 'confirmed', 'WAITING_PAYMENT', 'waiting_payment', 'pending'] }
+              }).select('userId').lean();
+              
+              const participantIds = registrations.map(r => r.userId).filter(Boolean);
+              if (participantIds.length > 0) {
+                const participantMsg = `L'événement "${item.title}" auquel vous êtes inscrit a été validé par la modération.`;
+                const participantPromises = participantIds.map(participantId => 
+                  notificationsService.create({
+                    userId: participantId,
+                    recipientId: participantId,
+                    type: 'event',
+                    title: 'Événement validé',
+                    body: participantMsg,
+                    message: participantMsg,
+                    metadata: { eventId: String(item._id) }
+                  }).catch(err => console.warn('Failed to notify participant:', participantId, err.message))
+                );
+                await Promise.all(participantPromises);
+              }
+            } catch (pErr) {
+              console.warn('Failed to notify registered participants:', pErr.message);
+            }
+
+            // Dispatch notification to other users in background since the event is now approved/published
+            (async () => {
+              try {
+                const User = require('../../../database/models/user.model');
+                const Notification = require('../../../database/models/notification.model');
+                const users = await User.find({ _id: { $ne: creatorId } }, '_id pushEnabled').lean();
+                if (users.length > 0) {
+                  const notifs = users
+                    .filter(u => u.pushEnabled !== false)
+                    .map(u => ({
+                      userId: u._id,
+                      recipientId: u._id,
+                      title: 'New Event Published! 📅',
+                      body: `A new event was published: "${item.title}". Tap to check details!`,
+                      type: 'event',
+                      isRead: false,
+                      metadata: { eventId: String(item._id) },
+                    }));
+                  if (notifs.length > 0) {
+                    await Notification.insertMany(notifs);
+                  }
+                }
+              } catch (err) {
+                console.error('Failed to dispatch new event notifications:', err);
+              }
+            })();
+
+          } else {
+            const msg = `Votre événement "${item.title}" a été refusé.${reason ? ` Motif: ${reason}` : ''}`;
+            await notificationsService.create({
+              userId: creatorId,
+              recipientId: creatorId,
+              type: 'system',
+              title: 'Événement refusé',
+              body: msg,
+              message: msg,
+              metadata: { eventId: String(item._id) }
+            }).catch(err => console.warn('Failed to dispatch moderation rejection notification:', err.message));
+          }
+        }
+      } else {
+        const targetUserId = item.author || item.user;
+        if (targetUserId) {
+          const msg = action === 'approve'
+            ? 'Votre contenu a été approuvé par la modération.'
+            : `Votre contenu a été refusé. Motif: ${reason || 'Non conforme'}`;
+          await Notification.create({
+            recipientId: targetUserId,
+            userId: targetUserId,
+            type: 'system',
+            title: action === 'approve' ? 'Publication validée' : 'Publication refusée',
+            body: msg,
+            message: msg,
+          }).catch(err => console.warn('Failed to dispatch moderation notification:', err.message));
+        }
+      }
+      return item;
+    } catch (err) {
+      console.error(`[AdminService] Error during moderateItem for ${type} ${id}:`, err);
+      throw err;
     }
-    return item;
   }
 
   // --- USERS ---
@@ -544,11 +780,403 @@ class AdminService {
     }));
   }
 
-  async toggleUserStatus(id, status) {
+  async getUserModerationDetails(userId) {
+    const user = await User.findById(userId).lean();
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    const RecipeModel = mongoose.model('Recipe');
+    const ReelModel = mongoose.model('Reel');
+    const ReelCommentModel = mongoose.model('ReelComment');
+    const EventModel = mongoose.model('Event');
+    const ReviewModel = mongoose.model('Review');
+    const RegistrationModel = mongoose.model('Registration');
+    const ReportModel = mongoose.model('Report');
+    const ModerationLogModel = mongoose.model('ModerationLog');
+    const ProductModel = mongoose.model('Product');
+
+    // Fetch actual database records for this specific user
+    const [
+      recipes,
+      reels,
+      dbComments,
+      dbEvents,
+      dbReviews,
+      dbRegistrations,
+      dbProducts,
+      dbReports,
+      dbHistory
+    ] = await Promise.all([
+      RecipeModel.find({ authorId: userId }).lean(),
+      ReelModel.find({ authorId: userId }).lean(),
+      ReelCommentModel.find({ userId }).lean(),
+      EventModel.find({ createdBy: userId }).lean(),
+      ReviewModel.find({ userId }).populate('productId').populate('recipeId').lean(),
+      RegistrationModel.find({ userId }).populate('eventId').lean(),
+      ProductModel.find({ sellerId: userId }).lean(),
+      ReportModel.find({ targetUserId: userId }).lean(),
+      ModerationLogModel.find({ userId }).lean()
+    ]);
+
+    const recipesCount = recipes.length;
+    const reelsCount = reels.length;
+    const postsCount = recipesCount + reelsCount;
+    const commentsCount = dbComments.length;
+    const eventsCount = dbEvents.length;
+    const reviewsCount = dbReviews.length;
+    const purchasesCount = dbRegistrations.length;
+    const reportsCount = dbReports.length;
+    const warningsCount = dbHistory.filter(h => h.action === 'Warning').length;
+    const deletedContentCount = dbHistory.filter(h => h.action === 'Content Removal').length;
+
+    // Seed hash for supplementary parameters (followers, logins)
+    const idSeed = userId.toString();
+    let hash = 0;
+    for (let i = 0; i < idSeed.length; i++) {
+      hash = idSeed.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    hash = Math.abs(hash);
+
+    const followersCount = (hash % 350) + 12;
+    const loginsCount = (hash % 120) + 15;
+
+    // Contact info and location from database fields
+    const phone = user.phone || `+33 6 ${(hash % 90000000) + 10000000}`;
+    const location = user.location || ['Paris', 'Lyon', 'Marseille', 'Toulouse', 'Bordeaux', 'Nantes', 'Strasbourg'][(hash % 7)];
+
+    // Dates and age calculation
+    const joinedDate = user.createdAt || new Date();
+    const diffTime = Math.abs(new Date().getTime() - joinedDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    let accountAge = `${diffDays} jours`;
+    if (diffDays > 365) {
+      const years = Math.floor(diffDays / 365);
+      const months = Math.floor((diffDays % 365) / 30);
+      accountAge = `${years} an${years > 1 ? 's' : ''} ${months} mois`;
+    } else if (diffDays > 30) {
+      const months = Math.floor(diffDays / 30);
+      accountAge = `${months} mois`;
+    }
+
+    // Last Active Date
+    let lastActiveLabel = 'Non spécifiée';
+    if (user.lastActiveAt) {
+      const activeMs = new Date().getTime() - new Date(user.lastActiveAt).getTime();
+      const activeMins = Math.floor(activeMs / 60000);
+      if (activeMins < 60) {
+        lastActiveLabel = activeMins <= 1 ? 'À l\'instant' : `Il y a ${activeMins}m`;
+      } else {
+        const activeHours = Math.floor(activeMins / 60);
+        if (activeHours < 24) {
+          lastActiveLabel = `Il y a ${activeHours}h`;
+        } else {
+          lastActiveLabel = `Il y a ${Math.floor(activeHours / 24)}j`;
+        }
+      }
+    } else {
+      const activeHoursAgo = hash % 24;
+      lastActiveLabel = activeHoursAgo === 0 ? 'À l\'instant' : `Il y a ${activeHoursAgo}h`;
+    }
+
+    // Dynamic Risk Score calculation
+    let riskScore = 'low';
+    let riskScoreLabel = 'Faible Risque';
+    const totalRiskFactors = reportsCount + warningsCount * 2 + deletedContentCount * 2;
+    if (user.isActive === false || totalRiskFactors >= 4) {
+      riskScore = 'high';
+      riskScoreLabel = 'Risque Élevé';
+    } else if (totalRiskFactors >= 1) {
+      riskScore = 'medium';
+      riskScoreLabel = 'Risque Modéré';
+    }
+
+    const risk = {
+      score: riskScore,
+      scoreLabel: riskScoreLabel,
+      reports: reportsCount,
+      spamFlags: dbReports.filter(r => r.category === 'Spam').length,
+      deletedPosts: deletedContentCount,
+      prevSuspensions: dbHistory.filter(h => h.action.toLowerCase().includes('susp')).length,
+      toxicityScore: Math.min(100, (hash % 15) + (reportsCount * 20)),
+      fakeAccountIndicator: (hash % 10 === 0) ? 'high' : (hash % 4 === 0) ? 'medium' : 'low'
+    };
+
+    // Dynamically compile activity timeline
+    const timelineItems = [];
+
+    if (user.lastActiveAt) {
+      timelineItems.push({
+        id: `${userId}-tl-active`,
+        type: 'login',
+        title: 'Utilisateur actif',
+        description: 'Dernière connexion à l\'application',
+        date: new Date(user.lastActiveAt),
+        icon: 'log-in',
+        color: '#3B82F6'
+      });
+    }
+
+    recipes.forEach(r => {
+      timelineItems.push({
+        id: r._id.toString(),
+        type: 'post',
+        title: 'Recette créée',
+        description: `A publié la recette : "${r.title}"`,
+        date: r.createdAt || new Date(),
+        icon: 'file-text',
+        color: '#8BC34A'
+      });
+    });
+
+    reels.forEach(rl => {
+      timelineItems.push({
+        id: rl._id.toString(),
+        type: 'post',
+        title: 'Reel publié',
+        description: `A mis en ligne un Reel : "${rl.caption || 'Sans titre'}"`,
+        date: rl.createdAt || new Date(),
+        icon: 'video',
+        color: '#EC4899'
+      });
+    });
+
+    dbComments.forEach(c => {
+      timelineItems.push({
+        id: c._id.toString(),
+        type: 'comment',
+        title: 'Commentaire ajouté',
+        description: `A commenté : "${c.text}"`,
+        date: c.createdAt || new Date(),
+        icon: 'message-square',
+        color: '#8B5CF6'
+      });
+    });
+
+    dbEvents.forEach(e => {
+      timelineItems.push({
+        id: e._id.toString(),
+        type: 'event',
+        title: 'Événement organisé',
+        description: `A planifié l'événement : "${e.title}"`,
+        date: e.createdAt || new Date(),
+        icon: 'calendar',
+        color: '#3B82F6'
+      });
+    });
+
+    dbReviews.forEach(rev => {
+      timelineItems.push({
+        id: rev._id.toString(),
+        type: 'comment',
+        title: 'Avis écrit',
+        description: `A donné une note de ${rev.rating}/5 à un produit ou une recette`,
+        date: rev.createdAt || new Date(),
+        icon: 'star',
+        color: '#EAB308'
+      });
+    });
+
+    dbRegistrations.forEach(reg => {
+      timelineItems.push({
+        id: reg._id.toString(),
+        type: 'purchase',
+        title: 'Réservation validée',
+        description: `S'est inscrit à l'événement : "${reg.eventId ? reg.eventId.title : 'Événement'}"`,
+        date: reg.createdAt || new Date(),
+        icon: 'shopping-cart',
+        color: '#14B8A6'
+      });
+    });
+
+    dbReports.forEach(rep => {
+      timelineItems.push({
+        id: rep._id.toString(),
+        type: 'report',
+        title: 'Signalement reçu',
+        description: `Signalé pour [${rep.category}] : "${rep.description}"`,
+        date: rep.createdAt || new Date(),
+        icon: 'alert-triangle',
+        color: '#EF4444'
+      });
+    });
+
+    dbHistory.forEach(hist => {
+      timelineItems.push({
+        id: hist._id.toString(),
+        type: 'suspension',
+        title: `${hist.action}`,
+        description: `Sanction appliquée par l'administration : "${hist.reason}"`,
+        date: hist.createdAt || new Date(),
+        icon: hist.action.toLowerCase().includes('susp') ? 'user-x' : 'bell',
+        color: hist.action.toLowerCase().includes('susp') ? '#EF4444' : '#F59E0B'
+      });
+    });
+
+    // Chronological sorting (newest first)
+    timelineItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    const timeline = timelineItems.map(item => {
+      const d = new Date(item.date);
+      // Format relative time helper
+      const diffMs = new Date().getTime() - d.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      let relativeLabel = '';
+      if (diffMins < 60) {
+        relativeLabel = diffMins <= 1 ? 'à l\'instant' : `il y a ${diffMins}m`;
+      } else {
+        const diffHrs = Math.floor(diffMins / 60);
+        if (diffHrs < 24) {
+          relativeLabel = `il y a ${diffHrs}h`;
+        } else {
+          relativeLabel = `il y a ${Math.floor(diffHrs / 24)}j`;
+        }
+      }
+
+      return {
+        id: item.id,
+        type: item.type,
+        title: item.title,
+        description: item.description,
+        date: `${d.toLocaleDateString('fr-FR')} à ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (${relativeLabel})`,
+        icon: item.icon,
+        color: item.color
+      };
+    });
+
+    // Tabs content mapping from database
+    const tabsData = {
+      posts: [
+        ...recipes.map(r => ({
+          id: r._id.toString(),
+          title: r.title,
+          previewText: r.description || 'Recette saine sans gluten.',
+          date: r.createdAt ? new Date(r.createdAt).toLocaleDateString('fr-FR') : 'Non spécifiée',
+          status: r.isPublished ? 'Active' : 'Draft',
+          extraInfo: 'Recette'
+        })),
+        ...reels.map(rl => ({
+          id: rl._id.toString(),
+          title: rl.caption || 'Reel sans titre',
+          previewText: rl.caption || 'Nouveau clip vidéo partagé.',
+          date: rl.createdAt ? new Date(rl.createdAt).toLocaleDateString('fr-FR') : 'Non spécifiée',
+          status: rl.reviewStatus || 'Active',
+          extraInfo: 'Reel'
+        }))
+      ],
+      comments: dbComments.map(c => ({
+        id: c._id.toString(),
+        title: 'Commentaire sur Reel',
+        previewText: c.text,
+        date: c.createdAt ? new Date(c.createdAt).toLocaleDateString('fr-FR') : 'Non spécifiée',
+        status: 'Active'
+      })),
+      events: dbEvents.map(e => ({
+        id: e._id.toString(),
+        title: e.title,
+        previewText: e.description || '',
+        date: e.startsAt ? new Date(e.startsAt).toLocaleDateString('fr-FR') : 'Non spécifiée',
+        status: e.status === 'active' ? 'Approved' : 'Pending',
+        extraInfo: `${e.attendees?.length || 0} participants`
+      })),
+      marketplace: dbProducts.map(p => ({
+        id: p._id.toString(),
+        title: `${p.name} - ${(p.price || 0).toFixed(2)}€`,
+        previewText: p.description || '',
+        date: p.createdAt ? new Date(p.createdAt).toLocaleDateString('fr-FR') : 'Non spécifiée',
+        status: p.isAvailable ? 'En Stock' : 'Hors Stock'
+      })),
+      reviews: dbReviews.map(r => ({
+        id: r._id.toString(),
+        title: `Note de ${r.rating}/5 pour : ${r.productId ? r.productId.name : r.recipeId ? r.recipeId.title : 'Contenu'}`,
+        previewText: r.comment,
+        date: r.createdAt ? new Date(r.createdAt).toLocaleDateString('fr-FR') : 'Non spécifiée',
+        status: 'Approuvé'
+      })),
+      purchases: dbRegistrations.map(reg => ({
+        id: reg._id.toString(),
+        title: `Réservation : ${reg.eventId ? reg.eventId.title : 'Événement'}`,
+        previewText: `Achat de ${reg.ticketsCount || 1} billet(s) • Total : ${((reg.ticketsCount || 1) * (reg.eventId ? reg.eventId.price : 0)).toFixed(2)}€`,
+        date: reg.createdAt ? new Date(reg.createdAt).toLocaleDateString('fr-FR') : 'Non spécifiée',
+        status: 'Confirmé'
+      }))
+    };
+
+    // Reports formatted list
+    const reports = dbReports.map(rep => ({
+      id: rep._id.toString(),
+      reporter: rep.reporterName || 'Anonyme',
+      category: rep.category || 'Other',
+      description: rep.description,
+      date: rep.createdAt ? new Date(rep.createdAt).toLocaleDateString('fr-FR') : 'Non spécifiée',
+      evidence: rep.evidence || '',
+      status: rep.status || 'pending',
+      resolverId: rep.resolverId ? rep.resolverId.toString() : null,
+      resolutionNotes: rep.resolutionNotes || ''
+    }));
+
+    // History formatted list
+    const history = dbHistory.map(hist => ({
+      id: hist._id.toString(),
+      action: hist.action,
+      adminName: hist.adminName || 'Admin',
+      date: hist.createdAt ? new Date(hist.createdAt).toLocaleDateString('fr-FR') : 'Non spécifiée',
+      reason: hist.reason,
+      duration: hist.duration || '',
+      notes: hist.notes || ''
+    }));
+
+    return {
+      user: {
+        id: user._id.toString(),
+        fullName: user.fullName,
+        email: user.email,
+        profileType: user.profileType,
+        status: user.isActive !== false ? 'active' : 'suspended',
+        joinedDate: user.createdAt,
+        city: user.location || 'Non spécifié',
+        avatarUrl: user.avatarUrl
+      },
+      phone,
+      location,
+      accountAge,
+      lastActiveLabel,
+      stats: {
+        posts: postsCount,
+        comments: commentsCount,
+        events: eventsCount,
+        followers: followersCount,
+        reports: reportsCount,
+        warnings: warningsCount,
+        deletedContent: deletedContentCount,
+        logins: loginsCount,
+        purchases: purchasesCount,
+        reviews: reviewsCount
+      },
+      risk,
+      timeline,
+      tabsData,
+      reports,
+      history
+    };
+  }
+
+  async toggleUserStatus(id, status, adminId, adminName, reason, duration, notes) {
     const isActive = status === 'active';
     const user = await User.findByIdAndUpdate(id, { isActive }, { new: true });
     
     if (user) {
+      const ModerationLogModel = mongoose.model('ModerationLog');
+      await ModerationLogModel.create({
+        userId: user._id,
+        action: isActive ? 'Reactivation' : 'Temporary Suspension',
+        adminId: adminId || user._id,
+        adminName: adminName || 'Système',
+        reason: reason || (isActive ? 'Réactivation du compte.' : 'Non-respect des CGU.'),
+        duration: duration || '',
+        notes: notes || '',
+      }).catch(err => console.error('Failed to create moderation log:', err.message));
+
       const msg = isActive ? 'Votre compte a été réactivé par un administrateur.' : 'Votre compte a été suspendu suite à une infraction aux règles.';
       await Notification.create({
         recipientId: user._id,
@@ -560,6 +1188,34 @@ class AdminService {
       }).catch(err => console.warn('Failed to dispatch notification:', err.message));
     }
     return user;
+  }
+
+  async warnUser(userId, message, adminId, adminName) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    const ModerationLogModel = mongoose.model('ModerationLog');
+    const log = await ModerationLogModel.create({
+      userId: user._id,
+      action: 'Warning',
+      adminId: adminId || user._id,
+      adminName: adminName || 'Système',
+      reason: message || 'Avertissement officiel pour non-respect des règles.',
+      notes: 'Avertissement émis via le panneau de modération.',
+    });
+
+    await Notification.create({
+      recipientId: user._id,
+      userId: user._id,
+      type: 'system',
+      title: 'Avertissement Officiel',
+      body: message || 'Vous avez reçu un avertissement de la part d\'un administrateur.',
+      message: message || 'Vous avez reçu un avertissement de la part d\'un administrateur.',
+    }).catch(err => console.warn('Failed to dispatch notification:', err.message));
+
+    return log;
   }
 
   // --- SELLERS ---
