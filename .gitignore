@@ -28,7 +28,6 @@ Thumbs.db
 .idea/
 
 # Temporary developer logs & reports
-tatus
 db-check-result.txt
 *.log
 *.txt.resolved
@@ -39,3 +38,43 @@ messaging-service/uploads/
 
 # Scrum Sheet
 scrum-sheet/
+
+# Integration workspace
+integration-possibility/
+
+# Repository Hygiene (auto-added)
+
+# Scratch & debug scripts
+scratch-*.js
+inspect-*.js
+
+# Compiler/build output dumps
+tsc-check.txt
+
+# Transient script run artifacts
+*-report.json
+reverted-seed-run-*.json
+test-results.json
+reupload-results.json
+
+# Resolved/draft docs (working files)
+*.resolved
+
+# Installer/temp files
+*.tmp
+
+# Unrelated Documentation Filters
+docs/next/
+docs/runbooks/
+docs/specs/
+docs/*.pdf
+
+# Ignore all audit files except --@admin_handoff_documentation.md and glutenia-integ
+docs/audits/*
+!docs/audits/--@admin_handoff_documentation.md
+!docs/audits/glutenia-integ/
+!docs/audits/glutenia-integ/*
+
+# Ignore intermediate audit notes in architecture
+docs/architecture/messagerie/messaging_module_audit*.md
+

@@ -743,6 +743,7 @@ const ar = {
   'Empowering the gluten-free community 🏆': 'دعم مجتمع الخالي من الغلوتين 🏆',
   'Pro User': 'حساب احترافي',
   'Anonymous': 'مجهول',
+<<<<<<< HEAD
   'You should wait for the admin approval. The response will be soon.': 'يجب عليك انتظار موافقة المسؤول. سيتم الرد قريباً.',
   'Event Submitted Successfully': 'تم تقديم الفعالية بنجاح',
   'Your event has been submitted for review.': 'لقد تم تقديم الفعالية للمراجعة.',
@@ -750,6 +751,14 @@ const ar = {
   'You will be notified once your event has been approved or rejected.': 'سيتم إخطارك بمجرد الموافقة على فعاليتك أو رفضها.',
   'Publishing Failed': 'فشل النشر',
   "We couldn't submit your event. Please check your internet connection and try again.": 'لم نتمكن من تقديم فعاليتك. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.',
+=======
+  'My stores & establishments': 'متاجري ومؤسساتي',
+  'Customer orders & Sales': 'طلبات العملاء والمبيعات',
+  'Mes Magasins & Établissements': 'متاجري ومؤسساتي',
+  'Commandes clients & Ventes': 'طلبات العملاء والمبيعات',
+  'Consulter mes commandes passées': 'الاطلاع على طلبياتي السابقة',
+  'Gérer & Éditer le magasin': 'إدارة وتعديل المتجر',
+>>>>>>> b278a7234440c8b4bf464ff52225ce53d7ae9e4f
 };
 
 export default ar;

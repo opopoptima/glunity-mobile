@@ -1,21 +1,27 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+<<<<<<< HEAD
 import frTranslation from '../translations/fr';
 import enTranslation from '../translations/en';
 import arTranslation from '../translations/ar';
+=======
+import en from '../translations/en';
+import fr from '../translations/fr';
+import ar from '../translations/ar';
+>>>>>>> b278a7234440c8b4bf464ff52225ce53d7ae9e4f
 
-export type Language = 'fr' | 'en' | 'ar';
-
-export let globalIsRTL = false;
+export type LanguageCode = 'en' | 'fr' | 'ar';
+export type Language = LanguageCode;
 
 interface LanguageContextType {
-  language: Language;
-  setLanguage: (lang: Language) => void;
-  toggleLanguage: () => void;
-  isRTL: boolean;
+  language: LanguageCode;
+  setLanguage: (lang: LanguageCode) => Promise<void>;
+  toggleLanguage: () => Promise<void>;
   t: (key: string, fallback?: string) => string;
+  isRTL: boolean;
 }
 
+<<<<<<< HEAD
 const translations: Record<Language, Record<string, string>> = {
   fr: {
     ...frTranslation,
@@ -497,51 +503,75 @@ const translations: Record<Language, Record<string, string>> = {
     'resources.empty': 'Aucune ressource trouvée',
     'back': 'Retour',
   },
+=======
+// Global hookless bindings for monkey-patched elements (Text, Alert, TextInput)
+export let globalT: (key: string, fallback?: string) => string = (key, fallback) => fallback || key;
+export let globalIsRTL = false;
+
+const translations: Record<LanguageCode, Record<string, string>> = {
+  en,
+  fr,
+  ar,
+>>>>>>> b278a7234440c8b4bf464ff52225ce53d7ae9e4f
 };
 
-const LanguageContext = createContext<LanguageContextType>({
-  language: 'fr',
-  setLanguage: () => {},
-  toggleLanguage: () => {},
-  isRTL: false,
-  t: (key: string, fallback?: string) => fallback || key,
-});
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
-const STORAGE_KEY = '@glu10_admin_language';
-
-export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>('fr');
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const [language, setLanguageState] = useState<LanguageCode>('fr');
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((saved) => {
-      if (saved === 'fr' || saved === 'en' || saved === 'ar') {
-        setLanguageState(saved as Language);
+    async function loadLanguage() {
+      try {
+        const savedLang = await AsyncStorage.getItem('@pref_language');
+        if (savedLang === 'en' || savedLang === 'fr' || savedLang === 'ar') {
+          setLanguageState(savedLang);
+        }
+      } catch (e) {
+        console.error('Failed to load language setting:', e);
       }
-    }).catch(() => {});
+    }
+    loadLanguage();
   }, []);
 
-  const isRTL = language === 'ar';
-  globalIsRTL = isRTL;
-
-  const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    AsyncStorage.setItem(STORAGE_KEY, lang).catch(() => {});
+  const setLanguage = async (lang: LanguageCode) => {
+    try {
+      await AsyncStorage.setItem('@pref_language', lang);
+      setLanguageState(lang);
+    } catch (e) {
+      console.error('Failed to save language setting:', e);
+    }
   };
 
-  const toggleLanguage = () => {
-    const nextLang = language === 'fr' ? 'en' : 'fr';
-    setLanguage(nextLang);
+  const toggleLanguage = async () => {
+    const nextLang: LanguageCode = language === 'fr' ? 'ar' : language === 'ar' ? 'en' : 'fr';
+    await setLanguage(nextLang);
   };
 
   const t = (key: string, fallback?: string): string => {
-    return translations[language]?.[key] || fallback || translations['fr']?.[key] || key;
+    if (!key) return fallback || key;
+    const cleanKey = key.trim();
+    return translations[language]?.[cleanKey] || translations[language]?.[key] || translations['fr']?.[cleanKey] || fallback || key;
   };
 
+  const isRTL = language === 'ar';
+
+  useEffect(() => {
+    globalT = t;
+    globalIsRTL = isRTL;
+  }, [language, isRTL]);
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage, isRTL, t }}>
+    <LanguageContext.Provider value={{ language, setLanguage, toggleLanguage, t, isRTL }}>
       {children}
     </LanguageContext.Provider>
   );
-};
+}
 
-export const useLanguage = () => useContext(LanguageContext);
+export function useLanguage() {
+  const context = useContext(LanguageContext);
+  if (!context) {
+    throw new Error('useLanguage must be used within a LanguageProvider');
+  }
+  return context;
+}

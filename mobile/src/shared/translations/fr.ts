@@ -282,6 +282,7 @@ const fr = {
   'You actively manage your gluten-free lifestyle and inspire others.': 'Vous gérez activement votre mode de vie sans gluten et inspirez les autres.',
   'Daily Action': 'Action Quotidienne',
   'Daily Streak Active!': 'Série Quotidienne Active !',
+  'Daily Check-In Completed! 🔥': 'Validation quotidienne effectuée ! 🔥',
   'Claim Daily Points': 'Récupérer vos Points Quotidiens',
   'Streak:': 'Série :',
   days: 'jours',
@@ -792,6 +793,7 @@ const fr = {
   'Empowering the gluten-free community 🏆': 'Soutenir la communauté sans gluten 🏆',
   'Pro User': 'Utilisateur Pro',
   'Anonymous': 'Anonyme',
+<<<<<<< HEAD
   'You should wait for the admin approval. The response will be soon.': "Vous devez attendre l'approbation de l'administrateur. La réponse sera envoyée bientôt.",
   'Event Submitted Successfully': 'Événement soumis avec succès',
   'Your event has been submitted for review.': 'Votre événement a été soumis pour examen.',
@@ -799,6 +801,14 @@ const fr = {
   'You will be notified once your event has been approved or rejected.': "Vous serez averti dès que votre événement aura été approuvé ou refusé.",
   'Publishing Failed': 'Échec de la publication',
   "We couldn't submit your event. Please check your internet connection and try again.": "Nous n'avons pas pu soumettre votre événement. Veuillez vérifier votre connexion Internet et réessayer.",
+=======
+  'My stores & establishments': 'Mes Magasins & Établissements',
+  'Customer orders & Sales': 'Commandes clients & Ventes',
+  'Mes Magasins & Établissements': 'Mes Magasins & Établissements',
+  'Commandes clients & Ventes': 'Commandes clients & Ventes',
+  'Consulter mes commandes passées': 'Consulter mes commandes passées',
+  'Gérer & Éditer le magasin': 'Gérer & Éditer le magasin',
+>>>>>>> b278a7234440c8b4bf464ff52225ce53d7ae9e4f
 };
 
 export default fr;

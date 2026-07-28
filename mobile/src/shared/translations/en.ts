@@ -749,6 +749,7 @@ const en = {
   'CANCELLED': 'User Cancelled',
   'REJECTED': 'User Cancelled',
   'Accept Payment': 'Accept Payment',
+<<<<<<< HEAD
   'You should wait for the admin approval. The response will be soon.': 'You should wait for the admin approval. The response will be soon.',
   'Event Submitted Successfully': 'Event Submitted Successfully',
   'Your event has been submitted for review.': 'Your event has been submitted for review.',
@@ -756,6 +757,14 @@ const en = {
   'You will be notified once your event has been approved or rejected.': 'You will be notified once your event has been approved or rejected.',
   'Publishing Failed': 'Publishing Failed',
   "We couldn't submit your event. Please check your internet connection and try again.": "We couldn't submit your event. Please check your internet connection and try again.",
+=======
+  'My stores & establishments': 'My Stores & Establishments',
+  'Customer orders & Sales': 'Customer Orders & Sales',
+  'Mes Magasins & Établissements': 'My Stores & Establishments',
+  'Commandes clients & Ventes': 'Customer Orders & Sales',
+  'Consulter mes commandes passées': 'Consult Past Orders',
+  'Gérer & Éditer le magasin': 'Manage & Edit Store',
+>>>>>>> b278a7234440c8b4bf464ff52225ce53d7ae9e4f
 };
 
 export default en;

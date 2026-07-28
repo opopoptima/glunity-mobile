@@ -11,6 +11,8 @@ import {
   Alert,
   Modal,
   Platform,
+  useWindowDimensions,
+  Share,
 } from 'react-native';
 import {
   Ionicons,
@@ -34,6 +36,8 @@ import {
   ArticleCardSkeleton,
   VideoCardSkeleton,
 } from '@/shared/components/SkeletonLoader';
+import { ReelPlayerItem } from '@/modules/reels/ui/components/ReelPlayerItem';
+import { ReelsService, type Reel } from '@/modules/reels/services/reels.service';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'PatientResources'>;
 
@@ -175,6 +179,7 @@ function ArticleIcon({
 export default function PatientResourcesScreen({ navigation }: Props) {
   const { theme: T } = useTheme();
   const { isRTL, t } = useLanguage();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const [featured, setFeatured] = useState<PatientArticle | null>(null);
   const [articles, setArticles] = useState<PatientArticle[]>([]);
@@ -183,7 +188,101 @@ export default function PatientResourcesScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<PatientArticle | null>(null);
+  const [selectedVideoReel, setSelectedVideoReel] = useState<ResourceVideo | PatientArticle | null>(null);
+  const [activeReel, setActiveReel] = useState<Reel | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  const handleOpenVideoReel = useCallback((videoItem: ResourceVideo | PatientArticle) => {
+    setSelectedVideoReel(videoItem);
+    const isVid = 'videoUrl' in videoItem;
+    const vUrl = isVid
+      ? (videoItem as ResourceVideo).videoUrl
+      : (videoItem as any).fileUrl || (videoItem as any).videoUrl || '';
+    const thumbUrl = isVid
+      ? (videoItem as ResourceVideo).thumbnailUrl
+      : (videoItem as PatientArticle).coverImageUrl || CATEGORY_IMAGES[videoItem.category] || 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600&h=400&fit=crop';
+    const dur = isVid
+      ? (videoItem as ResourceVideo).durationMinutes || 5
+      : (videoItem as PatientArticle).readMinutes || 5;
+    const excerptText = 'excerpt' in videoItem ? (videoItem as PatientArticle).excerpt : '';
+
+    const rawId = videoItem.id || '5f8f00000000000000000001';
+    const validMongoId = /^[0-9a-fA-F]{24}$/.test(rawId)
+      ? rawId
+      : `5f8f0000000000000000${(rawId.replace(/[^0-9]/g, '') || '1').padStart(4, '0')}`;
+
+    const formattedReel: Reel = {
+      id: validMongoId,
+      videoUrl: vUrl,
+      thumbnailUrl: thumbUrl,
+      caption: `${videoItem.title}${excerptText ? `\n\n${excerptText}` : ''}`,
+      duration: dur * 60,
+      viewsCount: (videoItem as any).viewsCount || 1,
+      likesCount: (videoItem as any).likesCount || 0,
+      commentsCount: (videoItem as any).commentsCount || 0,
+      sharesCount: (videoItem as any).sharesCount || 0,
+      isLiked: !!(videoItem as any).isLiked,
+      status: 'ready',
+      category: 'lifestyle',
+      createdAt: new Date().toISOString(),
+      author: {
+        id: 'medical-team',
+        fullName: isVid
+          ? (videoItem as ResourceVideo).presenter
+          : (videoItem as PatientArticle).authorName || 'Équipe Médicale Glu10',
+        avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&h=150&fit=crop',
+      },
+    };
+
+    setActiveReel(formattedReel);
+  }, []);
+
+  const handleToggleLike = useCallback(async (reelId: string) => {
+    setActiveReel(prev => {
+      if (!prev) return null;
+      const newIsLiked = !prev.isLiked;
+      const newLikesCount = newIsLiked ? prev.likesCount + 1 : Math.max(0, prev.likesCount - 1);
+      return { ...prev, isLiked: newIsLiked, likesCount: newLikesCount };
+    });
+
+    try {
+      const res = await ReelsService.toggleLike(reelId);
+      if (res.success && res.data) {
+        setActiveReel(prev => prev ? { ...prev, isLiked: res.data.liked, likesCount: res.data.likesCount } : null);
+      }
+    } catch (e) {
+      // Handled gracefully for fallback data
+    }
+  }, []);
+
+  const handleRecordView = useCallback(async (reelId: string) => {
+    setActiveReel(prev => prev ? { ...prev, viewsCount: prev.viewsCount + 1 } : null);
+    try {
+      await ReelsService.recordView(reelId);
+    } catch (e) {}
+  }, []);
+
+  const handleRecordShare = useCallback(async (reelId: string) => {
+    setActiveReel(prev => prev ? { ...prev, sharesCount: prev.sharesCount + 1 } : null);
+    try {
+      await ReelsService.recordShare(reelId);
+    } catch (e) {}
+  }, []);
+
+  const handleOpenShareSheet = useCallback(async (reel: Reel) => {
+    try {
+      await Share.share({
+        title: reel.caption,
+        message: `${reel.caption}\n\n${t('Watch on Glunity')}: ${reel.videoUrl}`,
+        url: reel.videoUrl,
+      });
+      handleRecordShare(reel.id);
+    } catch (e) {}
+  }, [handleRecordShare, t]);
+
+  const handleIncrementCommentsCount = useCallback((_reelId: string) => {
+    setActiveReel(prev => prev ? { ...prev, commentsCount: prev.commentsCount + 1 } : null);
+  }, []);
 
   const handleArticlePress = useCallback(async (article: PatientArticle) => {
     setDetailLoading(true);
@@ -1045,7 +1144,11 @@ export default function PatientResourcesScreen({ navigation }: Props) {
             <>
               <View style={s.sectionRow}>
                 <Text style={s.sectionLabel}>{t('Videos & Sessions')}</Text>
-                <TouchableOpacity style={s.seeAllBtn} activeOpacity={0.7}>
+                <TouchableOpacity
+                  style={s.seeAllBtn}
+                  activeOpacity={0.7}
+                  onPress={() => videos.length > 0 && handleOpenVideoReel(videos[0])}
+                >
                   <Text style={s.seeAllText}>{t('See All')}</Text>
                   <Feather name={isRTL ? "arrow-left" : "arrow-right"} size={14} color={T.red} />
                 </TouchableOpacity>
@@ -1057,9 +1160,7 @@ export default function PatientResourcesScreen({ navigation }: Props) {
                     key={video.id}
                     style={s.videoCard}
                     activeOpacity={0.82}
-                    onPress={() =>
-                      Alert.alert(t('Video'), `${t(video.title)}\n${t('by')} ${t(video.presenter)}`)
-                    }
+                    onPress={() => handleOpenVideoReel(video)}
                   >
                     <View>
                       <FastImage
@@ -1216,6 +1317,54 @@ export default function PatientResourcesScreen({ navigation }: Props) {
             <ActivityIndicator size="large" color={T.green} />
           </View>
         )}
+
+        {/* ── Patient Resource Video Player Modal (ReelPlayerItem) ─────────────── */}
+        <Modal
+          visible={!!activeReel}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => {
+            setSelectedVideoReel(null);
+            setActiveReel(null);
+          }}
+        >
+          <View style={{ flex: 1, backgroundColor: '#000' }}>
+            {activeReel && (
+              <ReelPlayerItem
+                reel={activeReel}
+                isActive={!!activeReel}
+                containerWidth={windowWidth}
+                containerHeight={windowHeight}
+                onToggleLike={handleToggleLike}
+                onRecordView={handleRecordView}
+                onRecordShare={handleRecordShare}
+                onIncrementCommentsCount={handleIncrementCommentsCount}
+                onOpenShareSheet={handleOpenShareSheet}
+              />
+            )}
+            <TouchableOpacity
+              style={{
+                position: 'absolute',
+                top: Platform.OS === 'ios' ? 54 : 24,
+                left: 20,
+                zIndex: 9999,
+                backgroundColor: 'rgba(0,0,0,0.65)',
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              activeOpacity={0.8}
+              onPress={() => {
+                setSelectedVideoReel(null);
+                setActiveReel(null);
+              }}
+            >
+              <Feather name="x" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </Modal>
       </View>
     </AppScaffold>
   );
