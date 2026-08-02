@@ -950,7 +950,7 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
                 style={[s.actionButton, s.whiteButton]}
                 activeOpacity={0.7}
                 id="action-edit-info"
-                onPress={() => navigation.navigate('EditStore', { establishmentId: route?.params?.establishmentId, store: route?.params?.store })}
+                onPress={() => navigation.navigate('EditStore', { establishmentId: route?.params?.establishmentId, store: route?.params?.store, isNew: false })}
               >
               <View style={s.actionIconContainer}>
                 <Feather name="edit-2" size={20} color={T.text} />

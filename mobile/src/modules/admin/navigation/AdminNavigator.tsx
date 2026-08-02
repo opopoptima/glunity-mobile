@@ -10,6 +10,8 @@ import { AdminModerationScreen } from '../ui/screens/AdminModerationScreen';
 import { AdminSellerVerificationScreen } from '../ui/screens/AdminSellerVerificationScreen';
 import { AdminUsersScreen } from '../ui/screens/AdminUsersScreen';
 import { AdminResourcesScreen } from '../ui/screens/AdminResourcesScreen';
+import { AdminShopModerationScreen } from '../ui/screens/AdminShopModerationScreen';
+import { AdminHistoryScreen } from '../ui/screens/AdminHistoryScreen';
 import { useAdminDashboard } from '../hooks/useAdminDashboard';
 import AdminEventsScreen from '../ui/screens/AdminEventsScreen';
 import AdminVerificationScreen from '../ui/screens/AdminVerificationScreen';
@@ -21,7 +23,7 @@ import { useSocket } from '../../../shared/context/socket.context';
 import { LanguageProvider, useLanguage } from '../../../shared/context/language.context';
 
 function AdminNavigatorContent() {
-  const [activeTab, setActiveTab] = useState<'home' | 'moderation' | 'sellers' | 'users' | 'resources'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'moderation' | 'sellers' | 'users' | 'resources' | 'shop' | 'history'>('home');
   const { theme: T, isDark } = useTheme();
   const { t } = useLanguage();
   const { stats, refresh } = useAdminDashboard();
@@ -181,13 +183,15 @@ function AdminNavigatorContent() {
               navigate: (screen: string, params?: any) => {
                 if (screen === 'AdminSellerVerification') setActiveTab('sellers');
                 if (screen === 'AdminModeration') setActiveTab('moderation');
+                if (screen === 'AdminShopModeration') setActiveTab('shop');
+                if (screen === 'AdminHistory') setActiveTab('history');
               },
             }}
           />
         )}
         {activeTab === 'moderation' && (
           <AdminModerationScreen
-            navigation={{ goBack: () => setActiveTab('home'), navigate: (s: string) => s === 'AdminSellerVerification' && setActiveTab('sellers') }}
+            navigation={{ goBack: () => setActiveTab('home') }}
             route={{ params: { initialTab: 'products' } }}
           />
         )}
@@ -200,78 +204,42 @@ function AdminNavigatorContent() {
         {activeTab === 'resources' && (
           <AdminResourcesScreen navigation={{ goBack: () => setActiveTab('home') }} />
         )}
+        {activeTab === 'shop' && (
+          <AdminShopModerationScreen navigation={{ goBack: () => setActiveTab('home') }} />
+        )}
+        {activeTab === 'history' && (
+          <AdminHistoryScreen navigation={{ goBack: () => setActiveTab('home') }} />
+        )}
       </View>
 
       {/* Floating Pill Bottom Navbar */}
       <View style={styles.floatingBarContainer}>
         <View style={styles.floatingPill}>
-          {/* Tab 1: Home Dashboard */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            activeOpacity={0.7}
-            onPress={() => setActiveTab('home')}
-          >
-            <Feather
-              name="home"
-              size={22}
-              color={activeTab === 'home' ? primaryGreen : T.textMuted}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                {
-                  color: activeTab === 'home' ? primaryGreen : T.textMuted,
-                  fontWeight: activeTab === 'home' ? Font.bold : Font.regular,
-                },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
+          {/* Tab 1: Home */}
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => setActiveTab('home')}>
+            <Feather name="home" size={22} color={activeTab === 'home' ? primaryGreen : T.textMuted} />
+            <Text style={[styles.tabLabel, { color: activeTab === 'home' ? primaryGreen : T.textMuted, fontWeight: activeTab === 'home' ? Font.bold : Font.regular }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
               {t('tab.home', 'Accueil')}
             </Text>
           </TouchableOpacity>
 
-          {/* Tab 2: Shops / Sellers Validation (Secondary) */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            activeOpacity={0.7}
-            onPress={() => setActiveTab('sellers')}
-          >
+          {/* Tab 2: Sellers */}
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => setActiveTab('sellers')}>
             <View style={{ alignItems: 'center' }}>
-              <MaterialCommunityIcons
-                name="storefront-outline"
-                size={22}
-                color={activeTab === 'sellers' ? primaryGreen : T.textMuted}
-              />
+              <MaterialCommunityIcons name="storefront-outline" size={22} color={activeTab === 'sellers' ? primaryGreen : T.textMuted} />
               {pendingSellersCount > 0 && (
                 <View style={styles.badgePill}>
                   <Text style={styles.badgeText}>{pendingSellersCount > 99 ? '99+' : pendingSellersCount}</Text>
                 </View>
               )}
             </View>
-            <Text
-              style={[
-                styles.tabLabel,
-                {
-                  color: activeTab === 'sellers' ? primaryGreen : T.textMuted,
-                  fontWeight: activeTab === 'sellers' ? Font.bold : Font.regular,
-                },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {t('tab.shops', 'Boutiques')}
+            <Text style={[styles.tabLabel, { color: activeTab === 'sellers' ? primaryGreen : T.textMuted, fontWeight: activeTab === 'sellers' ? Font.bold : Font.regular }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {t('tab.shops', 'Vendeurs')}
             </Text>
           </TouchableOpacity>
 
-          {/* Tab 3: Center Primary Action Circle for Moderation Hub */}
-          <TouchableOpacity
-            style={styles.centerTabItem}
-            activeOpacity={0.85}
-            onPress={() => setActiveTab('moderation')}
-          >
+          {/* Tab 3: Center — Moderation Hub */}
+          <TouchableOpacity style={styles.centerTabItem} activeOpacity={0.85} onPress={() => setActiveTab('moderation')}>
             <View style={styles.centerIconCircle}>
               <MaterialCommunityIcons name="shield-check-outline" size={26} color="#FFFFFF" />
               {moderationCount > 0 && (
@@ -282,57 +250,19 @@ function AdminNavigatorContent() {
             </View>
           </TouchableOpacity>
 
-          {/* Tab 4: Users Management */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            activeOpacity={0.7}
-            onPress={() => setActiveTab('users')}
-          >
-            <Feather
-              name="users"
-              size={22}
-              color={activeTab === 'users' ? primaryGreen : T.textMuted}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                {
-                  color: activeTab === 'users' ? primaryGreen : T.textMuted,
-                  fontWeight: activeTab === 'users' ? Font.bold : Font.regular,
-                },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {t('tab.users', 'Membres')}
+          {/* Tab 4: Shop Updates */}
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => setActiveTab('shop')}>
+            <MaterialCommunityIcons name="store-edit-outline" size={22} color={activeTab === 'shop' ? primaryGreen : T.textMuted} />
+            <Text style={[styles.tabLabel, { color: activeTab === 'shop' ? primaryGreen : T.textMuted, fontWeight: activeTab === 'shop' ? Font.bold : Font.regular }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {t('tab.shop', 'Boutiques')}
             </Text>
           </TouchableOpacity>
 
-          {/* Tab 5: Patient Resources */}
-          <TouchableOpacity
-            style={styles.tabItem}
-            activeOpacity={0.7}
-            onPress={() => setActiveTab('resources')}
-          >
-            <Feather
-              name="book-open"
-              size={22}
-              color={activeTab === 'resources' ? primaryGreen : T.textMuted}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                {
-                  color: activeTab === 'resources' ? primaryGreen : T.textMuted,
-                  fontWeight: activeTab === 'resources' ? Font.bold : Font.regular,
-                },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-            >
-              {t('tab.resources', 'Ressources')}
+          {/* Tab 5: History */}
+          <TouchableOpacity style={styles.tabItem} activeOpacity={0.7} onPress={() => setActiveTab('history')}>
+            <Feather name="clock" size={22} color={activeTab === 'history' ? primaryGreen : T.textMuted} />
+            <Text style={[styles.tabLabel, { color: activeTab === 'history' ? primaryGreen : T.textMuted, fontWeight: activeTab === 'history' ? Font.bold : Font.regular }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {t('tab.history', 'Historique')}
             </Text>
           </TouchableOpacity>
         </View>

@@ -5,92 +5,113 @@ const mongoose = require('mongoose');
 const recipesRepository = require('./recipes.repository');
 const AppError = require('../../common/errors/app-error');
 
+// Fields authors must never be allowed to set directly
+const PROTECTED_FIELDS = [
+  'moderationStatus', 'isPublic', 'approvedAt', 'approvedBy',
+  'moderatedAt', 'moderatedBy', 'moderationReason', 'moderationNotes',
+  'authorId', 'isPublished',
+];
+
+function stripProtectedFields(data) {
+  const safe = { ...data };
+  PROTECTED_FIELDS.forEach((f) => delete safe[f]);
+  return safe;
+}
+
+const RE_MODERATION_FIELDS = ['title', 'ingredients', 'steps', 'photos', 'videos', 'category'];
+
 class RecipesService {
-	async listRecipes(query, userId = null) {
-		const page = Number(query.page) > 0 ? Number(query.page) : 1;
-		const limitRaw = Number(query.limit) > 0 ? Number(query.limit) : 20;
-		const limit = Math.min(limitRaw, 50);
+  async listRecipes(query, userId = null) {
+    const page = Number(query.page) > 0 ? Number(query.page) : 1;
+    const limitRaw = Number(query.limit) > 0 ? Number(query.limit) : 20;
+    const limit = Math.min(limitRaw, 50);
 
-		const { items, total } = await recipesRepository.findMany({
-			category: query.category,
-			search: query.search,
-			page,
-			limit,
-		});
+    const { items, total } = await recipesRepository.findMany({
+      category: query.category,
+      search: query.search,
+      page,
+      limit,
+    });
 
-		return {
-			items: items.map((recipe) => recipe.toPublic(userId)),
-			pagination: {
-				page,
-				limit,
-				total,
-				totalPages: Math.max(1, Math.ceil(total / limit)),
-			},
-		};
-	}
+    return {
+      items: items.map((recipe) => recipe.toPublic(userId)),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  }
 
-	async getRecipeById(id, userId = null) {
-		if (!mongoose.Types.ObjectId.isValid(id)) {
-			throw AppError.badRequest('Invalid recipe id', 'INVALID_RECIPE_ID');
-		}
+  async getRecipeById(id, userId = null) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw AppError.badRequest('Invalid recipe id', 'INVALID_RECIPE_ID');
+    }
 
-		const recipe = await recipesRepository.findById(id);
-		if (!recipe) throw AppError.notFound('Recipe');
+    const recipe = await recipesRepository.findById(id);
+    if (!recipe) throw AppError.notFound('Recipe');
 
-		return recipe.toPublic(userId);
-	}
+    return recipe.toPublic(userId);
+  }
 
-	async createRecipe(dto, authorId) {
-		const recipe = await recipesRepository.create({
-			title: dto.title,
-			category: dto.category,
-			description: dto.description,
-			ingredients: dto.ingredients,
-			steps: dto.steps,
-			nutritionInfo: dto.nutritionInfo,
-			photos: dto.photos,
-			videos: dto.videos,
-			authorId,
-		});
+  async createRecipe(dto, authorId) {
+    const safe = stripProtectedFields(dto);
 
-		return recipe.toPublic(authorId);
-	}
+    const recipe = await recipesRepository.create({
+      ...safe,
+      authorId,
+      moderationStatus: 'pending',
+      isPublic: false,
+      isPublished: false,
+    });
 
-	async updateRecipe(id, authorId, updates) {
-		if (!mongoose.Types.ObjectId.isValid(id)) {
-			throw AppError.badRequest('Invalid recipe id', 'INVALID_RECIPE_ID');
-		}
+    return recipe.toPublic(authorId);
+  }
 
-		const recipe = await recipesRepository.updateByIdForAuthor(id, authorId, updates);
-		if (!recipe) {
-			throw AppError.notFound('Recipe not found or not owned by current user');
-		}
+  async updateRecipe(id, authorId, updates) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw AppError.badRequest('Invalid recipe id', 'INVALID_RECIPE_ID');
+    }
 
-		return recipe.toPublic(authorId);
-	}
+    const safe = stripProtectedFields(updates);
 
-	async deleteRecipe(id, authorId) {
-		if (!mongoose.Types.ObjectId.isValid(id)) {
-			throw AppError.badRequest('Invalid recipe id', 'INVALID_RECIPE_ID');
-		}
+    // Any author edit resets to pending — content must be re-approved
+    safe.moderationStatus = 'pending';
+    safe.isPublic = false;
+    safe.isPublished = false;
+    safe.moderationReason = '';
+    safe.moderationNotes = '';
 
-		const deleted = await recipesRepository.deleteByIdForAuthor(id, authorId);
-		if (!deleted) {
-			throw AppError.notFound('Recipe not found or not owned by current user');
-		}
-	}
+    const recipe = await recipesRepository.updateByIdForAuthor(id, authorId, safe);
+    if (!recipe) {
+      throw AppError.notFound('Recipe not found or not owned by current user');
+    }
 
-	async setFavorite(id, userId, value) {
-		if (!mongoose.Types.ObjectId.isValid(id)) {
-			throw AppError.badRequest('Invalid recipe id', 'INVALID_RECIPE_ID');
-		}
+    return recipe.toPublic(authorId);
+  }
 
-		const recipe = await recipesRepository.setFavorite(id, userId, value);
-		if (!recipe) throw AppError.notFound('Recipe');
+  async deleteRecipe(id, authorId) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw AppError.badRequest('Invalid recipe id', 'INVALID_RECIPE_ID');
+    }
 
-		return recipe.toPublic(userId);
-	}
+    const deleted = await recipesRepository.deleteByIdForAuthor(id, authorId);
+    if (!deleted) {
+      throw AppError.notFound('Recipe not found or not owned by current user');
+    }
+  }
+
+  async setFavorite(id, userId, value) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw AppError.badRequest('Invalid recipe id', 'INVALID_RECIPE_ID');
+    }
+
+    const recipe = await recipesRepository.setFavorite(id, userId, value);
+    if (!recipe) throw AppError.notFound('Recipe');
+
+    return recipe.toPublic(userId);
+  }
 }
 
 module.exports = new RecipesService();
-

@@ -2,58 +2,86 @@
 
 const Recipe = require('../../../database/models/recipe.model');
 
-const PUBLISHED_QUERY = {
-	$or: [{ isPublished: true }, { isPublished: { $exists: false } }],
-};
+// Public listing query: only approved + public
+const PUBLIC_QUERY = { isPublic: true, moderationStatus: 'approved' };
 
 const recipesRepository = {
-	create(data) {
-		return Recipe.create(data);
-	},
+  create(data) {
+    return Recipe.create(data);
+  },
 
-	findById(id) {
-		return Recipe.findOne({ _id: id, ...PUBLISHED_QUERY });
-	},
+  findById(id) {
+    return Recipe.findOne({ _id: id, ...PUBLIC_QUERY });
+  },
 
-	async findMany({ category, search, page = 1, limit = 20 }) {
-		const query = { ...PUBLISHED_QUERY };
+  /**
+   * Admin-only findById — no visibility restrictions.
+   */
+  findByIdForAdmin(id) {
+    return Recipe.findById(id)
+      .populate('authorId', 'fullName avatar email')
+      .populate('approvedBy', 'fullName')
+      .populate('moderatedBy', 'fullName');
+  },
 
-		if (category) query.category = category;
-		if (search) query.$text = { $search: search };
+  async findMany({ category, search, page = 1, limit = 20 }) {
+    const query = { ...PUBLIC_QUERY };
 
-		const skip = (page - 1) * limit;
+    if (category) query.category = category;
+    if (search)   query.$text = { $search: search };
 
-		const [items, total] = await Promise.all([
-			Recipe.find(query)
-				.sort({ createdAt: -1 })
-				.skip(skip)
-				.limit(limit),
-			Recipe.countDocuments(query),
-		]);
+    const skip = (page - 1) * limit;
 
-		return { items, total, page, limit };
-	},
+    const [items, total] = await Promise.all([
+      Recipe.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Recipe.countDocuments(query),
+    ]);
 
-	updateByIdForAuthor(id, authorId, updates) {
-		return Recipe.findOneAndUpdate(
-			{ _id: id, authorId },
-			{ $set: updates },
-			{ returnDocument: 'after', runValidators: true },
-		);
-	},
+    return { items, total, page, limit };
+  },
 
-	deleteByIdForAuthor(id, authorId) {
-		return Recipe.findOneAndDelete({ _id: id, authorId });
-	},
+  /**
+   * Admin-only listing — all statuses, with full population.
+   */
+  async findForAdmin(filter = {}, options = {}) {
+    const { skip = 0, limit = 20, sort = { createdAt: -1 } } = options;
 
-	setFavorite(recipeId, userId, value) {
-		return Recipe.findByIdAndUpdate(
-			recipeId,
-			value ? { $addToSet: { favoritedBy: userId } } : { $pull: { favoritedBy: userId } },
-			{ returnDocument: 'after' },
-		);
-	},
+    const [items, total] = await Promise.all([
+      Recipe.find(filter)
+        .populate('authorId', 'fullName avatar email')
+        .populate('approvedBy', 'fullName')
+        .populate('moderatedBy', 'fullName')
+        .sort(sort)
+        .skip(skip)
+        .limit(limit),
+      Recipe.countDocuments(filter),
+    ]);
+
+    return { items, total };
+  },
+
+  updateByIdForAuthor(id, authorId, updates) {
+    return Recipe.findOneAndUpdate(
+      { _id: id, authorId },
+      { $set: updates },
+      { returnDocument: 'after', runValidators: true },
+    );
+  },
+
+  deleteByIdForAuthor(id, authorId) {
+    return Recipe.findOneAndDelete({ _id: id, authorId });
+  },
+
+  setFavorite(recipeId, userId, value) {
+    return Recipe.findByIdAndUpdate(
+      recipeId,
+      value ? { $addToSet: { favoritedBy: userId } } : { $pull: { favoritedBy: userId } },
+      { returnDocument: 'after' },
+    );
+  },
 };
 
 module.exports = recipesRepository;
-

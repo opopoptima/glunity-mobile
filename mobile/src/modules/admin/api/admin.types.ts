@@ -1,5 +1,5 @@
 export interface AdminDashboardStats {
-  // Existing
+  // Core
   totalUsers: number;
   usersGrowth: number;
   verifiedSellers: number;
@@ -30,7 +30,7 @@ export interface AdminDashboardStats {
     health: number;
   };
 
-  // New
+  // Extended
   period?: string;
   periodLabel?: string;
   newUsersInPeriod?: number;
@@ -39,7 +39,6 @@ export interface AdminDashboardStats {
   activeUsers?: { dau: number; wau: number; mau: number };
   onlineNow?: number;
   topByXp?: Array<{ _id: string; fullName: string; points: number; avatar?: string; level?: number }>;
-
   moderationPreview?: Array<{
     _id: string;
     type: 'recipe' | 'event' | 'product' | 'reel';
@@ -48,7 +47,6 @@ export interface AdminDashboardStats {
     submittedAt: string;
     thumbnail?: string;
   }>;
-
   recentRegistrations?: Array<{
     _id: string;
     fullName: string;
@@ -57,14 +55,12 @@ export interface AdminDashboardStats {
     createdAt: string;
     avatar?: string;
   }>;
-
   platformHealth?: {
     notifications: number;
     emailsSent: number;
     apiLatency: string;
     dbStatus: string;
   };
-
   questionnaireStats?: {
     totalSurveyed: number;
     hasInsufficientData: boolean;
@@ -91,7 +87,6 @@ export interface AdminDashboardStats {
       other: { count: number; pct: number };
     };
   };
-
   authMethodStats?: {
     total: number;
     email:    { count: number; pct: number };
@@ -100,26 +95,56 @@ export interface AdminDashboardStats {
   };
 }
 
+export type ModerationStatus = 'pending' | 'approved' | 'rejected' | 'revision_requested' | 'resubmitted' | 'draft' | 'all';
+
 export interface ModerationItem {
   id: string;
-  title: string;
   type: 'product' | 'event' | 'recipe' | 'reel';
-  authorOrSeller: string;
-  date: string;
-  allergens?: string[];
+  title: string;
+  // Product fields
+  images?: string[];
+  ingredients?: string[];
   price?: string;
+  category?: string;
+  isGlutenFree?: boolean;
+  certifiedGF?: boolean;
+  sellerName?: string;
+  sellerEmail?: string;
+  shopName?: string;
+  // Recipe fields
+  photos?: string[];
+  description?: string;
+  steps?: string[];
+  nutritionInfo?: Record<string, unknown>;
+  authorName?: string;
+  authorEmail?: string;
+  // Event/Reel fields
+  authorOrSeller?: string;
   eventDate?: string;
   location?: string;
-  reelId?: string;
-  reviewStatus?: 'unreviewed' | 'reviewed' | 'removed';
-  videoUrl?: string;
-  thumbnailUrl?: string;
-  authorAvatar?: string;
-  authorUsername?: string;
-  caption?: string;
-  viewsCount?: number;
-  likesCount?: number;
-  commentsCount?: number;
+  // Moderation state
+  moderationStatus: ModerationStatus;
+  moderationReason?: string;
+  moderationNotes?: string;
+  approvedAt?: string;
+  approvedByName?: string;
+  moderatedAt?: string;
+  moderatedByName?: string;
+  date: string;
+  updatedAt?: string;
+}
+
+export interface ModerationStats {
+  pendingProducts: number;
+  pendingRecipes: number;
+  pendingReels: number;
+  pendingSellerVerifications: number;
+  pendingShopUpdates: number;
+  totalPending: number;
+  approvedToday: number;
+  rejectedToday: number;
+  revisionRequests: number;
+  verifiedSellers: number;
 }
 
 export interface SellerVerificationDossier {
@@ -133,6 +158,68 @@ export interface SellerVerificationDossier {
   certifications: string;
   documents: string[];
   submittedDate: string;
+  // New moderation fields
+  sellerVerificationStatus: 'draft' | 'pending' | 'approved' | 'rejected' | 'revision_requested' | 'resubmitted';
+  sellerVerificationReason?: string;
+  sellerVerificationNotes?: string;
+  sellerBadge: 'none' | 'verified';
+  isVerifiedSeller: boolean;
+  verifiedAt?: string;
+  storeInfo?: Record<string, unknown>;
+}
+
+export interface ChangedField {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+export interface ShopModerationItem {
+  id: string;
+  sellerId: string;
+  sellerName: string;
+  sellerEmail: string;
+  currentStoreName: string;
+  currentData: Record<string, unknown>;
+  proposedData: Record<string, unknown>;
+  changedFields: ChangedField[];
+  moderationStatus: 'pending' | 'approved' | 'rejected';
+  reason?: string;
+  notes?: string;
+  moderatedAt?: string;
+  moderatedByName?: string;
+  submittedAt: string;
+}
+
+export interface ModerationHistoryEntry {
+  id: string;
+  entityType: 'product' | 'recipe' | 'seller_verification' | 'seller_badge' | 'shop';
+  entityId: string;
+  entityTitle: string;
+  action: string;
+  previousStatus: string;
+  newStatus: string;
+  adminId?: string;
+  adminName: string;
+  adminAvatar?: string;
+  ownerId?: string;
+  ownerName: string;
+  shopName?: string;
+  reason?: string;
+  notes?: string;
+  changedFields?: ChangedField[];
+  createdAt: string;
+}
+
+export interface ModerationHistoryDetail extends ModerationHistoryEntry {
+  snapshot?: Record<string, unknown>;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export interface AdminUserListItem {

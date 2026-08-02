@@ -8,14 +8,8 @@ const Recipe = require('../../../database/models/recipe.model');
 const Reel = require('../../../database/models/reel.model');
 const ReelModeration = require('../../../database/models/reel-moderation.model');
 const Notification = require('../../../database/models/notification.model');
-const AppError = require('../../common/errors/app-error');
-
-// Supplementary models required for dynamic aggregation
-const Review = require('../../../database/models/review.model');
-const Registration = require('../../../database/models/registration.model');
-const ReelComment = require('../../../database/models/reel-comment.model');
-const Report = require('../../../database/models/report.model');
-const ModerationLog = require('../../../database/models/moderation-log.model');
+const ShopModeration = require('../../../database/models/shop-moderation.model');
+const ModerationHistory = require('../../../database/models/moderation-history.model');
 
 class AdminService {
   /**
@@ -1596,6 +1590,624 @@ class AdminService {
       videosCount,
       totalViews,
       totalClicks,
+    };
+  }
+
+  // --- MODERATION STATS ---
+
+  async getModerationStats() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [
+      pendingProducts,
+      pendingRecipes,
+      pendingReels,
+      pendingSellerVerifications,
+      pendingShopUpdates,
+      approvedToday,
+      rejectedToday,
+      revisionRequests,
+      verifiedSellers,
+    ] = await Promise.all([
+      Product.countDocuments({ moderationStatus: 'pending' }).catch(() => 0),
+      Recipe.countDocuments({ moderationStatus: 'pending' }).catch(() => 0),
+      Reel.countDocuments({ status: { $in: ['processing', 'pending'] } }).catch(() => 0),
+      User.countDocuments({ profileType: 'pro_commerce', sellerVerificationStatus: 'pending' }),
+      ShopModeration.countDocuments({ moderationStatus: 'pending' }).catch(() => 0),
+      ModerationHistory.countDocuments({ action: 'approved', createdAt: { $gte: today } }).catch(() => 0),
+      ModerationHistory.countDocuments({ action: 'rejected', createdAt: { $gte: today } }).catch(() => 0),
+      Product.countDocuments({ moderationStatus: 'revision_requested' }).catch(() => 0),
+      User.countDocuments({ profileType: 'pro_commerce', isVerifiedSeller: true }),
+    ]);
+
+    const totalPending = pendingProducts + pendingRecipes + pendingReels + pendingSellerVerifications + pendingShopUpdates;
+
+    return {
+      pendingProducts,
+      pendingRecipes,
+      pendingReels,
+      pendingSellerVerifications,
+      pendingShopUpdates,
+      totalPending,
+      approvedToday,
+      rejectedToday,
+      revisionRequests,
+      verifiedSellers,
+    };
+  }
+
+  // --- MODERATION QUEUE ---
+
+  async getModerationItems(type = 'all', status = 'pending', page = 1, limit = 20, search = '') {
+    let results = [];
+    const skip = (Number(page) - 1) * Number(limit);
+    const lim = Number(limit);
+    const statusFilter = status === 'all' ? {} : { moderationStatus: status };
+
+    if (type === 'all' || type === 'products') {
+      const productFilter = { ...statusFilter };
+      if (search) productFilter.name = { $regex: search, $options: 'i' };
+      const docs = await Product.find(productFilter)
+        .populate('sellerId', 'fullName email storeInfo')
+        .populate('approvedBy', 'fullName')
+        .populate('moderatedBy', 'fullName')
+        .sort({ createdAt: -1 })
+        .skip(type === 'products' ? skip : 0)
+        .limit(type === 'products' ? lim : 10)
+        .lean();
+      const mapped = docs.map(d => ({
+        id: d._id.toString(), type: 'product',
+        title: d.name || 'Produit Sans Titre',
+        images: d.images || [], category: d.category,
+        ingredients: d.ingredients || [],
+        price: d.price != null ? `${d.price} €` : undefined,
+        isGlutenFree: d.isGlutenFree, certifiedGF: d.certifiedGF,
+        sellerName: d.sellerId?.fullName || 'Inconnu',
+        sellerEmail: d.sellerId?.email || '',
+        shopName: d.sellerId?.storeInfo?.storeName || '',
+        moderationStatus: d.moderationStatus || 'pending',
+        moderationReason: d.moderationReason || '',
+        moderationNotes: d.moderationNotes || '',
+        approvedAt: d.approvedAt, approvedByName: d.approvedBy?.fullName || '',
+        moderatedAt: d.moderatedAt, moderatedByName: d.moderatedBy?.fullName || '',
+        date: d.createdAt, updatedAt: d.updatedAt,
+      }));
+      results = results.concat(mapped);
+    }
+
+    if (type === 'all' || type === 'recipes') {
+      const recipeFilter = { ...statusFilter };
+      if (search) recipeFilter.title = { $regex: search, $options: 'i' };
+      const docs = await Recipe.find(recipeFilter)
+        .populate('authorId', 'fullName email avatar')
+        .populate('approvedBy', 'fullName')
+        .populate('moderatedBy', 'fullName')
+        .sort({ createdAt: -1 })
+        .skip(type === 'recipes' ? skip : 0)
+        .limit(type === 'recipes' ? lim : 10)
+        .lean();
+      const mapped = docs.map(d => ({
+        id: d._id.toString(), type: 'recipe',
+        title: d.title || 'Recette',
+        photos: d.photos || [], description: d.description || '',
+        ingredients: d.ingredients || [], steps: d.steps || [],
+        category: d.category, nutritionInfo: d.nutritionInfo,
+        authorName: d.authorId?.fullName || 'Inconnu',
+        authorEmail: d.authorId?.email || '',
+        moderationStatus: d.moderationStatus || 'pending',
+        moderationReason: d.moderationReason || '',
+        moderationNotes: d.moderationNotes || '',
+        approvedAt: d.approvedAt, approvedByName: d.approvedBy?.fullName || '',
+        moderatedAt: d.moderatedAt, moderatedByName: d.moderatedBy?.fullName || '',
+        date: d.createdAt, updatedAt: d.updatedAt,
+      }));
+      results = results.concat(mapped);
+    }
+
+    if (type === 'all' || type === 'events') {
+      const eventFilter = status === 'all' ? {}
+        : status === 'pending' ? { $or: [{ status: 'pending' }, { status: { $exists: false } }] }
+        : status === 'approved' ? { status: 'active' }
+        : { status };
+      if (search) eventFilter.title = { $regex: search, $options: 'i' };
+      const docs = await Event.find(eventFilter).sort({ createdAt: -1 }).limit(type === 'events' ? lim : 10).lean();
+      const mapped = docs.map(d => ({
+        id: d._id.toString(), type: 'event',
+        title: d.title || 'Événement',
+        authorOrSeller: d.organizer || 'Inconnu',
+        moderationStatus: d.status === 'active' ? 'approved' : (d.status || 'pending'),
+        date: d.createdAt, eventDate: d.date, location: d.location,
+      }));
+      results = results.concat(mapped);
+    }
+
+    if (type === 'all' || type === 'reels') {
+      const reelFilter = status === 'all' ? {}
+        : status === 'pending' ? { status: { $in: ['processing', 'pending'] } }
+        : status === 'approved' ? { status: 'ready' }
+        : { status };
+      if (search) reelFilter.caption = { $regex: search, $options: 'i' };
+      const docs = await Reel.find(reelFilter).populate('user', 'fullName').sort({ createdAt: -1 }).limit(type === 'reels' ? lim : 10).lean();
+      const mapped = docs.map(d => ({
+        id: d._id.toString(), type: 'reel',
+        title: d.caption || 'Reel',
+        authorOrSeller: d.user?.fullName || 'Inconnu',
+        moderationStatus: d.status === 'ready' ? 'approved' : (d.status || 'pending'),
+        date: d.createdAt,
+      }));
+      results = results.concat(mapped);
+    }
+
+    return results.sort((a, b) => new Date(b.date) - new Date(a.date));
+  }
+
+  async getModerationItemById(type, id) {
+    if (type === 'product') {
+      const doc = await Product.findById(id)
+        .populate('sellerId', 'fullName email avatar storeInfo')
+        .populate('approvedBy', 'fullName')
+        .populate('moderatedBy', 'fullName')
+        .lean();
+      if (!doc) return null;
+      return { ...doc, type: 'product', title: doc.name };
+    }
+    if (type === 'recipe') {
+      const doc = await Recipe.findById(id)
+        .populate('authorId', 'fullName email avatar')
+        .populate('approvedBy', 'fullName')
+        .populate('moderatedBy', 'fullName')
+        .lean();
+      if (!doc) return null;
+      return { ...doc, type: 'recipe' };
+    }
+    return null;
+  }
+
+  async moderateItem(adminId, id, type, action, reason, notes) {
+    if (!['approve', 'reject', 'revision'].includes(action)) throw new Error(`Unknown action: ${action}`);
+    if ((action === 'reject' || action === 'revision') && !reason && !notes) {
+      throw new Error('reason or notes is required for reject/revision');
+    }
+
+    const admin = await User.findById(adminId).select('fullName').lean();
+    const adminName = admin?.fullName || 'Admin';
+
+    let EntityModel;
+    if (type === 'product') EntityModel = Product;
+    else if (type === 'recipe') EntityModel = Recipe;
+    else if (type === 'event') EntityModel = Event;
+    else if (type === 'reel') EntityModel = Reel;
+    else throw new Error(`Unknown type: ${type}`);
+
+    const previousDoc = await EntityModel.findById(id).lean();
+    if (!previousDoc) throw new Error('Item not found');
+
+    const previousStatus = previousDoc.moderationStatus || previousDoc.status || 'pending';
+    const now = new Date();
+
+    let update = {};
+    let newStatus = '';
+    let historyAction = '';
+    let ownerId = null;
+    let notifTitle = '', notifBody = '';
+
+    if (action === 'approve') {
+      newStatus = 'approved';
+      historyAction = 'approved';
+      if (type === 'product') {
+        update = { moderationStatus: 'approved', isApproved: true, isPublic: true, approvedAt: now, approvedBy: adminId };
+        ownerId = previousDoc.sellerId;
+        notifTitle = 'Produit approuvé ✅';
+        notifBody = `Votre produit "${previousDoc.name}" a été approuvé.`;
+      } else if (type === 'recipe') {
+        update = { moderationStatus: 'approved', isApproved: true, isPublic: true, approvedAt: now, approvedBy: adminId };
+        ownerId = previousDoc.authorId;
+        notifTitle = 'Recette approuvée ✅';
+        notifBody = `Votre recette "${previousDoc.title}" a été approuvée.`;
+      } else if (type === 'event') {
+        update = { status: 'active', isApproved: true };
+        ownerId = previousDoc.createdBy || previousDoc.userId;
+        notifTitle = 'Événement approuvé ✅';
+        notifBody = `Votre événement "${previousDoc.title}" a été approuvé.`;
+      } else if (type === 'reel') {
+        update = { status: 'ready' };
+        ownerId = previousDoc.user;
+        notifTitle = 'Reel approuvé ✅';
+        notifBody = 'Votre reel a été approuvé.';
+      }
+    } else if (action === 'reject') {
+      newStatus = 'rejected';
+      historyAction = 'rejected';
+      const rejectionReason = reason || notes || 'Non conforme';
+      if (type === 'product') {
+        update = { moderationStatus: 'rejected', moderationReason: rejectionReason, isPublic: false, moderatedAt: now, moderatedBy: adminId };
+        ownerId = previousDoc.sellerId;
+        notifTitle = 'Produit refusé';
+        notifBody = `Votre produit "${previousDoc.name}" a été refusé. Motif : ${rejectionReason}`;
+      } else if (type === 'recipe') {
+        update = { moderationStatus: 'rejected', moderationReason: rejectionReason, isPublic: false, moderatedAt: now, moderatedBy: adminId };
+        ownerId = previousDoc.authorId;
+        notifTitle = 'Recette refusée';
+        notifBody = `Votre recette "${previousDoc.title}" a été refusée. Motif : ${rejectionReason}`;
+      } else if (type === 'event') {
+        update = { status: 'rejected' };
+        ownerId = previousDoc.createdBy || previousDoc.userId;
+        notifTitle = 'Événement refusé';
+        notifBody = `Votre événement "${previousDoc.title}" a été refusé. Motif : ${rejectionReason}`;
+      } else if (type === 'reel') {
+        update = { status: 'rejected' };
+        ownerId = previousDoc.user;
+        notifTitle = 'Reel refusé';
+        notifBody = `Votre reel a été refusé. Motif : ${rejectionReason}`;
+      }
+    } else if (action === 'revision') {
+      newStatus = 'revision_requested';
+      historyAction = 'revision_requested';
+      const revNotes = notes || reason || '';
+      if (type === 'product') {
+        update = { moderationStatus: 'revision_requested', moderationNotes: revNotes, moderatedAt: now, moderatedBy: adminId };
+        ownerId = previousDoc.sellerId;
+        notifTitle = 'Révision demandée';
+        notifBody = `Des modifications sont requises pour votre produit "${previousDoc.name}". ${revNotes}`;
+      } else if (type === 'recipe') {
+        update = { moderationStatus: 'revision_requested', moderationNotes: revNotes, moderatedAt: now, moderatedBy: adminId };
+        ownerId = previousDoc.authorId;
+        notifTitle = 'Révision demandée';
+        notifBody = `Des modifications sont requises pour votre recette "${previousDoc.title}". ${revNotes}`;
+      }
+    }
+
+    const updatedDoc = await EntityModel.findByIdAndUpdate(id, update, { new: true });
+
+    if (ownerId) {
+      await Promise.all([
+        ModerationHistory.create({
+          entityType: type,
+          entityId: id,
+          entityTitle: previousDoc.name || previousDoc.title || previousDoc.caption || id.toString(),
+          action: historyAction,
+          previousStatus,
+          newStatus,
+          adminId,
+          adminName,
+          ownerId,
+          reason: reason || '',
+          notes: notes || '',
+        }).catch(err => console.warn('[moderation-history] failed:', err.message)),
+        Notification.create({
+          recipientId: ownerId,
+          userId: ownerId,
+          type: 'system',
+          title: notifTitle,
+          body: notifBody,
+          message: notifBody,
+        }).catch(err => console.warn('[moderation-notif] failed:', err.message)),
+      ]);
+    }
+
+    return { success: true, newStatus, item: updatedDoc };
+  }
+
+  // --- SELLERS ---
+
+  async getSellerVerifications(status = 'pending', page = 1, search = '') {
+    const limit = 20;
+    const skip = (Number(page) - 1) * limit;
+    const filter = { profileType: 'pro_commerce' };
+    if (status !== 'all') filter.sellerVerificationStatus = status;
+    if (search) filter.$or = [
+      { fullName: { $regex: search, $options: 'i' } },
+      { email: { $regex: search, $options: 'i' } },
+    ];
+    const [sellers, total] = await Promise.all([
+      User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      User.countDocuments(filter),
+    ]);
+    const items = sellers.map(s => ({
+      id: s._id.toString(),
+      storeName: s.storeInfo?.storeName || s.fullName,
+      ownerName: s.fullName,
+      email: s.email,
+      phone: s.phone || s.storeInfo?.phone || 'Non renseigné',
+      siret: s.storeInfo?.siret || 'Non renseigné',
+      address: s.storeInfo?.address || s.location || 'Non renseigné',
+      certifications: s.storeInfo?.certifications?.join(', ') || 'Aucune',
+      documents: s.sellerVerificationDocuments || s.storeInfo?.documents || [],
+      submittedDate: s.createdAt,
+      sellerVerificationStatus: s.sellerVerificationStatus || 'draft',
+      sellerVerificationReason: s.sellerVerificationReason || '',
+      sellerVerificationNotes: s.sellerVerificationNotes || '',
+      sellerBadge: s.sellerBadge || 'none',
+      isVerifiedSeller: s.isVerifiedSeller || false,
+      verifiedAt: s.verifiedAt || null,
+      storeInfo: s.storeInfo || {},
+    }));
+    return { items, total, page: Number(page), limit };
+  }
+
+  async processSellerBadge(adminId, sellerId, action, reason) {
+    if (!['approve', 'reject', 'revision', 'revoke'].includes(action)) throw new Error(`Unknown action: ${action}`);
+    if (action !== 'approve' && !reason) throw new Error('reason is required for reject, revision and revoke actions');
+
+    const admin = await User.findById(adminId).select('fullName').lean();
+    const adminName = admin?.fullName || 'Admin';
+    const seller = await User.findById(sellerId).lean();
+    if (!seller) throw new Error('Seller not found');
+
+    const previousStatus = seller.sellerVerificationStatus || 'draft';
+    const now = new Date();
+
+    let update = {};
+    let newStatus = '';
+    let historyAction = '';
+    let notifTitle = '', notifBody = '';
+
+    if (action === 'approve') {
+      newStatus = 'approved'; historyAction = 'badge_assigned';
+      update = {
+        sellerVerificationStatus: 'approved', sellerBadge: 'verified',
+        isVerifiedSeller: true, verifiedAt: now, verifiedBy: adminId,
+        'storeInfo.isVerified': true,
+      };
+      notifTitle = 'Badge Vendeur Vérifié 🏅';
+      notifBody = 'Félicitations ! Votre dossier a été approuvé et votre badge Vendeur Vérifié est maintenant actif.';
+    } else if (action === 'reject') {
+      newStatus = 'rejected'; historyAction = 'rejected';
+      update = {
+        sellerVerificationStatus: 'rejected', sellerVerificationReason: reason,
+        sellerBadge: 'none', isVerifiedSeller: false, 'storeInfo.isVerified': false,
+      };
+      notifTitle = 'Vérification Vendeur Refusée ❌';
+      notifBody = `Votre dossier a été refusé. Motif : ${reason}`;
+    } else if (action === 'revision') {
+      newStatus = 'revision_requested'; historyAction = 'revision_requested';
+      update = { sellerVerificationStatus: 'revision_requested', sellerVerificationNotes: reason };
+      notifTitle = 'Documents complémentaires requis';
+      notifBody = `Des corrections sont requises pour votre dossier. ${reason}`;
+    } else if (action === 'revoke') {
+      newStatus = 'rejected'; historyAction = 'badge_revoked';
+      update = {
+        sellerVerificationStatus: 'rejected', sellerBadge: 'none',
+        isVerifiedSeller: false, sellerVerificationReason: reason, 'storeInfo.isVerified': false,
+      };
+      notifTitle = 'Badge Vendeur Révoqué';
+      notifBody = `Votre badge vendeur a été révoqué. Motif : ${reason}`;
+    }
+
+    await Promise.all([
+      User.findByIdAndUpdate(sellerId, update),
+      ModerationHistory.create({
+        entityType: 'seller',
+        entityId: sellerId,
+        entityTitle: seller.storeInfo?.storeName || seller.fullName || 'Vendeur',
+        action: historyAction,
+        previousStatus,
+        newStatus,
+        adminId,
+        adminName,
+        ownerId: sellerId,
+        ownerName: seller.fullName || '',
+        reason: reason || '',
+      }).catch(err => console.warn('[seller-history] failed:', err.message)),
+      Notification.create({
+        recipientId: sellerId,
+        userId: sellerId,
+        type: 'system',
+        title: notifTitle,
+        body: notifBody,
+        message: notifBody,
+      }).catch(err => console.warn('[seller-notif] failed:', err.message)),
+    ]);
+
+    const updatedSeller = await User.findById(sellerId).lean();
+    return updatedSeller;
+  }
+
+  // --- SHOP MODERATION ---
+
+  async getShopModerations(status = 'pending', page = 1) {
+    const limit = 20;
+    const skip = (Number(page) - 1) * limit;
+    const filter = status !== 'all' ? { moderationStatus: status } : {};
+
+    const [items, total] = await Promise.all([
+      ShopModeration.find(filter)
+        .populate('sellerId', 'fullName email storeInfo')
+        .populate('moderatedBy', 'fullName')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      ShopModeration.countDocuments(filter),
+    ]);
+
+    return {
+      items: items.map(d => ({
+        id: d._id.toString(),
+        sellerId: d.sellerId?._id?.toString(),
+        sellerName: d.sellerId?.fullName || '',
+        sellerEmail: d.sellerId?.email || '',
+        currentStoreName: d.sellerId?.storeInfo?.storeName || '',
+        currentData: d.currentData,
+        proposedData: d.proposedData,
+        changedFields: d.changedFields || [],
+        moderationStatus: d.moderationStatus,
+        reason: d.reason || '',
+        notes: d.notes || '',
+        moderatedAt: d.moderatedAt,
+        moderatedByName: d.moderatedBy?.fullName || '',
+        submittedAt: d.createdAt,
+      })),
+      total,
+      page: Number(page),
+      limit,
+    };
+  }
+
+  async processShopUpdate(adminId, submissionId, action, reason) {
+    if (!['approve', 'reject'].includes(action)) throw new Error(`Unknown action: ${action}`);
+    if (action === 'reject' && !reason) throw new Error('reason is required for rejection');
+
+    const admin = await User.findById(adminId).select('fullName').lean();
+    const adminName = admin?.fullName || 'Admin';
+
+    const submission = await ShopModeration.findById(submissionId).lean();
+    if (!submission) throw new Error('Shop moderation submission not found');
+
+    const seller = await User.findById(submission.sellerId).lean();
+    const now = new Date();
+
+    let newStatus, notifTitle, notifBody;
+    if (action === 'approve') {
+      newStatus = 'approved';
+      const storeUpdate = {};
+      Object.entries(submission.proposedData || {}).forEach(([key, val]) => {
+        storeUpdate[`storeInfo.${key}`] = val;
+      });
+      if (Object.keys(storeUpdate).length > 0) {
+        await User.findByIdAndUpdate(submission.sellerId, storeUpdate);
+      }
+      // Mark the linked Establishment as verified and public
+      const Establishment = require('../../../database/models/establishment.model');
+      const estFilter = submission.establishmentId
+        ? { _id: submission.establishmentId, owner: submission.sellerId }
+        : { owner: submission.sellerId };
+      await Establishment.findOneAndUpdate(
+        estFilter,
+        { $set: { verified: true, isPublic: true, moderationStatus: 'approved' } },
+        { sort: { createdAt: -1 } }
+      ).catch(err => console.warn('[establishment-approve] failed:', err.message));
+      notifTitle = 'Mise à jour boutique approuvée ✅';
+      notifBody = 'Vos modifications de boutique ont été approuvées et sont maintenant visibles sur la carte.';
+    } else {
+      newStatus = 'rejected';
+      notifTitle = 'Mise à jour boutique refusée ❌';
+      notifBody = `Votre demande de modification a été refusée. Motif : ${reason}`;
+      // Mark the linked Establishment as rejected
+      const Establishment = require('../../../database/models/establishment.model');
+      const estFilter = submission.establishmentId
+        ? { _id: submission.establishmentId, owner: submission.sellerId }
+        : { owner: submission.sellerId };
+      await Establishment.findOneAndUpdate(
+        estFilter,
+        { $set: { verified: false, isPublic: false, moderationStatus: 'rejected' } },
+        { sort: { createdAt: -1 } }
+      ).catch(err => console.warn('[establishment-reject] failed:', err.message));
+    }
+
+    await Promise.all([
+      ShopModeration.findByIdAndUpdate(submissionId, {
+        moderationStatus: newStatus,
+        reason: reason || '',
+        moderatedAt: now,
+        moderatedBy: adminId,
+        adminName,
+      }),
+      ModerationHistory.create({
+        entityType: 'shop',
+        entityId: submissionId,
+        entityTitle: seller?.storeInfo?.storeName || seller?.fullName || 'Boutique',
+        action: action === 'approve' ? 'shop_update_approved' : 'shop_update_rejected',
+        previousStatus: submission.moderationStatus,
+        newStatus,
+        adminId,
+        adminName,
+        ownerId: submission.sellerId,
+        ownerName: seller?.fullName || '',
+        shopId: submission.sellerId,
+        shopName: seller?.storeInfo?.storeName || '',
+        reason: reason || '',
+        changedFields: submission.changedFields || [],
+      }).catch(err => console.warn('[shop-history] failed:', err.message)),
+      Notification.create({
+        recipientId: submission.sellerId,
+        userId: submission.sellerId,
+        type: 'system',
+        title: notifTitle,
+        body: notifBody,
+        message: notifBody,
+      }).catch(err => console.warn('[shop-notif] failed:', err.message)),
+    ]);
+
+    return { success: true, newStatus };
+  }
+
+  // --- MODERATION HISTORY ---
+
+  async getModerationHistory(filters = {}, page = 1, limit = 20) {
+    const skip = (Number(page) - 1) * Number(limit);
+    const query = {};
+    if (filters.entityType) query.entityType = filters.entityType;
+    if (filters.action)     query.action     = filters.action;
+    if (filters.adminId)    query.adminId    = filters.adminId;
+    if (filters.ownerId)    query.ownerId    = filters.ownerId;
+    if (filters.from || filters.to) {
+      query.createdAt = {};
+      if (filters.from) query.createdAt.$gte = new Date(filters.from);
+      if (filters.to)   query.createdAt.$lte = new Date(filters.to);
+    }
+    const [histItems, histTotal] = await Promise.all([
+      ModerationHistory.find(query)
+        .populate('adminId', 'fullName avatar')
+        .populate('ownerId', 'fullName')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      ModerationHistory.countDocuments(query),
+    ]);
+    return {
+      items: histItems.map(h => ({
+        id: h._id.toString(),
+        entityType: h.entityType,
+        entityId: h.entityId?.toString(),
+        entityTitle: h.entityTitle,
+        action: h.action,
+        previousStatus: h.previousStatus,
+        newStatus: h.newStatus,
+        adminId: h.adminId?._id?.toString() || h.adminId?.toString(),
+        adminName: h.adminId?.fullName || h.adminName,
+        adminAvatar: h.adminId?.avatar,
+        ownerId: h.ownerId?._id?.toString() || h.ownerId?.toString(),
+        ownerName: h.ownerId?.fullName || h.ownerName,
+        shopName: h.shopName,
+        reason: h.reason,
+        notes: h.notes,
+        changedFields: h.changedFields,
+        createdAt: h.createdAt,
+      })),
+      total: histTotal,
+      page: Number(page),
+      limit: Number(limit),
+    };
+  }
+
+  async getModerationHistoryById(id) {
+    const h = await ModerationHistory.findById(id)
+      .populate('adminId', 'fullName avatar')
+      .populate('ownerId', 'fullName avatar')
+      .lean();
+    if (!h) return null;
+    return {
+      id: h._id.toString(),
+      entityType: h.entityType,
+      entityId: h.entityId?.toString(),
+      entityTitle: h.entityTitle,
+      action: h.action,
+      previousStatus: h.previousStatus,
+      newStatus: h.newStatus,
+      adminId: h.adminId?._id?.toString() || h.adminId?.toString(),
+      adminName: h.adminId?.fullName || h.adminName,
+      adminAvatar: h.adminId?.avatar,
+      ownerId: h.ownerId?._id?.toString() || h.ownerId?.toString(),
+      ownerName: h.ownerId?.fullName || h.ownerName,
+      shopName: h.shopName,
+      reason: h.reason,
+      notes: h.notes,
+      changedFields: h.changedFields,
+      snapshot: h.snapshot,
+      createdAt: h.createdAt,
     };
   }
 }

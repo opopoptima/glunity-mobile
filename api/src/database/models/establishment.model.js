@@ -60,7 +60,14 @@ const establishmentSchema = new mongoose.Schema(
     },
     verified: {
       type: Boolean,
-      default: true,
+      default: false,
+    },
+    isPublic: { type: Boolean, default: false, index: true },
+    moderationStatus: {
+      type: String,
+      enum: ['draft', 'pending', 'approved', 'rejected', 'revision_requested', 'resubmitted', 'suspended'],
+      default: 'pending',
+      index: true,
     },
   },
   {

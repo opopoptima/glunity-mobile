@@ -10,32 +10,65 @@ class AdminController {
     try {
       const period = req.query.period || '7d';
       const stats = await adminService.getDashboardStats(period);
-      return res.status(200).json({
-        success: true,
-        data: stats,
-      });
-    } catch (err) {
-      next(err);
-    }
+      return res.status(200).json({ success: true, data: stats });
+    } catch (err) { next(err); }
   }
 
+  /**
+   * GET /api/admin/moderation/stats
+   */
+  async getModerationStats(req, res, next) {
+    try {
+      const stats = await adminService.getModerationStats();
+      return res.status(200).json({ success: true, data: stats });
+    } catch (err) { next(err); }
+  }
+
+  /**
+   * GET /api/admin/moderation?type=products&status=pending&page=1&search=
+   */
   async getModerationItems(req, res, next) {
     try {
-      const type = req.query.type || 'all';
-      const items = await adminService.getModerationItems(type);
+      const { type = 'all', status = 'pending', page = 1, limit = 20, search = '' } = req.query;
+      const items = await adminService.getModerationItems(type, status, page, limit, search);
       return res.status(200).json({ success: true, data: items });
     } catch (err) { next(err); }
   }
 
+  /**
+   * GET /api/admin/moderation/:type/:id
+   */
+  async getModerationItemById(req, res, next) {
+    try {
+      const { type, id } = req.params;
+      const item = await adminService.getModerationItemById(type, id);
+      if (!item) return res.status(404).json({ success: false, message: 'Not found' });
+      return res.status(200).json({ success: true, data: item });
+    } catch (err) { next(err); }
+  }
+
+  /**
+   * PATCH /api/admin/moderation/:type/:id/approve
+   * PATCH /api/admin/moderation/:type/:id/reject
+   * PATCH /api/admin/moderation/:type/:id/request-revision
+   * Legacy: POST /api/admin/moderation/:type/:id/:action
+   */
   async moderateItem(req, res, next) {
     try {
+      const adminId = req.user._id || req.user.id;
       const { type, id, action } = req.params;
-      const { reason } = req.body;
-      const adminId = req.user ? req.user._id : 'unknown';
-      const result = await adminService.moderateItem(id, type, action, reason, adminId);
+      const { reason, notes } = req.body || {};
+      // Normalize action names
+      const normalizedAction = action === 'approve' ? 'approve'
+        : action === 'reject' ? 'reject'
+        : (action === 'request-revision' || action === 'revision') ? 'revision'
+        : action;
+      const result = await adminService.moderateItem(adminId, id, type, normalizedAction, reason, notes);
       return res.status(200).json({ success: true, data: result });
     } catch (err) { next(err); }
   }
+
+  // ── Users ──────────────────────────────────────────────────────────────────
 
   async getUsers(req, res, next) {
     try {
@@ -64,58 +97,86 @@ class AdminController {
     } catch (err) { next(err); }
   }
 
-  async warnUser(req, res, next) {
-    try {
-      const { id } = req.params;
-      const { message } = req.body;
-      const adminId = req.user ? req.user._id : null;
-      const adminName = req.user ? req.user.fullName : 'Administrateur';
-      const log = await adminService.warnUser(id, message, adminId, adminName);
-      return res.status(200).json({ success: true, data: log });
-    } catch (err) { next(err); }
-  }
+  // ── Sellers ────────────────────────────────────────────────────────────────
 
-  async resetUserPassword(req, res, next) {
-    try {
-      const { id } = req.params;
-      const adminId = req.user ? req.user._id : null;
-      const adminName = req.user ? req.user.fullName : 'Administrateur';
-      const result = await adminService.resetUserPassword(id, adminId, adminName);
-      return res.status(200).json({ success: true, data: result });
-    } catch (err) { next(err); }
-  }
-
-  async exportUserData(req, res, next) {
-    try {
-      const { id } = req.params;
-      const data = await adminService.exportUserData(id);
-      return res.status(200).json({ success: true, data });
-    } catch (err) { next(err); }
-  }
-
-  async deleteUser(req, res, next) {
-    try {
-      const { id } = req.params;
-      await adminService.deleteUser(id);
-      return res.status(200).json({ success: true, message: 'User deleted successfully' });
-    } catch (err) { next(err); }
-  }
-
+  /**
+   * GET /api/admin/sellers/pending → kept for legacy compat
+   * GET /api/admin/seller-verifications?status=pending&page=1&search=
+   */
   async getSellerVerifications(req, res, next) {
     try {
-      const sellers = await adminService.getSellerVerifications();
-      return res.status(200).json({ success: true, data: sellers });
-    } catch (err) { next(err); }
-  }
-
-  async processSellerBadge(req, res, next) {
-    try {
-      const { id, action } = req.params;
-      const { remarks } = req.body;
-      const result = await adminService.processSellerBadge(id, action, remarks);
+      const { status = 'pending', page = 1, search = '' } = req.query;
+      const result = await adminService.getSellerVerifications(status, page, search);
       return res.status(200).json({ success: true, data: result });
     } catch (err) { next(err); }
   }
+
+  /**
+   * POST /api/admin/sellers/:id/:action  (legacy)
+   * PATCH /api/admin/seller-verifications/:id/approve
+   * PATCH /api/admin/seller-verifications/:id/reject
+   * PATCH /api/admin/seller-verifications/:id/request-revision
+   * PATCH /api/admin/seller-verifications/:id/revoke-badge
+   */
+  async processSellerBadge(req, res, next) {
+    try {
+      const adminId = req.user._id || req.user.id;
+      const { id, action } = req.params;
+      const { reason, remarks } = req.body || {};
+      const normalizedAction = action === 'approve' ? 'approve'
+        : action === 'reject' ? 'reject'
+        : (action === 'request-revision' || action === 'revision') ? 'revision'
+        : action === 'revoke-badge' ? 'revoke'
+        : action;
+      const result = await adminService.processSellerBadge(adminId, id, normalizedAction, reason || remarks);
+      return res.status(200).json({ success: true, data: result });
+    } catch (err) { next(err); }
+  }
+
+  // ── Shop Moderation ────────────────────────────────────────────────────────
+
+  async getShopModerations(req, res, next) {
+    try {
+      const { status = 'pending', page = 1 } = req.query;
+      const result = await adminService.getShopModerations(status, page);
+      return res.status(200).json({ success: true, data: result });
+    } catch (err) { next(err); }
+  }
+
+  async processShopUpdate(req, res, next) {
+    try {
+      const adminId = req.user._id || req.user.id;
+      const { id, action } = req.params;
+      const { reason } = req.body || {};
+      const result = await adminService.processShopUpdate(adminId, id, action, reason);
+      return res.status(200).json({ success: true, data: result });
+    } catch (err) { next(err); }
+  }
+
+  // ── Moderation History ─────────────────────────────────────────────────────
+
+  async getModerationHistory(req, res, next) {
+    try {
+      const { entityType, action, adminId, ownerId, from, to, page = 1, limit = 20 } = req.query;
+      const result = await adminService.getModerationHistory(
+        { entityType, action, adminId, ownerId, from, to },
+        page,
+        limit,
+      );
+      return res.status(200).json({ success: true, data: result });
+    } catch (err) { next(err); }
+  }
+
+  async getModerationHistoryById(req, res, next) {
+    try {
+      const { id } = req.params;
+      const entry = await adminService.getModerationHistoryById(id);
+      if (!entry) return res.status(404).json({ success: false, message: 'History entry not found' });
+      return res.status(200).json({ success: true, data: entry });
+    } catch (err) { next(err); }
+  }
+
+  // ── Patient Resources ──────────────────────────────────────────────────────
 
   async getPatientResources(req, res, next) {
     try {

@@ -28,7 +28,7 @@ export type AppStackParamList = {
   AdminSpace:      undefined;
   Settings:        undefined;
   EditProfile:     undefined;
-  EditStore:       { establishmentId?: string; store?: any; lang?: string } | undefined;
+  EditStore:       { establishmentId?: string; store?: any; lang?: string; isNew?: boolean } | undefined;
   MyEstablishments: undefined;
   /** Pass sellerId when visiting another seller's profile */
   SellerProfile:   { sellerId?: string; establishmentId?: string; store?: any } | undefined;
