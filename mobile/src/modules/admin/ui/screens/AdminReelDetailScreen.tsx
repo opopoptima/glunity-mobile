@@ -23,7 +23,7 @@ import { useLanguage } from '../../../../shared/context/language.context';
 export function AdminReelDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const item: ModerationItem = route.params?.item;
+  const item: any = route.params?.item;
   const { width, height } = useWindowDimensions();
   const { theme: T, isDark } = useTheme();
   const { t } = useLanguage();
@@ -34,7 +34,7 @@ export function AdminReelDetailScreen() {
   // Mark notification as "reviewed" on mount/view
   useEffect(() => {
     if (item && item.id) {
-      adminApi.moderateItem(item.id, 'reel', 'review').catch((err) => {
+      adminApi.moderateItem(item.id, 'reel', 'approve').catch((err) => {
         console.warn('[AdminReelDetail] Failed to auto-review reel notification:', err);
       });
     }

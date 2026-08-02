@@ -61,6 +61,10 @@ export function AdminModerationScreen({ route, navigation }: any) {
     refresh, modal, detail,
   } = useAdminModeration(initialTab);
 
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'popularity'>('newest');
+  const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'online' | 'presentiel'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+
   const primaryGreen = Colors.green || '#8BC34A';
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
   const borderC = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';

@@ -12,6 +12,7 @@ import {
   PaginatedResult,
   AdminUserListItem,
   PatientResourceItem,
+  EnrichedUserDetail,
 } from './admin.types';
 export * from './admin.types';
 
@@ -159,8 +160,39 @@ export const adminApi = {
     return res.data?.data || res.data;
   },
 
-  async toggleUserStatus(id: string, status: 'active' | 'suspended') {
-    return http.patch(`/admin/users/${id}/status`, { status });
+  async getUserModerationDetails(id: string): Promise<EnrichedUserDetail> {
+    const res = await http.get(`/admin/users/${id}`);
+    return res.data?.data || res.data;
+  },
+
+  async toggleUserStatus(
+    id: string,
+    status: 'active' | 'suspended',
+    reason?: string,
+    duration?: string,
+    notes?: string,
+  ) {
+    return http.patch(`/admin/users/${id}/status`, { status, reason, duration, notes });
+  },
+
+  async warnUser(id: string, warningMessage: string, notes?: string): Promise<boolean> {
+    const res = await http.post(`/admin/users/${id}/warn`, { warningMessage, notes });
+    return res.data?.success ?? true;
+  },
+
+  async resetUserPassword(id: string): Promise<{ success: boolean; tempPassword?: string }> {
+    const res = await http.post(`/admin/users/${id}/reset-password`);
+    return res.data?.data || res.data;
+  },
+
+  async deleteUser(id: string, reason?: string): Promise<boolean> {
+    const res = await http.delete(`/admin/users/${id}`, { data: { reason } });
+    return res.data?.success ?? true;
+  },
+
+  async exportUserData(id: string): Promise<any> {
+    const res = await http.get(`/admin/users/${id}/export`);
+    return res.data?.data || res.data;
   },
 
   // ── Patient Resources ──────────────────────────────────────────────────────
