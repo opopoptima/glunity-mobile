@@ -13,10 +13,19 @@ export function useAdminUsers() {
   const [selectedUser, setSelectedUser] = useState<AdminUserListItem | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 450);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
   const loadUsersData = async () => {
     try {
       setLoading(true);
-      const data = await adminApi.getUsers(filter, searchQuery);
+      const data = await adminApi.getUsers(filter, debouncedSearchQuery);
       setUsers(data);
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -27,7 +36,7 @@ export function useAdminUsers() {
 
   useEffect(() => {
     loadUsersData();
-  }, [filter, searchQuery]);
+  }, [filter, debouncedSearchQuery]);
 
   const handleToggleStatus = async (userToToggle?: AdminUserListItem) => {
     const target = userToToggle || selectedUser;

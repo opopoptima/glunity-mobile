@@ -75,6 +75,32 @@ class AdminController {
     } catch (err) { next(err); }
   }
 
+  async resetUserPassword(req, res, next) {
+    try {
+      const { id } = req.params;
+      const adminId = req.user ? req.user._id : null;
+      const adminName = req.user ? req.user.fullName : 'Administrateur';
+      const result = await adminService.resetUserPassword(id, adminId, adminName);
+      return res.status(200).json({ success: true, data: result });
+    } catch (err) { next(err); }
+  }
+
+  async exportUserData(req, res, next) {
+    try {
+      const { id } = req.params;
+      const data = await adminService.exportUserData(id);
+      return res.status(200).json({ success: true, data });
+    } catch (err) { next(err); }
+  }
+
+  async deleteUser(req, res, next) {
+    try {
+      const { id } = req.params;
+      await adminService.deleteUser(id);
+      return res.status(200).json({ success: true, message: 'User deleted successfully' });
+    } catch (err) { next(err); }
+  }
+
   async getSellerVerifications(req, res, next) {
     try {
       const sellers = await adminService.getSellerVerifications();

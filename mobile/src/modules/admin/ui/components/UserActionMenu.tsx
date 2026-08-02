@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView, TouchableWithoutFeedback } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../../../../shared/context/theme.context';
 import { Font, Radius, Spacing } from '../../../../shared/utils/theme';
@@ -12,7 +12,7 @@ interface UserActionMenuProps {
   onSendWarning: () => void;
   onSuspend: () => void;
   onReactivate: () => void;
-  onChangeRole: () => void;
+  onViewPublicProfile: () => void;
   onResetPassword: () => void;
   onExportData: () => void;
   onDeleteAccount: () => void;
@@ -25,7 +25,7 @@ export function UserActionMenu({
   onSendWarning,
   onSuspend,
   onReactivate,
-  onChangeRole,
+  onViewPublicProfile,
   onResetPassword,
   onExportData,
   onDeleteAccount,
@@ -41,11 +41,13 @@ export function UserActionMenu({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      >
+      <View style={styles.modalContainer}>
+        {/* Background Overlay */}
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={styles.absoluteOverlay} />
+        </TouchableWithoutFeedback>
+
+        {/* Bottom Sheet content */}
         <View
           style={[
             styles.bottomSheet,
@@ -54,7 +56,6 @@ export function UserActionMenu({
               borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
             },
           ]}
-          onStartShouldSetResponder={() => true}
         >
           {/* Top drag handle indicator */}
           <View style={[styles.dragHandle, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)' }]} />
@@ -69,8 +70,9 @@ export function UserActionMenu({
             <TouchableOpacity
               style={styles.optionItem}
               onPress={() => {
+                console.log('[UserActionMenu] View Public Profile pressed');
                 onClose();
-                // Logic to view public profile
+                onViewPublicProfile();
               }}
             >
               <Feather name="user" size={18} color={T.textSub} style={styles.optionIcon} />
@@ -84,6 +86,7 @@ export function UserActionMenu({
                 <TouchableOpacity
                   style={styles.optionItem}
                   onPress={() => {
+                    console.log('[UserActionMenu] Send Warning pressed');
                     onClose();
                     onSendWarning();
                   }}
@@ -97,6 +100,7 @@ export function UserActionMenu({
                   <TouchableOpacity
                     style={styles.optionItem}
                     onPress={() => {
+                      console.log('[UserActionMenu] Suspend pressed');
                       onClose();
                       onSuspend();
                     }}
@@ -115,6 +119,7 @@ export function UserActionMenu({
               <TouchableOpacity
                 style={styles.optionItem}
                 onPress={() => {
+                  console.log('[UserActionMenu] Reactivate pressed');
                   onClose();
                   onReactivate();
                 }}
@@ -128,22 +133,11 @@ export function UserActionMenu({
 
             <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]} />
 
-            {/* Change Role */}
-            <TouchableOpacity
-              style={styles.optionItem}
-              onPress={() => {
-                onClose();
-                onChangeRole();
-              }}
-            >
-              <Feather name="shield" size={18} color={T.textSub} style={styles.optionIcon} />
-              <Text style={[styles.optionText, { color: T.text }]}>Changer le rôle</Text>
-            </TouchableOpacity>
-
             {/* Reset Password */}
             <TouchableOpacity
               style={styles.optionItem}
               onPress={() => {
+                console.log('[UserActionMenu] Reset Password pressed');
                 onClose();
                 onResetPassword();
               }}
@@ -156,6 +150,7 @@ export function UserActionMenu({
             <TouchableOpacity
               style={styles.optionItem}
               onPress={() => {
+                console.log('[UserActionMenu] Export Data pressed');
                 onClose();
                 onExportData();
               }}
@@ -169,6 +164,7 @@ export function UserActionMenu({
               <TouchableOpacity
                 style={styles.optionItem}
                 onPress={() => {
+                  console.log('[UserActionMenu] Delete Account pressed');
                   onClose();
                   onDeleteAccount();
                 }}
@@ -187,16 +183,23 @@ export function UserActionMenu({
             <Text style={[styles.cancelText, { color: T.text }]}>Annuler</Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  absoluteOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   bottomSheet: {
     borderTopLeftRadius: 20,
@@ -235,6 +238,7 @@ const styles = StyleSheet.create({
   },
   optionsList: {
     paddingHorizontal: Spacing.md,
+    flexShrink: 1,
   },
   optionItem: {
     flexDirection: 'row',

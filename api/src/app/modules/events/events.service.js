@@ -81,12 +81,24 @@ const eventsService = {
 		// Normalize incoming imageUrl into images array so the mapper can read images[0].url
 		const images = [];
 		if (payload && payload.imageUrl) images.push({ url: payload.imageUrl });
+
+		// Auto-publish if created by an Admin
+		let isPublished = false;
+		let status = 'pending';
+		if (userId) {
+			const creator = await User.findById(userId);
+			if (creator && creator.profileType === 'admin') {
+				isPublished = true;
+				status = 'published';
+			}
+		}
+
 		const createPayload = {
 			...payload,
 			images: images.length ? images : payload.images || undefined,
 			createdBy: userId || undefined,
-			isPublished: false,
-			status: 'pending'
+			isPublished,
+			status
 		};
 		const doc = await repo.create(createPayload);
 		const eventObj = doc.toObject();

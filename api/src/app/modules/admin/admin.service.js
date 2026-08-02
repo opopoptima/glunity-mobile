@@ -1218,6 +1218,154 @@ class AdminService {
     return log;
   }
 
+  async resetUserPassword(userId, adminId, adminName) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Generate a secure temp password
+    const tempPassword = 'GP-' + Math.random().toString(36).substring(2, 8).toUpperCase() + Math.floor(10 + Math.random() * 90);
+    const { hashPassword } = require('../../common/utils/password');
+    user.passwordHash = await hashPassword(tempPassword);
+    await user.save();
+
+    // Log the action
+    const ModerationLogModel = mongoose.model('ModerationLog');
+    await ModerationLogModel.create({
+      userId: user._id,
+      action: 'Reactivation', // Fallback enum since reset password isn't in default list
+      adminId: adminId || user._id,
+      adminName: adminName || 'Système',
+      reason: 'Réinitialisation du mot de passe par l\'administrateur.',
+      notes: `Mot de passe temporaire généré: ${tempPassword}`,
+    }).catch(err => console.error('Failed to create moderation log:', err.message));
+
+    // Notify the user via email
+    const emailService = require('../../common/services/email.service');
+    emailService.sendMail({
+      to: user.email,
+      subject: 'Réinitialisation de votre mot de passe GlUnity',
+      html: `
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
+          <h2 style="color:#8BC34A">GlUnity — Mot de Passe Réinitialisé</h2>
+          <p>Bonjour ${user.fullName},</p>
+          <p>Un administrateur a réinitialisé votre mot de passe. Voici votre nouveau mot de passe temporaire :</p>
+          <div style="font-size:24px;font-weight:bold;color:#333;margin:20px 0;text-align:center;padding:12px;background:#f5f5f5;border-radius:8px">
+            ${tempPassword}
+          </div>
+          <p>Veuillez vous connecter avec ce mot de passe temporaire et le modifier immédiatement depuis votre espace profil.</p>
+        </div>
+      `
+    }).catch(err => console.error('Failed to send reset email:', err.message));
+
+    return {
+      message: `Le mot de passe temporaire pour ${user.fullName} est : ${tempPassword}`,
+      tempPassword
+    };
+  }
+
+  async exportUserData(userId) {
+    const user = await User.findById(userId).lean();
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Fetch associated content dynamically
+    let posts = [], comments = [], events = [], recipes = [], products = [], reviews = [];
+
+    try {
+      const Event = require('../../../database/models/event.model');
+      events = await Event.find({ creator: userId }).lean();
+    } catch (e) {}
+
+    try {
+      const Recipe = require('../../../database/models/recipe.model');
+      recipes = await Recipe.find({ author: userId }).lean();
+    } catch (e) {}
+
+    try {
+      const Product = require('../../../database/models/product.model');
+      products = await Product.find({ seller: userId }).lean();
+    } catch (e) {}
+
+    try {
+      const Review = require('../../../database/models/review.model');
+      reviews = await Review.find({ author: userId }).lean();
+    } catch (e) {}
+
+    return {
+      exportTimestamp: new Date().toISOString(),
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        location: user.location,
+        profileType: user.profileType,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+      events: events.map(e => ({ id: e._id, title: e.title, description: e.description, date: e.date, createdAt: e.createdAt })),
+      recipes: recipes.map(r => ({ id: r._id, title: r.title, description: r.description, createdAt: r.createdAt })),
+      products: products.map(p => ({ id: p._id, name: p.name, description: p.description, price: p.price, createdAt: p.createdAt })),
+      reviews: reviews.map(rev => ({ id: rev._id, rating: rev.rating, comment: rev.comment, createdAt: rev.createdAt })),
+    };
+  }
+
+  async deleteUser(userId) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    // Dynamic model loading & deletion
+    const cleanups = [
+      { path: '../../../database/models/event.model', field: 'creator' },
+      { path: '../../../database/models/recipe.model', field: 'author' },
+      { path: '../../../database/models/product.model', field: 'seller' },
+      { path: '../../../database/models/review.model', field: 'author' },
+      { path: '../../../database/models/report.model', field: 'reporter' },
+      { path: '../../../database/models/registration.model', field: 'participant' },
+      { path: '../../../database/models/notification.model', field: 'recipientId' },
+      { path: '../../../database/models/moderation-log.model', field: 'userId' },
+      { path: '../../../database/models/reel.model', field: 'author' },
+      { path: '../../../database/models/reel-comment.model', field: 'author' },
+      { path: '../../../database/models/reel-like.model', field: 'userId' },
+      { path: '../../../database/models/reel-view.model', field: 'userId' },
+      { path: '../../../database/models/location.model', field: 'createdBy' },
+      { path: '../../../database/models/message.model', field: 'sender' },
+    ];
+
+    for (const item of cleanups) {
+      try {
+        const Model = require(item.path);
+        if (Model && Model.deleteMany) {
+          await Model.deleteMany({ [item.field]: userId });
+        }
+      } catch (err) {
+        console.warn(`Failed to clean up ${item.path}: ${err.message}`);
+      }
+    }
+
+    // Pull from channel participants
+    try {
+      const Channel = require('../../../database/models/channel.model');
+      if (Channel && Channel.updateMany) {
+        await Channel.updateMany(
+          { 'participants.userId': userId },
+          { $pull: { participants: { userId: userId } } }
+        );
+      }
+    } catch (err) {
+      console.warn(`Failed to clean up Channel participants: ${err.message}`);
+    }
+
+    // Delete user from DB
+    await User.findByIdAndDelete(userId);
+    return true;
+  }
+
   // --- SELLERS ---
   async getSellerVerifications() {
     const sellers = await User.find({

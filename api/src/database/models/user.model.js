@@ -57,8 +57,8 @@ const userSchema = new Schema(
 
     storeInfo: storeSchema,
 
-    googleId: { type: String, unique: true, sparse: true },
-    facebookId: { type: String, unique: true, sparse: true },
+    googleId: { type: String },
+    facebookId: { type: String },
 
     birthDate: { type: Date, default: null },
     location: { type: String, trim: true, default: '' },
@@ -234,6 +234,7 @@ userSchema.index({ isActive: 1, points: -1 });
 userSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 userSchema.index({ facebookId: 1 }, { unique: true, sparse: true });
 userSchema.index({ pushToken: 1 }, { sparse: true });
+userSchema.index({ createdAt: -1 });
 
 // ─── Virtuals ─────────────────────────────────────────────────────────────────
 userSchema.virtual('avatarUrl').get(function () {

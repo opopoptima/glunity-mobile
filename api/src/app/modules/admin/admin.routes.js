@@ -25,6 +25,9 @@ router.get('/users', (req, res, next) => adminController.getUsers(req, res, next
 router.get('/users/:id/moderation-details', (req, res, next) => adminController.getUserModerationDetails(req, res, next));
 router.patch('/users/:id/status', (req, res, next) => adminController.toggleUserStatus(req, res, next));
 router.post('/users/:id/warn', (req, res, next) => adminController.warnUser(req, res, next));
+router.post('/users/:id/reset-password', (req, res, next) => adminController.resetUserPassword(req, res, next));
+router.get('/users/:id/export', (req, res, next) => adminController.exportUserData(req, res, next));
+router.delete('/users/:id', (req, res, next) => adminController.deleteUser(req, res, next));
 
 // Sellers
 router.get('/sellers/pending', (req, res, next) => adminController.getSellerVerifications(req, res, next));

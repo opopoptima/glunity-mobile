@@ -54,6 +54,21 @@ export const adminApi = {
     return http.post(`/admin/users/${id}/warn`, { message });
   },
 
+  async resetUserPassword(id: string) {
+    const res = await http.post(`/admin/users/${id}/reset-password`);
+    return res.data?.data || res.data;
+  },
+
+  async exportUserData(id: string) {
+    const res = await http.get(`/admin/users/${id}/export`);
+    return res.data?.data || res.data;
+  },
+
+  async deleteUser(id: string) {
+    const res = await http.delete(`/admin/users/${id}`);
+    return res.data?.data || res.data;
+  },
+
   // Fetch Patient Resources (with optional category, type, status filters)
   async getPatientResources(params?: { category?: string; type?: string; status?: string }): Promise<PatientResourceItem[]> {
     const res = await http.get('/admin/resources', { params });

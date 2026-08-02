@@ -26,6 +26,7 @@ import { ActivityTimeline } from '../components/ActivityTimeline';
 import { ReportsSection } from '../components/ReportsSection';
 import { ModerationHistory } from '../components/ModerationHistory';
 import { UserActionMenu } from '../components/UserActionMenu';
+import { CustomDialog } from '../../../../shared/components/CustomDialog';
 
 export function AdminUserModerationScreen({ route, navigation }: any) {
   const { theme: T, isDark } = useTheme();
@@ -77,10 +78,15 @@ export function AdminUserModerationScreen({ route, navigation }: any) {
     setWarningMessage,
     handleSendWarning,
 
-    // Role modal inputs
-    roleModalVisible,
-    setRoleModalVisible,
-    handleChangeRole,
+    // Custom Dialog & Toast state
+    dialog,
+    toast,
+    tempPassword,
+    handleDialogInputChange,
+    closeDialog,
+
+    // Processing state
+    isProcessing,
 
     // Directly action methods
     handleResetPassword,
@@ -323,7 +329,9 @@ export function AdminUserModerationScreen({ route, navigation }: any) {
         onSendWarning={() => setWarningModalVisible(true)}
         onSuspend={() => setSuspendModalVisible(true)}
         onReactivate={handleReactivateUser}
-        onChangeRole={() => setRoleModalVisible(true)}
+        onViewPublicProfile={() => {
+          navigation.navigate('Profile', { userId: user.id });
+        }}
         onResetPassword={handleResetPassword}
         onExportData={handleExportData}
         onDeleteAccount={handleDeleteAccount}
@@ -425,14 +433,20 @@ export function AdminUserModerationScreen({ route, navigation }: any) {
               <TouchableOpacity
                 style={[styles.modalActionBtn, { backgroundColor: isDark ? '#252528' : '#F3F4F6' }]}
                 onPress={() => setSuspendModalVisible(false)}
+                disabled={isProcessing}
               >
                 <Text style={[styles.modalActionBtnText, { color: T.text }]}>Annuler</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalActionBtn, { backgroundColor: '#EF4444' }]}
                 onPress={handleSuspendUser}
+                disabled={isProcessing}
               >
-                <Text style={[styles.modalActionBtnText, { color: '#FFF' }]}>Suspendre le membre</Text>
+                {isProcessing ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={[styles.modalActionBtnText, { color: '#FFF' }]}>Suspendre le membre</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -474,73 +488,98 @@ export function AdminUserModerationScreen({ route, navigation }: any) {
               placeholderTextColor={T.textMuted}
               value={warningMessage}
               onChangeText={setWarningMessage}
+              editable={!isProcessing}
             />
 
             <View style={styles.modalActionRow}>
               <TouchableOpacity
                 style={[styles.modalActionBtn, { backgroundColor: isDark ? '#252528' : '#F3F4F6' }]}
                 onPress={() => setWarningModalVisible(false)}
+                disabled={isProcessing}
               >
                 <Text style={[styles.modalActionBtnText, { color: T.text }]}>Annuler</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalActionBtn, { backgroundColor: '#F59E0B' }]}
                 onPress={handleSendWarning}
+                disabled={isProcessing}
               >
-                <Text style={[styles.modalActionBtnText, { color: '#FFF' }]}>Envoyer</Text>
+                {isProcessing ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={[styles.modalActionBtnText, { color: '#FFF' }]}>Envoyer</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-
-      {/* CHANGE ROLE MODAL */}
-      <Modal
-        visible={roleModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRoleModalVisible(false)}
+      {/* CUSTOM DIALOG SYSTEM */}
+      <CustomDialog
+        visible={dialog.visible}
+        title={dialog.title}
+        message={dialog.message}
+        icon={dialog.icon as any}
+        iconColor={dialog.iconColor}
+        loading={dialog.loading}
+        loadingMessage={dialog.loadingMessage}
+        buttons={dialog.buttons}
+        showInput={dialog.showInput}
+        inputValue={dialog.inputValue}
+        onChangeInput={handleDialogInputChange}
+        inputPlaceholder={dialog.inputPlaceholder}
+        inputAutoCapitalize="characters"
+        onClose={closeDialog}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: isDark ? '#1A1A1D' : '#FFFFFF' }]}>
-            <View style={styles.modalHeaderRow}>
-              <View style={styles.modalHeaderTitleBox}>
-                <Feather name="shield" size={18} color={primaryGreen} />
-                <Text style={[styles.modalTitle, { color: T.text }]}>Modifier le Rôle</Text>
-              </View>
-              <TouchableOpacity onPress={() => setRoleModalVisible(false)} style={{ padding: 4 }}>
-                <Feather name="x" size={18} color={T.textMuted} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ gap: 8, marginTop: 12 }}>
-              {[
-                { id: 'celiac', name: 'Patient Cœliaque' },
-                { id: 'pro_commerce', name: 'Commerçant / Vendeur' },
-                { id: 'pro_health', name: 'Professionnel Santé' },
-                { id: 'admin', name: 'Administrateur' },
-              ].map((roleObj) => (
-                <TouchableOpacity
-                  key={roleObj.id}
-                  style={[
-                    styles.roleRowItem,
-                    {
-                      backgroundColor: user.profileType === roleObj.id ? 'rgba(109, 174, 63, 0.08)' : isDark ? '#252528' : '#F9FAFB',
-                      borderColor: user.profileType === roleObj.id ? primaryGreen : 'transparent',
-                    },
-                  ]}
-                  onPress={() => handleChangeRole(roleObj.id as any)}
-                >
-                  <Text style={[styles.roleRowText, { color: user.profileType === roleObj.id ? primaryGreen : T.text, fontWeight: user.profileType === roleObj.id ? '700' : '400' }]}>
-                    {roleObj.name}
-                  </Text>
-                  {user.profileType === roleObj.id && <Feather name="check" size={16} color={primaryGreen} />}
-                </TouchableOpacity>
-              ))}
-            </View>
+        {dialog.title === 'Password Reset Successfully' && tempPassword ? (
+          <View style={{
+            width: '100%',
+            padding: 16,
+            backgroundColor: isDark ? '#252528' : '#F9FAFB',
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+            alignItems: 'center',
+            marginVertical: 12,
+          }}>
+            <Text style={{
+              fontSize: 12,
+              color: T.textMuted,
+              textTransform: 'uppercase',
+              fontWeight: '700',
+              letterSpacing: 0.5,
+              marginBottom: 8,
+              fontFamily: 'Poppins',
+            }}>Temporary Password</Text>
+            <Text style={{
+              fontSize: 22,
+              color: T.text,
+              fontWeight: '700',
+              letterSpacing: 1,
+              fontFamily: 'Poppins',
+            }} selectable>{tempPassword}</Text>
           </View>
+        ) : null}
+      </CustomDialog>
+
+      {/* CUSTOM TOAST SYSTEM */}
+      {toast.visible && (
+        <View
+          style={[
+            styles.toastBox,
+            {
+              backgroundColor: toast.type === 'error' ? '#C8102E' : toast.type === 'info' ? '#F59E0B' : '#6DAE3F',
+            },
+          ]}
+        >
+          <Feather
+            name={toast.type === 'error' ? 'alert-triangle' : toast.type === 'info' ? 'alert-circle' : 'check-circle'}
+            size={16}
+            color="#FFFFFF"
+          />
+          <Text style={styles.toastText}>{toast.message}</Text>
         </View>
-      </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -792,5 +831,31 @@ const styles = StyleSheet.create({
   },
   roleRowText: {
     fontSize: 13.5,
+  },
+  toastBox: {
+    position: 'absolute',
+    bottom: 50,
+    left: '10%',
+    right: '10%',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: Radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+    zIndex: 9999,
+  },
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 13.5,
+    fontFamily: Font.family,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

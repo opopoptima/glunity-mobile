@@ -5,7 +5,7 @@ const env      = require('../config/env');
 const logger   = require('./logger.bootstrap');
 
 const MONGO_OPTIONS = {
-  serverSelectionTimeoutMS: 5000,
+  serverSelectionTimeoutMS: 30000,
   socketTimeoutMS:          45000,
   maxPoolSize:              10,
   minPoolSize:              2,
