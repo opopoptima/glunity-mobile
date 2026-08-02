@@ -100,9 +100,22 @@ const recipeSchema = new Schema(
 		],
 		isPublished: {
 			type: Boolean,
-			default: true,
+			default: false,
 			index: true,
 		},
+		moderationStatus: {
+			type: String,
+			enum: ['draft', 'pending', 'approved', 'rejected', 'revision_requested', 'resubmitted', 'suspended'],
+			default: 'pending',
+			index: true,
+		},
+		isPublic: { type: Boolean, default: false, index: true },
+		moderationReason: { type: String, trim: true, default: '' },
+		moderationNotes: { type: String, trim: true, default: '' },
+		approvedAt: { type: Date, default: null },
+		approvedBy: { type: Types.ObjectId, ref: 'User', default: null },
+		moderatedAt: { type: Date, default: null },
+		moderatedBy: { type: Types.ObjectId, ref: 'User', default: null },
 	},
 	{
 		timestamps: true,
@@ -114,6 +127,7 @@ const recipeSchema = new Schema(
 
 recipeSchema.index({ title: 'text' });
 recipeSchema.index({ category: 1, createdAt: -1 });
+recipeSchema.index({ moderationStatus: 1, createdAt: -1 });
 
 function slugifyTitle(title) {
 	return title

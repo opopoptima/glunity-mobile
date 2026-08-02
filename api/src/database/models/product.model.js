@@ -49,6 +49,19 @@ const productSchema = new Schema(
 			type: Number,
 			default: 0,
 		},
+		moderationStatus: {
+			type: String,
+			enum: ['draft', 'pending', 'approved', 'rejected', 'revision_requested', 'resubmitted', 'suspended'],
+			default: 'pending',
+			index: true,
+		},
+		isPublic: { type: Boolean, default: false, index: true },
+		moderationReason: { type: String, trim: true, default: '' },
+		moderationNotes: { type: String, trim: true, default: '' },
+		approvedAt: { type: Date, default: null },
+		approvedBy: { type: Types.ObjectId, ref: 'User', default: null },
+		moderatedAt: { type: Date, default: null },
+		moderatedBy: { type: Types.ObjectId, ref: 'User', default: null },
 	},
 	{
 		timestamps: true,
@@ -60,6 +73,7 @@ const productSchema = new Schema(
 
 productSchema.index({ name: 'text' });
 productSchema.index({ category: 1, createdAt: -1 });
+productSchema.index({ moderationStatus: 1, createdAt: -1 });
 
 productSchema.methods.toPublic = function toPublic() {
 	return {

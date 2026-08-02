@@ -205,7 +205,7 @@ export default function MyEstablishmentsScreen({ navigation }: Props) {
         <TouchableOpacity
           style={[styles.addStoreCard, { backgroundColor: colors.green }]}
           activeOpacity={0.85}
-          onPress={() => navigation.navigate('EditStore', { establishmentId: undefined })}
+          onPress={() => navigation.navigate('EditStore', { establishmentId: 'new', isNew: true })}
         >
           <View style={styles.addStoreRow}>
             <View style={styles.addIconBg}>

@@ -26,6 +26,7 @@ import { useLanguage } from '@/shared/context/language.context';
 import { AppScaffold } from '@/shared/components/AppScaffold';
 import type { UpdateProfileDto } from '@/modules/auth/api/auth.api';
 import { MapWebView } from '@/modules/map/ui/components/MapWebView';
+import http from '@/core/network/http.client';
 import { upsertEstablishmentApi, EstablishmentCategory } from '../../api/establishment.api';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'EditStore'>;
@@ -349,15 +350,17 @@ export default function EditStoreScreen({ navigation, route }: Props) {
   const isSeller = user?.profileType === 'pro_commerce';
 
   const paramStore = route?.params?.store;
-  const establishmentId = route?.params?.establishmentId || paramStore?._id;
-  const storeInfo = user?.storeInfo || {};
+  const rawId = route?.params?.establishmentId || paramStore?._id;
+  const isNew = route?.params?.isNew === true || rawId === 'new';
+  const establishmentId = isNew ? undefined : rawId;
+  const storeInfo = isNew ? {} : (user?.storeInfo || {});
 
-  const [storeName, setStoreName] = useState(paramStore?.name ?? storeInfo.storeName ?? '');
-  const [description, setDescription] = useState(paramStore?.description ?? storeInfo.description ?? '');
-  const [address, setAddress] = useState(paramStore?.address ?? storeInfo.address ?? '');
-  const [operatingHours, setOperatingHours] = useState(storeInfo.operatingHours ?? '08:00 - 19:00');
-  const [phone, setPhone] = useState(paramStore?.phone ?? storeInfo.phone ?? '');
-  const [imageUrl, setImageUrl] = useState(paramStore?.coverImageUrl ?? paramStore?.logoUrl ?? storeInfo.imageUrl ?? '');
+  const [storeName, setStoreName] = useState(isNew ? '' : (paramStore?.name ?? storeInfo.storeName ?? ''));
+  const [description, setDescription] = useState(isNew ? '' : (paramStore?.description ?? storeInfo.description ?? ''));
+  const [address, setAddress] = useState(isNew ? '' : (paramStore?.address ?? storeInfo.address ?? ''));
+  const [operatingHours, setOperatingHours] = useState(isNew ? '08:00 - 19:00' : (storeInfo.operatingHours ?? '08:00 - 19:00'));
+  const [phone, setPhone] = useState(isNew ? '' : (paramStore?.phone ?? storeInfo.phone ?? ''));
+  const [imageUrl, setImageUrl] = useState(isNew ? '' : (paramStore?.coverImageUrl ?? paramStore?.logoUrl ?? storeInfo.imageUrl ?? ''));
   const [category, setCategory] = useState<EstablishmentCategory>(paramStore?.category ?? 'Supermarket');
   const [openTime, setOpenTime] = useState(paramStore?.openTime ?? '08:00');
   const [closeTime, setCloseTime] = useState(paramStore?.closeTime ?? '19:00');
@@ -439,21 +442,45 @@ export default function EditStoreScreen({ navigation, route }: Props) {
     setError('');
     setSaving(true);
     try {
-      const dto: any = {
-        storeInfo: {
-          storeName: storeName.trim() || undefined,
-          description: description.trim() || undefined,
-          address: address.trim() || undefined,
-          operatingHours: operatingHours.trim() || undefined,
-          phone: phone.trim() || undefined,
-          imageUrl: imageUrl.trim() || undefined,
-        }
-      };
-      await updateProfile(dto);
+      if (!storeName.trim()) {
+        setError(t('Veuillez entrer le nom du magasin', 'Veuillez entrer le nom du magasin'));
+        setSaving(false);
+        return;
+      }
 
-      // Save or update establishment in database for map markers and multi-store listing
+      // Submit shop update to seller moderation queue for admin review
+      try {
+        await http.post('/seller/shop/update', {
+          storeName: storeName.trim(),
+          description: description.trim(),
+          address: address.trim(),
+          phone: phone.trim(),
+          operatingHours,
+          category,
+          imageUrl: imageUrl.trim(),
+        });
+      } catch (modErr: any) {
+        console.warn('[shop-moderation-submit]', modErr?.response?.data?.message || modErr.message);
+      }
+
+      // If editing main store or first store setup, sync profile storeInfo
+      if (!isNew || !user?.storeInfo?.storeName) {
+        const dto: any = {
+          storeInfo: {
+            storeName: storeName.trim() || undefined,
+            description: description.trim() || undefined,
+            address: address.trim() || undefined,
+            operatingHours: operatingHours.trim() || undefined,
+            phone: phone.trim() || undefined,
+            imageUrl: imageUrl.trim() || undefined,
+          }
+        };
+        await updateProfile(dto);
+      }
+
+      // Save (update existing or create new) establishment document
       await upsertEstablishmentApi({
-        id: establishmentId,
+        id: isNew ? undefined : establishmentId,
         name: storeName.trim() || user?.fullName || 'Magasin Sans Gluten',
         category,
         description: description.trim(),
@@ -526,17 +553,17 @@ export default function EditStoreScreen({ navigation, route }: Props) {
   }
 
   return (
-    <AppScaffold title={t("Edit Store Info")} activeTab="profile" onBack={() => navigation.goBack()} contentStyle={{ backgroundColor: T.bg }}>
+    <AppScaffold title={isNew ? t("Add New Store", "Ajouter un magasin") : t("Edit Store Info", "Modifier le magasin")} activeTab="profile" onBack={() => navigation.goBack()} contentStyle={{ backgroundColor: T.bg }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
           <View style={s.heroBanner}>
             <View style={{ flex: 1 }}>
-              <Text style={s.heroBannerTitle}>{t("Store Information")}</Text>
-              <Text style={s.heroBannerSub}>{t("Keep your address, hours and\ncontact details up to date.")}</Text>
+              <Text style={s.heroBannerTitle}>{isNew ? t("New Store Profile", "Nouveau Point de Vente") : t("Store Information", "Informations du magasin")}</Text>
+              <Text style={s.heroBannerSub}>{isNew ? t("Create a profile for your new store location.", "Créez un profil pour votre nouveau point de vente.") : t("Keep your address, hours and\ncontact details up to date.")}</Text>
             </View>
             <View style={s.heroBannerIcon}>
-              <Feather name="home" size={24} color="#FFFFFF" />
+              <Feather name={isNew ? "plus-circle" : "home"} size={24} color="#FFFFFF" />
             </View>
           </View>
 
@@ -857,7 +884,7 @@ export default function EditStoreScreen({ navigation, route }: Props) {
             ) : (
               <>
                 <Feather name={isRTL ? "arrow-left" : "check"} size={20} color="#FFFFFF" />
-                <Text style={s.saveBtnText}>{t("Save Store Details")}</Text>
+                <Text style={s.saveBtnText}>{isNew ? t("Create Store Profile", "Créer le point de vente") : t("Save Store Details", "Enregistrer les modifications")}</Text>
               </>
             )}
           </TouchableOpacity>

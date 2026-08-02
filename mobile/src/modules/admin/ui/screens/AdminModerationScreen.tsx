@@ -1,90 +1,194 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  SafeAreaView, TextInput, ActivityIndicator,
+} from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../../../shared/context/theme.context';
 import { Colors, Font, Radius, Spacing } from '../../../../shared/utils/theme';
 import { useAdminModeration, TabType } from '../../hooks/useAdminModeration';
 import { ModerationCard } from '../components/ModerationCard';
 import { ActionModal } from '../components/ActionModal';
+import { ModerationDetailModal } from '../components/ModerationDetailModal';
 import { SkeletonCard } from '../components/SkeletonCard';
-
 import { useLanguage } from '../../../../shared/context/language.context';
+import { ModerationStatus } from '../../api/admin.api';
+
+const CONTENT_TABS: { id: TabType; label: string; icon: string; color: string }[] = [
+  { id: 'products', label: 'Produits',   icon: 'food-apple',  color: '#8BC34A' },
+  { id: 'events',   label: 'Événements', icon: 'calendar',    color: '#3B82F6' },
+  { id: 'recipes',  label: 'Recettes',   icon: 'chef-hat',    color: '#F59E0B' },
+  { id: 'reels',    label: 'Reels',      icon: 'movie-play',  color: '#EC4899' },
+];
+
+const STATUS_FILTERS: { id: ModerationStatus; label: string; color: string }[] = [
+  { id: 'pending',            label: 'En attente', color: '#F59E0B' },
+  { id: 'revision_requested', label: 'Révision',   color: '#8B5CF6' },
+  { id: 'rejected',           label: 'Refusés',    color: '#EF4444' },
+  { id: 'approved',           label: 'Approuvés',  color: '#22C55E' },
+  { id: 'all',                label: 'Tout',       color: '#6B7280' },
+];
 
 export function AdminModerationScreen({ route, navigation }: any) {
   const { theme: T, isDark } = useTheme();
   const { t } = useLanguage();
   const initialTab: TabType = route?.params?.initialTab || 'products';
-  const { activeTab, setActiveTab, loading, filteredItems, modal } = useAdminModeration(initialTab);
-  const primaryGreen = Colors.green || '#8BC34A';
 
-  const tabs: { id: TabType; label: string; icon: string; color: string }[] = [
-    { id: 'products', label: t('mod.filter_products', 'Produits'), icon: 'food-apple', color: '#8BC34A' },
-    { id: 'events', label: t('mod.filter_events', 'Événements'), icon: 'calendar', color: '#3B82F6' },
-    { id: 'recipes', label: t('mod.filter_recipes', 'Recettes'), icon: 'chef-hat', color: '#F59E0B' },
-    { id: 'reels', label: t('mod.filter_reels', 'Reels'), icon: 'movie-play', color: '#EC4899' },
-  ];
+  const {
+    activeTab, setActiveTab,
+    statusFilter, setStatusFilter,
+    loading, filteredItems,
+    search, setSearch,
+    refresh, modal, detail,
+  } = useAdminModeration(initialTab);
+
+  const primaryGreen = Colors.green || '#8BC34A';
+  const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
+  const borderC = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const inputBg = isDark ? '#2C2C2E' : 'rgba(46,46,46,0.05)';
+
+  const activeTabConfig = CONTENT_TABS.find(t => t.id === activeTab);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: T.bg }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: isDark ? '#1C1C1E' : Colors.white, borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack()}>
+    <SafeAreaView style={[styles.root, { backgroundColor: T.bg }]}>
+      {/* ─── Header ─────────────────────────────────────────── */}
+      <View style={[styles.header, { backgroundColor: cardBg, borderBottomColor: borderC }]}>
+        <TouchableOpacity style={styles.iconBtn} onPress={() => navigation?.goBack()}>
           <Feather name="arrow-left" size={20} color={T.text} />
         </TouchableOpacity>
-        <View style={styles.headerText}>
-          <Text style={[styles.headerTitle, { color: T.text }]}>{t('mod.title', 'Centre de Modération')}</Text>
-          <Text style={[styles.headerSub, { color: T.textMuted }]}>{t('mod.sub', 'Validation des produits, recettes, événements et reels')}</Text>
+        <View style={styles.headerCenter}>
+          <Text style={[styles.headerTitle, { color: T.text }]}>Modération</Text>
+          <Text style={[styles.headerSub, { color: T.textMuted }]}>
+            {filteredItems.length} élément{filteredItems.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.iconBtn} onPress={refresh}>
+          <Feather name="refresh-cw" size={18} color={T.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      {/* ─── Search ──────────────────────────────────────────── */}
+      <View style={styles.searchContainer}>
+        <View style={[styles.searchBar, { backgroundColor: inputBg, borderColor: borderC }]}>
+          <Feather name="search" size={16} color={T.textMuted} />
+          <TextInput
+            style={[styles.searchInput, { color: T.text }]}
+            placeholder="Rechercher un contenu..."
+            placeholderTextColor={T.textMuted}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Feather name="x-circle" size={16} color={T.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      {/* Pill Tabs */}
-      <View style={styles.tabBarContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
-          {tabs.map((tab) => {
+      {/* ─── Content Type Chips ──────────────────────────────── */}
+      <View style={styles.chipSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+        >
+          {CONTENT_TABS.map(tab => {
             const isActive = activeTab === tab.id;
             return (
               <TouchableOpacity
                 key={tab.id}
                 style={[
-                  styles.tabPill,
-                  { backgroundColor: isActive ? tab.color : isDark ? '#2C2C2E' : 'rgba(46,46,46,0.06)' },
+                  styles.typeChip,
+                  {
+                    backgroundColor: isActive ? tab.color : (isDark ? '#2C2C2E' : 'rgba(46,46,46,0.06)'),
+                    borderColor: isActive ? tab.color : 'transparent',
+                  },
                 ]}
                 onPress={() => setActiveTab(tab.id)}
+                activeOpacity={0.75}
               >
-                <MaterialCommunityIcons name={tab.icon as any} size={15} color={isActive ? '#FFF' : T.textMuted} />
-                <Text style={[styles.tabLabel, { color: isActive ? '#FFF' : T.text }]}>{tab.label}</Text>
+                <MaterialCommunityIcons
+                  name={tab.icon as any}
+                  size={14}
+                  color={isActive ? '#FFF' : T.textMuted}
+                />
+                <Text style={[styles.typeChipLabel, { color: isActive ? '#FFF' : T.text }]}>
+                  {tab.label}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       </View>
 
-      {/* Content */}
-      <ScrollView contentContainerStyle={styles.contentScroll}>
+      {/* ─── Status Filter Underline Tabs ────────────────────── */}
+      <View style={[styles.statusBar, { borderBottomColor: borderC }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.statusRow}
+        >
+          {STATUS_FILTERS.map(s => {
+            const isActive = statusFilter === s.id;
+            return (
+              <TouchableOpacity
+                key={s.id}
+                style={styles.statusTab}
+                onPress={() => setStatusFilter(s.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.statusLabel, {
+                  color: isActive ? s.color : T.textMuted,
+                  fontFamily: isActive ? Font.semibold : Font.regular,
+                }]}>
+                  {s.label}
+                </Text>
+                {isActive && (
+                  <View style={[styles.statusUnderline, { backgroundColor: s.color }]} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* ─── List ────────────────────────────────────────────── */}
+      <ScrollView
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      >
         {loading ? (
           <>
-            <SkeletonCard height={100} />
-            <SkeletonCard height={100} />
-            <SkeletonCard height={100} />
+            <SkeletonCard height={120} />
+            <SkeletonCard height={120} />
+            <SkeletonCard height={120} />
           </>
         ) : filteredItems.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Feather name="check-circle" size={40} color={primaryGreen} />
-            <Text style={[styles.emptyText, { color: T.textMuted }]}>Aucun contenu en attente dans cette catégorie</Text>
+            <View style={[styles.emptyIcon, { backgroundColor: Colors.greenLight }]}>
+              <Feather name="check-circle" size={32} color={primaryGreen} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: T.text }]}>Tout est à jour !</Text>
+            <Text style={[styles.emptyDesc, { color: T.textMuted }]}>
+              Aucun contenu{activeTabConfig ? ` (${activeTabConfig.label})` : ''} dans cette catégorie.
+            </Text>
           </View>
         ) : (
-          filteredItems.map((item) => (
+          filteredItems.map(item => (
             <ModerationCard
               key={item.id}
               item={item}
               onApprove={() => modal.handleOpenAction(item, 'approve')}
               onReject={() => modal.handleOpenAction(item, 'reject')}
+              onRevision={() => modal.handleOpenAction(item, 'revision')}
+              onViewDetail={() => detail.open(item)}
             />
           ))
         )}
       </ScrollView>
 
-      {/* Decision Modal */}
+      {/* ─── Action Modal ───────────────────────────────────────────────── */}
       <ActionModal
         visible={modal.visible}
         onClose={() => modal.setVisible(false)}
@@ -93,43 +197,134 @@ export function AdminModerationScreen({ route, navigation }: any) {
         selectedItem={modal.selectedItem}
         rejectReason={modal.rejectReason}
         setRejectReason={modal.setRejectReason}
+        revisionNotes={modal.revisionNotes}
+        setRevisionNotes={modal.setRevisionNotes}
+      />
+
+      {/* ─── Detail Modal ────────────────────────────────────────────────── */}
+      <ModerationDetailModal
+        visible={detail.visible}
+        item={detail.item}
+        onClose={() => detail.setVisible(false)}
+        onApprove={() => {
+          detail.setVisible(false);
+          if (detail.item) modal.handleOpenAction(detail.item, 'approve');
+        }}
+        onReject={() => {
+          detail.setVisible(false);
+          if (detail.item) modal.handleOpenAction(detail.item, 'reject');
+        }}
+        onRevision={() => {
+          detail.setVisible(false);
+          if (detail.item) modal.handleOpenAction(detail.item, 'revision');
+        }}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  root: { flex: 1 },
+
+  /* Header */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing.sm,
   },
-  headerText: { flex: 1 },
-  headerTitle: { fontFamily: Font.bold, fontSize: 20 },
-  headerSub: { fontFamily: Font.regular, fontSize: 13, marginTop: 2 },
-  tabBarContainer: { marginTop: Spacing.md, marginBottom: Spacing.xs },
-  tabsScroll: { paddingHorizontal: Spacing.md, gap: 8 },
-  tabPill: {
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle:  { fontFamily: Font.bold, fontSize: 17 },
+  headerSub:    { fontFamily: Font.regular, fontSize: 12, marginTop: 1 },
+
+  /* Search */
+  searchContainer: { paddingHorizontal: Spacing.md, paddingTop: 12, paddingBottom: 4 },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: Font.regular,
+    fontSize: 14,
+    padding: 0,
+    margin: 0,
+  },
+
+  /* Content Type Chips */
+  chipSection: { paddingTop: 12 },
+  chipRow: {
+    paddingHorizontal: Spacing.md,
+    gap: 8,
+  },
+  typeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 13,
     borderRadius: Radius.full,
+    borderWidth: 1.5,
     gap: 5,
   },
-  tabLabel: { fontFamily: Font.medium, fontSize: 13 },
-  contentScroll: { padding: Spacing.md, paddingBottom: 120 },
-  emptyBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: Spacing.xxl, marginTop: Spacing.lg },
-  emptyText: { fontFamily: Font.medium, fontSize: 15, marginTop: Spacing.md, textAlign: 'center' },
+  typeChipLabel: { fontFamily: Font.medium, fontSize: 13 },
+
+  /* Status filter underline tabs */
+  statusBar: {
+    borderBottomWidth: 1,
+    marginTop: 12,
+  },
+  statusRow: {
+    paddingHorizontal: Spacing.md,
+    gap: 4,
+  },
+  statusTab: {
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    paddingTop: 4,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  statusLabel: { fontSize: 13 },
+  statusUnderline: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
+    borderRadius: 2,
+  },
+
+  /* List */
+  listContent: { padding: Spacing.md, paddingBottom: 120 },
+
+  /* Empty */
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xxl,
+    marginTop: Spacing.lg,
+  },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.md,
+  },
+  emptyTitle: { fontFamily: Font.bold, fontSize: 17, marginBottom: 6 },
+  emptyDesc:  { fontFamily: Font.regular, fontSize: 14, textAlign: 'center', lineHeight: 20 },
 });

@@ -27,6 +27,7 @@ const patientResourcesRoutes = require('./modules/patient-resources/patient-reso
 const uploadsRoutes = require('./modules/uploads/uploads.routes');
 const reelsRoutes = require('./modules/reels/reels.routes');
 const reelPreviewRoutes = require('./modules/reels/reels.preview.routes');
+const sellerRoutes = require('./modules/seller/seller.routes');
 
 const app = express();
 
@@ -146,6 +147,7 @@ app.use('/api/uploads', uploadsRoutes);
 app.use('/api/reels', reelsRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/establishments', establishmentRoutes);
+app.use('/api/seller', sellerRoutes);
 
 // ── Reel Preview (Open Graph / social share) ──────────────────────────────────
 // Public route: GET /reel/:id → returns server-rendered HTML with OG meta tags.

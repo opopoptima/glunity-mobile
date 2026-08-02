@@ -9,71 +9,171 @@ interface ActionModalProps {
   visible: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  actionType: 'approve' | 'reject';
+  actionType: 'approve' | 'reject' | 'revision';
   selectedItem: ModerationItem | null;
   rejectReason: string;
   setRejectReason: (reason: string) => void;
+  revisionNotes?: string;
+  setRevisionNotes?: (notes: string) => void;
 }
 
-export function ActionModal({ visible, onClose, onConfirm, actionType, selectedItem, rejectReason, setRejectReason }: ActionModalProps) {
+const ACTION_CONFIG = {
+  approve: {
+    title: 'Confirmer la validation',
+    icon:  'check-circle' as const,
+    color: '#22C55E',
+    btnLabel: 'Approuver & Notifier',
+  },
+  reject: {
+    title: 'Motif de refus',
+    icon:  'x-circle' as const,
+    color: '#EF4444',
+    btnLabel: 'Envoyer le refus',
+  },
+  revision: {
+    title: 'Demande de révision',
+    icon:  'edit-2' as const,
+    color: '#8B5CF6',
+    btnLabel: 'Demander des modifications',
+  },
+};
+
+export function ActionModal({
+  visible, onClose, onConfirm, actionType, selectedItem,
+  rejectReason, setRejectReason, revisionNotes, setRevisionNotes,
+}: ActionModalProps) {
   const { theme: T, isDark } = useTheme();
-  const primaryGreen = Colors.green || '#8BC34A';
+  const cardBg  = isDark ? '#1C1C1E' : '#FFFFFF';
+  const inputBg = isDark ? '#2C2C2E' : 'rgba(46,46,46,0.05)';
+  const borderC = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+
+  const cfg = ACTION_CONFIG[actionType];
+
+  const description =
+    actionType === 'approve'
+      ? `"${selectedItem?.title || 'cet élément'}" sera rendu visible. L'auteur recevra une notification.`
+      : actionType === 'reject'
+      ? `Expliquez pourquoi "${selectedItem?.title || 'cet élément'}" est refusé. L'auteur sera notifié.`
+      : `Précisez les modifications attendues pour "${selectedItem?.title || 'cet élément'}".`;
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: isDark ? '#1C1C1E' : Colors.white }]}>
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: T.text }]}>
-              {actionType === 'approve' ? 'Confirmation de Validation' : 'Motif de Refus'}
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Feather name="x" size={20} color={T.textMuted} />
-            </TouchableOpacity>
+      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+        {/* Bottom-sheet stops propagation */}
+        <TouchableOpacity activeOpacity={1} style={[styles.sheet, { backgroundColor: cardBg }]}>
+          {/* Drag handle */}
+          <View style={[styles.handle, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }]} />
+
+          {/* Icon + Title */}
+          <View style={styles.titleRow}>
+            <View style={[styles.titleIcon, { backgroundColor: cfg.color + '18' }]}>
+              <Feather name={cfg.icon} size={20} color={cfg.color} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.title, { color: T.text }]}>{cfg.title}</Text>
+              <Text style={[styles.desc, { color: T.textMuted }]}>{description}</Text>
+            </View>
           </View>
 
-          <Text style={[styles.modalDesc, { color: T.textMuted }]}>
-            {actionType === 'approve'
-              ? `Voulez-vous publier "${selectedItem?.title || 'cet élément'}" ? L'utilisateur sera notifié par In-App et Email.`
-              : `Veuillez spécifier le motif du refus pour "${selectedItem?.title || 'cet élément'}".`}
-          </Text>
-
-          {actionType === 'reject' && (
+          {/* Text input */}
+          {(actionType === 'reject' || actionType === 'revision') && (
             <TextInput
-              style={[styles.reasonInput, { color: T.text, backgroundColor: isDark ? '#2C2C2E' : 'rgba(46,46,46,0.06)', borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(46,46,46,0.2)' }]}
-              placeholder="Ex: Contenu inapproprié, manque de détails..."
+              style={[styles.input, { color: T.text, backgroundColor: inputBg, borderColor: borderC }]}
+              placeholder={
+                actionType === 'reject'
+                  ? 'Ex: Images manquantes, contenu inapproprié...'
+                  : 'Ex: Veuillez corriger la liste des ingrédients...'
+              }
               placeholderTextColor={T.textMuted}
               multiline
-              numberOfLines={3}
-              value={rejectReason}
-              onChangeText={setRejectReason}
+              numberOfLines={4}
+              value={actionType === 'reject' ? rejectReason : revisionNotes}
+              onChangeText={actionType === 'reject' ? setRejectReason : setRevisionNotes}
+              autoFocus
             />
           )}
 
-          <View style={styles.modalActions}>
-            <TouchableOpacity style={[styles.btnModal, { backgroundColor: isDark ? '#2C2C2E' : 'rgba(46,46,46,0.06)' }]} onPress={onClose}>
-              <Text style={[styles.btnModalText, { color: T.text }]}>Annuler</Text>
+          {/* Buttons */}
+          <View style={styles.btnRow}>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnCancel, { backgroundColor: inputBg }]}
+              onPress={onClose}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.btnText, { color: T.text }]}>Annuler</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.btnModal, { backgroundColor: actionType === 'approve' ? primaryGreen : Colors.error }]} onPress={onConfirm}>
-              <Text style={[styles.btnModalText, { color: Colors.white }]}>
-                {actionType === 'approve' ? 'Confirmer' : 'Envoyer le refus'}
-              </Text>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnConfirm, { backgroundColor: cfg.color }]}
+              onPress={onConfirm}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.btnText, { color: '#FFF' }]}>{cfg.btnLabel}</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: Spacing.md },
-  modalContent: { width: '100%', borderRadius: Radius.lg, padding: Spacing.lg, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
-  modalTitle: { fontFamily: Font.bold, fontSize: 18 },
-  modalDesc: { fontFamily: Font.regular, fontSize: 14, marginBottom: Spacing.md, lineHeight: 20 },
-  reasonInput: { borderWidth: 1, borderRadius: Radius.md, padding: Spacing.sm, fontFamily: Font.regular, fontSize: 14, minHeight: 80, textAlignVertical: 'top', marginBottom: Spacing.md },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Spacing.md, marginTop: Spacing.md },
-  btnModal: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: Radius.md },
-  btnModalText: { fontFamily: Font.medium, fontSize: 14 },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 34,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: 20,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 18,
+  },
+  titleIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  title: { fontFamily: Font.bold, fontSize: 17, marginBottom: 4 },
+  desc:  { fontFamily: Font.regular, fontSize: 13, lineHeight: 18 },
+  input: {
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    padding: 12,
+    fontFamily: Font.regular,
+    fontSize: 14,
+    minHeight: 90,
+    textAlignVertical: 'top',
+    marginBottom: 18,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  btn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+  },
+  btnCancel:  {},
+  btnConfirm: {},
+  btnText: { fontFamily: Font.semibold, fontSize: 14 },
 });

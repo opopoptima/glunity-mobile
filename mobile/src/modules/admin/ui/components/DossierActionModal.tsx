@@ -9,7 +9,7 @@ interface DossierActionModalProps {
   modalType: 'details' | 'action' | null;
   onClose: () => void;
   seller: SellerVerificationDossier | null;
-  actionKind: 'approve' | 'revision' | 'reject';
+  actionKind: 'approve' | 'revision' | 'reject' | 'revoke';
   remarks: string;
   setRemarks: (text: string) => void;
   onConfirmAction: () => void;

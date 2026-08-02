@@ -57,6 +57,20 @@ const userSchema = new Schema(
 
     storeInfo: storeSchema,
 
+    sellerVerificationStatus: {
+      type: String,
+      enum: ['draft', 'pending', 'approved', 'rejected', 'revision_requested', 'resubmitted'],
+      default: 'draft',
+      index: true,
+    },
+    sellerVerificationDocuments: { type: [String], default: [] },
+    sellerVerificationReason: { type: String, default: '' },
+    sellerVerificationNotes: { type: String, default: '' },
+    sellerBadge: { type: String, enum: ['none', 'verified'], default: 'none' },
+    isVerifiedSeller: { type: Boolean, default: false, index: true },
+    verifiedAt: { type: Date, default: null },
+    verifiedBy: { type: Types.ObjectId, ref: 'User', default: null },
+
     googleId: { type: String, unique: true, sparse: true },
     facebookId: { type: String, unique: true, sparse: true },
 

@@ -179,6 +179,71 @@ exports.upsertEstablishment = async (req, res, next) => {
       establishment = await Establishment.create(payload);
     }
 
+    // Upsert ShopModeration (update existing pending or create new) — prevents duplicates in admin queue
+    try {
+      const ShopModeration = require('../../../database/models/shop-moderation.model');
+      const ModerationHistory = require('../../../database/models/moderation-history.model');
+      const User = require('../../../database/models/user.model');
+
+      const seller = await User.findById(userId).select('fullName email storeInfo').lean();
+
+      const proposedData = {
+        storeName: payload.name,
+        category: payload.category,
+        description: payload.description,
+        address: payload.address,
+        phone: payload.phone,
+        openTime: payload.openTime,
+        closeTime: payload.closeTime,
+        coverImageUrl: payload.coverImageUrl,
+      };
+
+      const currentData = seller?.storeInfo || {};
+
+      const changedFields = [
+        { field: 'Nom du magasin', oldValue: currentData.storeName ?? null, newValue: payload.name },
+        { field: 'Catégorie', oldValue: currentData.category ?? null, newValue: payload.category },
+        { field: 'Adresse', oldValue: currentData.address ?? null, newValue: payload.address },
+        { field: 'Téléphone', oldValue: currentData.phone ?? null, newValue: payload.phone },
+      ].filter(cf => JSON.stringify(cf.oldValue) !== JSON.stringify(cf.newValue));
+
+      const finalChangedFields = changedFields.length > 0
+        ? changedFields
+        : [{ field: id ? 'Modification boutique' : 'Nouveau point de vente', oldValue: null, newValue: payload.name }];
+
+      // Upsert: update existing pending submission OR create new one (prevents duplicate entries)
+      const submission = await ShopModeration.findOneAndUpdate(
+        { sellerId: userId, moderationStatus: 'pending' },
+        {
+          $set: {
+            shopId: userId,
+            establishmentId: establishment._id,
+            currentData,
+            proposedData,
+            changedFields: finalChangedFields,
+            moderationStatus: 'pending',
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      await ModerationHistory.create({
+        entityType: 'shop',
+        entityId: submission._id,
+        entityTitle: payload.name || 'Boutique',
+        action: 'submitted',
+        previousStatus: 'approved',
+        newStatus: 'pending',
+        ownerId: userId,
+        ownerName: seller?.fullName || '',
+        shopId: userId,
+        shopName: payload.name || '',
+        changedFields: finalChangedFields,
+      }).catch(err => console.warn('[shop-history] failed:', err.message));
+    } catch (modErr) {
+      console.warn('[Shop Moderation Upsert Warning]', modErr.message);
+    }
+
     // Sync corresponding Location record for map rendering
     try {
       const Location = require('../../../database/models/location.model');

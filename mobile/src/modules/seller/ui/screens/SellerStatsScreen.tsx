@@ -174,7 +174,7 @@ export default function SellerStatsScreen({ navigation }: Props) {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => navigation.navigate('EditStore')}
+              onPress={() => navigation.navigate('EditStore', { isNew: false })}
               activeOpacity={0.85}
               id="btn-stats-edit-store"
               style={{
