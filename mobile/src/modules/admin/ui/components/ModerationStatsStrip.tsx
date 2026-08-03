@@ -52,12 +52,8 @@ export function ModerationStatsStrip({ stats, onCellPress }: Props) {
         </View>
       </View>
 
-      {/* Per-category strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.strip}
-      >
+      {/* Per-category strip (4 cards fill screen width evenly) */}
+      <View style={styles.gridRow}>
         {CELLS.map(cell => {
           const count = (stats?.[cell.key] as number) ?? 0;
           const isUrgent = count > 10;
@@ -69,7 +65,7 @@ export function ModerationStatsStrip({ stats, onCellPress }: Props) {
               onPress={() => onCellPress?.(cell.key)}
             >
               <View style={[styles.cellIcon, { backgroundColor: cell.color + '18' }]}>
-                <MaterialCommunityIcons name={cell.icon as any} size={16} color={cell.color} />
+                <MaterialCommunityIcons name={cell.icon as any} size={20} color={cell.color} />
               </View>
               <Text style={[styles.cellCount, { color: T.text }]}>{count}</Text>
               <Text style={[styles.cellLabel, { color: T.textMuted }]} numberOfLines={1}>{cell.label}</Text>
@@ -79,7 +75,7 @@ export function ModerationStatsStrip({ stats, onCellPress }: Props) {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -105,24 +101,24 @@ const styles = StyleSheet.create({
   todayPill:  { flexDirection: 'row', alignItems: 'center', gap: 3 },
   todayText:  { fontFamily: Font.semibold, fontSize: 11 },
 
-  strip: { paddingHorizontal: 14, gap: 8, paddingBottom: 4 },
+  gridRow: { paddingHorizontal: 14, flexDirection: 'row', gap: 8, paddingBottom: 4 },
   cell: {
-    width: 78,
-    borderRadius: Radius.md,
+    flex: 1,
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    paddingVertical: 7,
-    paddingHorizontal: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
     position: 'relative',
   },
-  cellIcon:  { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  cellCount: { fontFamily: Font.bold, fontSize: 16 },
-  cellLabel: { fontFamily: Font.regular, fontSize: 10, textAlign: 'center' },
+  cellIcon:  { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  cellCount: { fontFamily: Font.bold, fontSize: 17 },
+  cellLabel: { fontFamily: Font.medium, fontSize: 11, textAlign: 'center' },
   urgentDot: {
     position: 'absolute',
-    top: 5,
-    right: 5,
+    top: 6,
+    right: 6,
     width: 6,
     height: 6,
     borderRadius: 3,
