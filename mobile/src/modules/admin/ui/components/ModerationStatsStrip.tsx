@@ -70,7 +70,7 @@ export function ModerationStatsStrip({ stats, onCellPress }: Props) {
               onPress={() => onCellPress?.(cell.key)}
             >
               <View style={[styles.cellIcon, { backgroundColor: cell.color + '18' }]}>
-                <MaterialCommunityIcons name={cell.icon as any} size={18} color={cell.color} />
+                <MaterialCommunityIcons name={cell.icon as any} size={16} color={cell.color} />
               </View>
               <Text style={[styles.cellCount, { color: T.text }]}>{count}</Text>
               <Text style={[styles.cellLabel, { color: T.textMuted }]} numberOfLines={1}>{cell.label}</Text>
@@ -86,45 +86,47 @@ export function ModerationStatsStrip({ stats, onCellPress }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrapper: { paddingBottom: 4 },
+  wrapper: { paddingBottom: 2 },
 
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 14,
-    marginVertical: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: Radius.lg,
+    marginTop: 6,
+    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: Radius.md,
     borderWidth: 1,
   },
   summaryLeft: { flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 5 },
-  totalNum:   { fontFamily: Font.bold, fontSize: 28 },
-  totalLabel: { fontFamily: Font.regular, fontSize: 13 },
+  totalNum:   { fontFamily: Font.bold, fontSize: 20 },
+  totalLabel: { fontFamily: Font.regular, fontSize: 12 },
   summaryRight: { flexDirection: 'row', alignItems: 'center' },
-  todayPill:  { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  todayText:  { fontFamily: Font.semibold, fontSize: 12 },
+  todayPill:  { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  todayText:  { fontFamily: Font.semibold, fontSize: 11 },
 
-  strip: { paddingHorizontal: 14, gap: 10, paddingBottom: 6 },
+  strip: { paddingHorizontal: 14, gap: 8, paddingBottom: 4 },
   cell: {
-    width: 88,
-    borderRadius: Radius.lg,
+    width: 78,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    padding: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
     alignItems: 'center',
-    gap: 6,
+    gap: 3,
     position: 'relative',
   },
-  cellIcon:  { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  cellCount: { fontFamily: Font.bold, fontSize: 20 },
-  cellLabel: { fontFamily: Font.regular, fontSize: 11, textAlign: 'center' },
+  cellIcon:  { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  cellCount: { fontFamily: Font.bold, fontSize: 16 },
+  cellLabel: { fontFamily: Font.regular, fontSize: 10, textAlign: 'center' },
   urgentDot: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    top: 5,
+    right: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#EF4444',
   },
 });

@@ -357,14 +357,14 @@ const styles = StyleSheet.create({
   headerSub:    { fontFamily: Font.regular, fontSize: 12, marginTop: 1 },
 
   /* Search */
-  searchContainer: { paddingHorizontal: Spacing.md, paddingTop: 12, paddingBottom: 4 },
+  searchContainer: { paddingHorizontal: Spacing.md, paddingTop: 6, paddingBottom: 4 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 7,
     gap: 8,
   },
   searchInput: {
