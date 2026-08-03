@@ -14,11 +14,10 @@ interface StatCell {
 }
 
 const CELLS: StatCell[] = [
-  { key: 'pendingProducts',          label: 'Produits',   icon: 'food-apple',           color: '#8BC34A' },
-  { key: 'pendingRecipes',           label: 'Recettes',   icon: 'chef-hat',             color: '#F59E0B' },
-  { key: 'pendingReels',             label: 'Reels',      icon: 'movie-play',           color: '#EC4899' },
-  { key: 'pendingShopUpdates',       label: 'Boutiques',  icon: 'store-edit-outline',   color: '#3B82F6' },
-  { key: 'pendingSellerVerifications', label: 'Vendeurs', icon: 'shield-account-outline', color: '#8B5CF6' },
+  { key: 'pendingProducts', label: 'Produits',   icon: 'food-apple',  color: '#8BC34A' },
+  { key: 'pendingEvents' as any,   label: 'Événements', icon: 'calendar',    color: '#3B82F6' },
+  { key: 'pendingRecipes',  label: 'Recettes',   icon: 'chef-hat',    color: '#F59E0B' },
+  { key: 'pendingReels',    label: 'Reels',      icon: 'movie-play',  color: '#EC4899' },
 ];
 
 interface Props {

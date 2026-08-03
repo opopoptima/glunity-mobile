@@ -72,6 +72,7 @@ export function AdminModerationScreen({ route, navigation }: any) {
   const { stats: dashStats } = useAdminDashboard();
   const moderationStats = dashStats ? {
     pendingProducts: dashStats.pendingModeration?.products ?? 0,
+    pendingEvents:   dashStats.pendingModeration?.events ?? 0,
     pendingRecipes:  dashStats.pendingModeration?.recipes ?? 0,
     pendingReels:    dashStats.pendingModeration?.reels ?? 0,
     pendingShopUpdates: (dashStats as any).pendingShopUpdates ?? 0,
@@ -148,6 +149,7 @@ export function AdminModerationScreen({ route, navigation }: any) {
       {/* ─── Stats Strip ─────────────────────────────────────── */}
       <ModerationStatsStrip stats={moderationStats} onCellPress={(key) => {
         if (key === 'pendingProducts') setActiveTab('products');
+        else if (key === 'pendingEvents') setActiveTab('events');
         else if (key === 'pendingRecipes') setActiveTab('recipes');
         else if (key === 'pendingReels') setActiveTab('reels');
       }} />
@@ -251,24 +253,6 @@ export function AdminModerationScreen({ route, navigation }: any) {
           />
         }
       >
-        {/* Quick-access cross-links */}
-        <View style={styles.crossLinks}>
-          {[
-            { label: 'Boutiques', icon: 'store-edit-outline', color: '#3B82F6', sub: `${moderationStats?.pendingShopUpdates ?? 0} en attente` },
-            { label: 'Vendeurs',  icon: 'shield-account-outline', color: '#8B5CF6', sub: `${moderationStats?.pendingSellerVerifications ?? 0} dossiers` },
-          ].map(link => (
-            <View key={link.label} style={[styles.crossCard, { borderColor: borderC, backgroundColor: cardBg }]}>
-              <View style={[styles.crossIcon, { backgroundColor: link.color + '18' }]}>
-                <MaterialCommunityIcons name={link.icon as any} size={18} color={link.color} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.crossLabel, { color: T.text }]}>{link.label}</Text>
-                <Text style={[styles.crossSub, { color: T.textMuted }]}>{link.sub}</Text>
-              </View>
-              <Feather name="chevron-right" size={16} color={T.textMuted} />
-            </View>
-          ))}
-        </View>
         {loading ? (
           <>
             <SkeletonCard height={120} />
