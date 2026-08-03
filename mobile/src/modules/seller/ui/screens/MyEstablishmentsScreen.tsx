@@ -38,7 +38,15 @@ export default function MyEstablishmentsScreen({ navigation }: Props) {
     if (!isRefresh) setLoading(true);
     try {
       const data = await getMyEstablishmentsApi();
-      setEstablishments(data);
+      const seen = new Set<string>();
+      const unique = data.filter(item => {
+        const key = (item.name || '').trim().toLowerCase();
+        if (seen.has(key) || seen.has(item._id)) return false;
+        seen.add(key);
+        seen.add(item._id);
+        return true;
+      });
+      setEstablishments(unique);
     } catch (err: any) {
       // quiet fallback
     } finally {
@@ -63,10 +71,18 @@ export default function MyEstablishmentsScreen({ navigation }: Props) {
           text: t('Supprimer', 'Supprimer'),
           style: 'destructive',
           onPress: async () => {
+            // Optimistic instant removal from UI (< 1s)
+            const previousList = [...establishments];
+            setEstablishments(prev => prev.filter(item =>
+              item._id !== store._id &&
+              (item.name || '').trim().toLowerCase() !== (store.name || '').trim().toLowerCase()
+            ));
+
             try {
               await deleteEstablishmentApi(store._id);
-              fetchStores();
             } catch (err: any) {
+              // Revert on error
+              setEstablishments(previousList);
               Alert.alert(t('Erreur', 'Erreur'), err?.message || t('Échec de la suppression.', 'Échec de la suppression.'));
             }
           },

@@ -97,15 +97,55 @@ exports.getEstablishmentById = async (req, res, next) => {
 
 /**
  * Get all establishments owned by current logged in seller (multi-store support)
+ * Strictly deduplicated so each boutique appears only once.
  */
 exports.getMyEstablishments = async (req, res, next) => {
   try {
     const userId = req.user.id || req.user._id;
-    const establishments = await Establishment.find({ owner: userId }).sort({ createdAt: -1 });
+    const ShopModeration = require('../../../database/models/shop-moderation.model');
+
+    const [rawEstablishments, shopModerations] = await Promise.all([
+      Establishment.find({ owner: userId }).sort({ createdAt: -1 }),
+      ShopModeration.find({ sellerId: userId }).sort({ updatedAt: -1 }).lean().catch(() => []),
+    ]);
+
+    const moderationMap = new Map();
+    for (const mod of shopModerations) {
+      if (mod.establishmentId && !moderationMap.has(mod.establishmentId.toString())) {
+        moderationMap.set(mod.establishmentId.toString(), mod);
+      }
+      if (mod.proposedData?.storeName && !moderationMap.has(mod.proposedData.storeName.trim().toLowerCase())) {
+        moderationMap.set(mod.proposedData.storeName.trim().toLowerCase(), mod);
+      }
+    }
+
+    const seen = new Set();
+    const uniqueEstablishments = [];
+
+    for (const est of rawEstablishments) {
+      const nameKey = (est.name || '').trim().toLowerCase();
+      const idKey = est._id.toString();
+
+      if (!seen.has(nameKey) && !seen.has(idKey)) {
+        seen.add(nameKey);
+        seen.add(idKey);
+
+        const mod = moderationMap.get(idKey) || moderationMap.get(nameKey);
+        const estObj = est.toObject ? est.toObject() : { ...est };
+
+        if (mod) {
+          estObj.moderationStatus = mod.moderationStatus;
+          estObj.moderationReason = mod.reason || mod.moderationReason || '';
+          estObj.moderationNotes = mod.notes || mod.moderationNotes || '';
+        }
+
+        uniqueEstablishments.push(estObj);
+      }
+    }
 
     return res.json({
       success: true,
-      data: establishments,
+      data: uniqueEstablishments,
     });
   } catch (error) {
     return next(error);
@@ -297,13 +337,36 @@ exports.upsertEstablishment = async (req, res, next) => {
 exports.deleteEstablishment = async (req, res, next) => {
   try {
     const userId = req.user.id || req.user._id;
-    const establishment = await Establishment.findOneAndDelete({ _id: req.params.id, owner: userId });
+    const estId = req.params.id;
+
+    const establishment = await Establishment.findOneAndDelete({ _id: estId, owner: userId });
 
     if (!establishment) {
       return res.status(404).json({
         success: false,
         message: 'Magasin non trouvé ou non autorisé',
       });
+    }
+
+    // Delete any duplicate establishment records with the same store name for this owner
+    if (establishment.name) {
+      await Establishment.deleteMany({
+        owner: userId,
+        name: { $regex: `^${establishment.name.trim()}$`, $options: 'i' },
+      }).catch(err => console.warn('[deleteEstablishment duplicates warning]', err.message));
+    }
+
+    // Clean up corresponding ShopModeration and Location records
+    try {
+      const ShopModeration = require('../../../database/models/shop-moderation.model');
+      const Location = require('../../../database/models/location.model');
+
+      await Promise.all([
+        ShopModeration.deleteMany({ $or: [{ establishmentId: estId }, { sellerId: userId, 'proposedData.storeName': establishment.name }] }),
+        Location.deleteMany({ $or: [{ establishmentId: estId }, { name: establishment.name, createdBy: userId }] }),
+      ]);
+    } catch (cleanErr) {
+      console.warn('[deleteEstablishment cleanup warning]', cleanErr.message);
     }
 
     return res.json({
