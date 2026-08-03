@@ -20,6 +20,7 @@ const STATUS_META: Record<string, { color: string; bg: string; label: string }> 
   approved:           { color: '#22C55E', bg: 'rgba(34,197,94,0.1)',   label: 'Approuvé' },
   rejected:           { color: '#EF4444', bg: 'rgba(239,68,68,0.1)',   label: 'Refusé' },
   revision_requested: { color: '#8B5CF6', bg: 'rgba(139,92,246,0.1)', label: 'Révision' },
+  resubmitted:        { color: '#3B82F6', bg: 'rgba(59,130,246,0.1)',  label: 'Renvoyé' },
 };
 
 const TYPE_META: Record<string, { icon: string; color: string }> = {
@@ -29,6 +30,13 @@ const TYPE_META: Record<string, { icon: string; color: string }> = {
   reel:    { icon: 'movie-play',  color: '#EC4899' },
 };
 
+/** Returns true if item is older than 48h and still pending */
+function isUrgent(dateStr?: string, status?: string): boolean {
+  if (!dateStr || (status !== 'pending' && status !== 'resubmitted')) return false;
+  const ageMs = Date.now() - new Date(dateStr).getTime();
+  return ageMs > 48 * 60 * 60 * 1000;
+}
+
 export function ModerationCard({ item, onApprove, onReject, onRevision, onViewDetail }: ModerationCardProps) {
   const { theme: T, isDark } = useTheme();
   const { t } = useLanguage();
@@ -37,13 +45,34 @@ export function ModerationCard({ item, onApprove, onReject, onRevision, onViewDe
   const cardBg  = isDark ? '#1C1C1E' : '#FFFFFF';
   const borderC = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
 
-  const status = STATUS_META[item.moderationStatus] ?? { color: '#6B7280', bg: 'rgba(107,114,128,0.1)', label: item.moderationStatus };
-  const typeM  = TYPE_META[item.type]  ?? { icon: 'file-document-outline', color: '#6B7280' };
-
-  const author = item.sellerName || item.authorName || item.authorOrSeller;
+  const status    = STATUS_META[item.moderationStatus] ?? { color: '#6B7280', bg: 'rgba(107,114,128,0.1)', label: item.moderationStatus };
+  const typeM     = TYPE_META[item.type] ?? { icon: 'file-document-outline', color: '#6B7280' };
+  const author    = item.sellerName || item.authorName || item.authorOrSeller;
+  const urgent    = isUrgent(item.date, item.moderationStatus);
+  const isResubmitted = item.moderationStatus === 'resubmitted';
 
   return (
-    <View style={[styles.card, { backgroundColor: cardBg, borderColor: borderC }]}>
+    <View style={[
+      styles.card,
+      { backgroundColor: cardBg, borderColor: urgent ? '#EF444430' : borderC },
+      urgent && styles.urgentCard,
+    ]}>
+      {/* Urgent indicator strip */}
+      {urgent && (
+        <View style={styles.urgentStrip}>
+          <Feather name="alert-triangle" size={10} color="#EF4444" />
+          <Text style={styles.urgentText}>Urgent · +48h en attente</Text>
+        </View>
+      )}
+
+      {/* Resubmitted indicator strip */}
+      {isResubmitted && !urgent && (
+        <View style={styles.resubmittedStrip}>
+          <Feather name="refresh-cw" size={10} color="#3B82F6" />
+          <Text style={styles.resubmittedText}>Renvoyé après révision</Text>
+        </View>
+      )}
+
       {/* ── Top Row ── */}
       <View style={styles.topRow}>
         {/* Type icon */}
@@ -74,7 +103,7 @@ export function ModerationCard({ item, onApprove, onReject, onRevision, onViewDe
         </View>
       </View>
 
-      {/* ── Meta Row (price / date) ── */}
+      {/* ── Meta Row (price / category / date) ── */}
       <View style={styles.metaRow}>
         {item.price ? (
           <View style={styles.metaChip}>
@@ -100,6 +129,25 @@ export function ModerationCard({ item, onApprove, onReject, onRevision, onViewDe
           {formatDateUserFriendly(item.date)}
         </Text>
       </View>
+
+      {/* ── Rejection reason preview (if any) ── */}
+      {item.moderationReason ? (
+        <View style={[styles.reasonRow, { backgroundColor: 'rgba(239,68,68,0.06)', borderColor: 'rgba(239,68,68,0.15)' }]}>
+          <Feather name="alert-circle" size={12} color="#EF4444" />
+          <Text style={[styles.reasonText, { color: '#EF4444' }]} numberOfLines={1}>
+            {item.moderationReason}
+          </Text>
+        </View>
+      ) : null}
+
+      {item.moderationNotes && !item.moderationReason ? (
+        <View style={[styles.reasonRow, { backgroundColor: 'rgba(139,92,246,0.06)', borderColor: 'rgba(139,92,246,0.15)' }]}>
+          <Feather name="edit-2" size={12} color="#8B5CF6" />
+          <Text style={[styles.reasonText, { color: '#8B5CF6' }]} numberOfLines={1}>
+            Révision : {item.moderationNotes}
+          </Text>
+        </View>
+      ) : null}
 
       {/* ── View Details Button ── */}
       {onViewDetail ? (
@@ -147,6 +195,31 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     overflow: 'hidden',
   },
+  urgentCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#EF4444',
+  },
+
+  /* Indicator strips */
+  urgentStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(239,68,68,0.07)',
+  },
+  urgentText: { fontFamily: Font.semibold, fontSize: 10, color: '#EF4444', textTransform: 'uppercase', letterSpacing: 0.4 },
+
+  resubmittedStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(59,130,246,0.07)',
+  },
+  resubmittedText: { fontFamily: Font.semibold, fontSize: 10, color: '#3B82F6', textTransform: 'uppercase', letterSpacing: 0.4 },
 
   /* Top */
   topRow: {
@@ -186,7 +259,7 @@ const styles = StyleSheet.create({
     gap: 6,
     flexWrap: 'wrap',
     paddingHorizontal: 14,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
   metaChip: {
     flexDirection: 'row',
@@ -199,6 +272,20 @@ const styles = StyleSheet.create({
   },
   metaChipText: { fontFamily: Font.medium, fontSize: 11 },
   dateText: { fontFamily: Font.regular, fontSize: 11, marginLeft: 'auto' },
+
+  /* Reason preview */
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 14,
+    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  reasonText: { fontFamily: Font.regular, fontSize: 12, flex: 1 },
 
   /* Details Button */
   detailBtn: {

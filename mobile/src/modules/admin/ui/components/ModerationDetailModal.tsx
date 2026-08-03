@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
   ScrollView, Image,
@@ -8,6 +8,8 @@ import { useTheme } from '../../../../shared/context/theme.context';
 import { Colors, Font, Radius, Spacing } from '../../../../shared/utils/theme';
 import { ModerationItem } from '../../api/admin.api';
 import { formatDateUserFriendly } from '../../../../shared/utils/date.utils';
+import { ModerationTimeline, TimelineStatus } from './ModerationTimeline';
+import { VerificationChecklist } from './VerificationChecklist';
 
 interface Props {
   visible: boolean;
@@ -75,6 +77,7 @@ export function ModerationDetailModal({ visible, item, onClose, onApprove, onRej
   const cardBg  = isDark ? '#1C1C1E' : '#FFFFFF';
   const sectionBg = isDark ? '#2C2C2E' : 'rgba(46,46,46,0.04)';
   const borderC = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
+  const [activeDetailTab, setActiveDetailTab] = useState<'info' | 'checklist'>('info');
 
   if (!item) return null;
 
@@ -100,6 +103,27 @@ export function ModerationDetailModal({ visible, item, onClose, onApprove, onRej
             <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
               <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
             </View>
+          </View>
+
+          {/* ── Detail / Checklist tabs ── */}
+          <View style={[styles.detailTabs, { backgroundColor: isDark ? '#2C2C2E' : 'rgba(0,0,0,0.04)', borderBottomColor: borderC }]}>
+            {(['info', 'checklist'] as const).map(tab => (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.detailTab, activeDetailTab === tab && { backgroundColor: cardBg }]}
+                onPress={() => setActiveDetailTab(tab)}
+                activeOpacity={0.7}
+              >
+                <Feather
+                  name={tab === 'info' ? 'file-text' : 'check-square'}
+                  size={13}
+                  color={activeDetailTab === tab ? primaryGreen : T.textMuted}
+                />
+                <Text style={[styles.detailTabText, { color: activeDetailTab === tab ? T.text : T.textMuted, fontFamily: activeDetailTab === tab ? Font.semibold : Font.regular }]}>
+                  {tab === 'info' ? 'Informations' : 'Checklist'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -140,23 +164,44 @@ export function ModerationDetailModal({ visible, item, onClose, onApprove, onRej
               </View>
             ) : null}
 
-            {/* ── Identity Section ── */}
-            <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
-              <SectionTitle title="Identité" icon="account-circle-outline" color="#3B82F6" />
-              <InfoRow icon="user"     label="Auteur / Vendeur" value={author} />
-              <InfoRow icon="mail"     label="Email"            value={item.sellerEmail || (item as any).authorEmail} />
-              <InfoRow icon="shopping-bag" label="Boutique"     value={item.shopName} />
-              <InfoRow icon="calendar" label="Soumis le"        value={formatDateUserFriendly(item.date)} />
-              {item.moderatedAt ? (
-                <InfoRow icon="check-square" label="Modéré le" value={formatDateUserFriendly(item.moderatedAt)} />
-              ) : null}
-              {item.moderatedByName ? (
-                <InfoRow icon="shield" label="Modéré par" value={item.moderatedByName} />
-              ) : null}
-            </View>
+            {activeDetailTab === 'checklist' ? (
+              <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+                <SectionTitle title="Checklist de vérification" icon="clipboard-check-outline" color={primaryGreen} />
+                <VerificationChecklist
+                  contentType={isProduct ? 'product' : isRecipe ? 'recipe' : 'product'}
+                />
+              </View>
+            ) : (
+              <>
+                {/* ── Identity Section ── */}
+                <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+                  <SectionTitle title="Identité" icon="account-circle-outline" color="#3B82F6" />
+                  <InfoRow icon="user"     label="Auteur / Vendeur" value={author} />
+                  <InfoRow icon="mail"     label="Email"            value={item.sellerEmail || (item as any).authorEmail} />
+                  <InfoRow icon="shopping-bag" label="Boutique"     value={item.shopName} />
+                  <InfoRow icon="calendar" label="Soumis le"        value={formatDateUserFriendly(item.date)} />
+                  {item.moderatedAt ? (
+                    <InfoRow icon="check-square" label="Modéré le" value={formatDateUserFriendly(item.moderatedAt)} />
+                  ) : null}
+                  {item.moderatedByName ? (
+                    <InfoRow icon="shield" label="Modéré par" value={item.moderatedByName} />
+                  ) : null}
+                </View>
 
-            {/* ── Product-specific ── */}
-            {isProduct && (
+                {/* ── Moderation Timeline ── */}
+                <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+                  <SectionTitle title="Historique de modération" icon="timeline-clock-outline" color="#F59E0B" />
+                  <ModerationTimeline
+                    currentStatus={item.moderationStatus as TimelineStatus}
+                    submittedAt={formatDateUserFriendly(item.date)}
+                    moderatedAt={item.moderatedAt ? formatDateUserFriendly(item.moderatedAt) : undefined}
+                  />
+                </View>
+              </>
+            )}
+
+            {/* ── Product-specific (only on info tab) ── */}
+            {activeDetailTab === 'info' && isProduct && (
               <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
                 <SectionTitle title="Détails Produit" icon="food-apple" color={primaryGreen} />
                 <InfoRow icon="tag"        label="Catégorie"     value={item.category} />
@@ -197,8 +242,8 @@ export function ModerationDetailModal({ visible, item, onClose, onApprove, onRej
               </View>
             )}
 
-            {/* ── Recipe-specific ── */}
-            {isRecipe && (
+            {/* ── Recipe-specific (only on info tab) ── */}
+            {activeDetailTab === 'info' && isRecipe && (
               <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
                 <SectionTitle title="Détails Recette" icon="chef-hat" color="#F59E0B" />
                 <InfoRow icon="tag"       label="Catégorie"    value={item.category} />
@@ -341,6 +386,27 @@ const styles = StyleSheet.create({
   stepNumText:{ fontFamily: Font.bold, fontSize: 12 },
   stepText:   { fontFamily: Font.regular, fontSize: 13, flex: 1, lineHeight: 18 },
   moreText:   { fontFamily: Font.regular, fontSize: 12 },
+
+  /* Detail tabs */
+  detailTabs: {
+    flexDirection: 'row',
+    marginHorizontal: 14,
+    marginBottom: 4,
+    borderRadius: Radius.md,
+    padding: 3,
+    gap: 2,
+    borderBottomWidth: 0,
+  },
+  detailTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: Radius.sm,
+    gap: 5,
+  },
+  detailTabText: { fontSize: 13 },
 
   /* Action bar */
   actionBar: {

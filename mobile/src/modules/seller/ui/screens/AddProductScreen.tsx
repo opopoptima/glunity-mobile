@@ -22,6 +22,7 @@ import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SubmissionConfirmationModal } from '../components/SubmissionConfirmationModal';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'AddProduct'>;
 
@@ -496,6 +497,8 @@ export default function AddProductScreen({ navigation, route }: Props) {
 
   const [nameError, setNameError] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [submissionModalVisible, setSubmissionModalVisible] = useState(false);
+  const [submittedProductName, setSubmittedProductName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -600,11 +603,13 @@ export default function AddProductScreen({ navigation, route }: Props) {
         await productsApi.create(dto);
       }
 
+      setSubmittedProductName(productName.trim());
       setSuccessModalVisible(true);
+      setSubmissionModalVisible(true);
 
       setTimeout(() => {
         setSuccessModalVisible(false);
-        navigation.goBack();
+        // navigation.goBack() is now handled by SubmissionConfirmationModal onClose
       }, 1800);
     } catch (err: any) {
       console.error('Error saving product:', err);
@@ -895,6 +900,18 @@ export default function AddProductScreen({ navigation, route }: Props) {
         {/* Prevent tab overlap */}
         <View style={{ height: 110 }} />
       </ScrollView>
+
+      {/* Submission Confirmation Modal */}
+      <SubmissionConfirmationModal
+        visible={submissionModalVisible}
+        contentType="product"
+        contentName={submittedProductName}
+        isEdit={isEditing}
+        onClose={() => {
+          setSubmissionModalVisible(false);
+          navigation.goBack();
+        }}
+      />
 
     </AppScaffold>
   );

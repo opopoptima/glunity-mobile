@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  SafeAreaView, TextInput, ActivityIndicator,
+  SafeAreaView, TextInput, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -13,8 +13,10 @@ import { EventCard } from '../components/EventCard';
 import { ActionModal } from '../components/ActionModal';
 import { ModerationDetailModal } from '../components/ModerationDetailModal';
 import { SkeletonCard } from '../components/SkeletonCard';
+import { ModerationStatsStrip } from '../components/ModerationStatsStrip';
 import { useLanguage } from '../../../../shared/context/language.context';
 import { ModerationStatus } from '../../api/admin.api';
+import { useAdminDashboard } from '../../hooks/useAdminDashboard';
 
 const CONTENT_TABS: { id: TabType; label: string; icon: string; color: string }[] = [
   { id: 'products', label: 'Produits',   icon: 'food-apple',  color: '#8BC34A' },
@@ -64,6 +66,28 @@ export function AdminModerationScreen({ route, navigation }: any) {
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'popularity'>('newest');
   const [eventTypeFilter, setEventTypeFilter] = useState<'all' | 'online' | 'presentiel'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // For stats strip
+  const { stats: dashStats } = useAdminDashboard();
+  const moderationStats = dashStats ? {
+    pendingProducts: dashStats.pendingModeration?.products ?? 0,
+    pendingRecipes:  dashStats.pendingModeration?.recipes ?? 0,
+    pendingReels:    dashStats.pendingModeration?.reels ?? 0,
+    pendingShopUpdates: (dashStats as any).pendingShopUpdates ?? 0,
+    pendingSellerVerifications: dashStats.pendingSellersCount ?? 0,
+    totalPending: dashStats.pendingModeration?.total ?? 0,
+    approvedToday: (dashStats as any).approvedToday ?? 0,
+    rejectedToday: (dashStats as any).rejectedToday ?? 0,
+    revisionRequests: 0,
+    verifiedSellers: dashStats.verifiedSellers ?? 0,
+  } : null;
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refresh();
+    setIsRefreshing(false);
+  };
 
   const primaryGreen = Colors.green || '#8BC34A';
   const cardBg = isDark ? '#1C1C1E' : '#FFFFFF';
@@ -120,6 +144,13 @@ export function AdminModerationScreen({ route, navigation }: any) {
           <Feather name="refresh-cw" size={18} color={T.textMuted} />
         </TouchableOpacity>
       </View>
+
+      {/* ─── Stats Strip ─────────────────────────────────────── */}
+      <ModerationStatsStrip stats={moderationStats} onCellPress={(key) => {
+        if (key === 'pendingProducts') setActiveTab('products');
+        else if (key === 'pendingRecipes') setActiveTab('recipes');
+        else if (key === 'pendingReels') setActiveTab('reels');
+      }} />
 
       {/* ─── Search ──────────────────────────────────────────── */}
       <View style={styles.searchContainer}>
@@ -211,7 +242,33 @@ export function AdminModerationScreen({ route, navigation }: any) {
       <ScrollView
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={primaryGreen}
+            colors={[primaryGreen]}
+          />
+        }
       >
+        {/* Quick-access cross-links */}
+        <View style={styles.crossLinks}>
+          {[
+            { label: 'Boutiques', icon: 'store-edit-outline', color: '#3B82F6', sub: `${moderationStats?.pendingShopUpdates ?? 0} en attente` },
+            { label: 'Vendeurs',  icon: 'shield-account-outline', color: '#8B5CF6', sub: `${moderationStats?.pendingSellerVerifications ?? 0} dossiers` },
+          ].map(link => (
+            <View key={link.label} style={[styles.crossCard, { borderColor: borderC, backgroundColor: cardBg }]}>
+              <View style={[styles.crossIcon, { backgroundColor: link.color + '18' }]}>
+                <MaterialCommunityIcons name={link.icon as any} size={18} color={link.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.crossLabel, { color: T.text }]}>{link.label}</Text>
+                <Text style={[styles.crossSub, { color: T.textMuted }]}>{link.sub}</Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={T.textMuted} />
+            </View>
+          ))}
+        </View>
         {loading ? (
           <>
             <SkeletonCard height={120} />
@@ -381,4 +438,19 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontFamily: Font.bold, fontSize: 17, marginBottom: 6 },
   emptyDesc:  { fontFamily: Font.regular, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+
+  /* Cross-link cards */
+  crossLinks: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  crossCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: 12,
+  },
+  crossIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  crossLabel: { fontFamily: Font.semibold, fontSize: 13 },
+  crossSub:   { fontFamily: Font.regular, fontSize: 11, marginTop: 1 },
 });

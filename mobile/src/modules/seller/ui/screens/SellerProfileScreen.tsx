@@ -27,6 +27,7 @@ import productsApi, { Product } from '../../api/products.api';
 import reviewsApi, { Review } from '../../api/reviews.api';
 import http from '@/core/network/http.client';
 import { API_BASE_URL } from '@/core/config/api.config';
+import { SubmissionStatusBanner, ContentModerationStatus } from '../components/SubmissionStatusBanner';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'SellerProfile'>;
 
@@ -1054,6 +1055,15 @@ export default function SellerProfileScreen({ navigation, route }: Props) {
                       </View>
                     )}
                   </View>
+                  {/* Moderation status for own profile */}
+                  {isOwnProfile && (prod as any).moderationStatus && (prod as any).moderationStatus !== 'approved' && (
+                    <SubmissionStatusBanner
+                      status={(prod as any).moderationStatus as ContentModerationStatus}
+                      reason={(prod as any).moderationReason}
+                      notes={(prod as any).moderationNotes}
+                      compact
+                    />
+                  )}
                 </View>
               </TouchableOpacity>
             ))

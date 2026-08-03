@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../../../../shared/context/theme.context';
-import { Colors, Font, Radius, Spacing } from '../../../../shared/utils/theme';
+import { Colors, Font, Radius } from '../../../../shared/utils/theme';
 import { ModerationItem } from '../../api/admin.api';
+import { SuggestedReasonsSheet } from './SuggestedReasonsSheet';
 
 interface ActionModalProps {
   visible: boolean;
@@ -45,21 +46,30 @@ export function ActionModal({
   const { theme: T, isDark } = useTheme();
   const cardBg  = isDark ? '#1C1C1E' : '#FFFFFF';
   const inputBg = isDark ? '#2C2C2E' : 'rgba(46,46,46,0.05)';
-  const borderC = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
 
   const cfg = ACTION_CONFIG[actionType];
 
-  const description =
-    actionType === 'approve'
-      ? `"${selectedItem?.title || 'cet élément'}" sera rendu visible. L'auteur recevra une notification.`
-      : actionType === 'reject'
-      ? `Expliquez pourquoi "${selectedItem?.title || 'cet élément'}" est refusé. L'auteur sera notifié.`
-      : `Précisez les modifications attendues pour "${selectedItem?.title || 'cet élément'}".`;
+  // For reject/revision, delegate to SuggestedReasonsSheet
+  if (actionType === 'reject' || actionType === 'revision') {
+    return (
+      <SuggestedReasonsSheet
+        visible={visible}
+        mode={actionType}
+        value={actionType === 'reject' ? rejectReason : (revisionNotes ?? '')}
+        onChange={actionType === 'reject' ? setRejectReason : (setRevisionNotes ?? (() => {}))}
+        onClose={onClose}
+        onConfirm={onConfirm}
+        itemTitle={selectedItem?.title}
+      />
+    );
+  }
+
+  // Approve path — simple confirmation sheet
+  const description = `« ${selectedItem?.title || 'cet élément'} » sera rendu visible. L'auteur recevra une notification.`;
 
   return (
     <Modal visible={visible} transparent animationType="slide">
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        {/* Bottom-sheet stops propagation */}
         <TouchableOpacity activeOpacity={1} style={[styles.sheet, { backgroundColor: cardBg }]}>
           {/* Drag handle */}
           <View style={[styles.handle, { backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)' }]} />
@@ -75,23 +85,13 @@ export function ActionModal({
             </View>
           </View>
 
-          {/* Text input */}
-          {(actionType === 'reject' || actionType === 'revision') && (
-            <TextInput
-              style={[styles.input, { color: T.text, backgroundColor: inputBg, borderColor: borderC }]}
-              placeholder={
-                actionType === 'reject'
-                  ? 'Ex: Images manquantes, contenu inapproprié...'
-                  : 'Ex: Veuillez corriger la liste des ingrédients...'
-              }
-              placeholderTextColor={T.textMuted}
-              multiline
-              numberOfLines={4}
-              value={actionType === 'reject' ? rejectReason : revisionNotes}
-              onChangeText={actionType === 'reject' ? setRejectReason : setRevisionNotes}
-              autoFocus
-            />
-          )}
+          {/* Approval checklist hint */}
+          <View style={[styles.hintBox, { backgroundColor: cfg.color + '10', borderColor: cfg.color + '30' }]}>
+            <Feather name="info" size={13} color={cfg.color} />
+            <Text style={[styles.hintText, { color: T.textMuted }]}>
+              L'auteur sera notifié immédiatement. Le contenu sera visible sur la plateforme.
+            </Text>
+          </View>
 
           {/* Buttons */}
           <View style={styles.btnRow}>
@@ -107,6 +107,7 @@ export function ActionModal({
               onPress={onConfirm}
               activeOpacity={0.8}
             >
+              <Feather name="check" size={15} color="#FFF" style={{ marginRight: 4 }} />
               <Text style={[styles.btnText, { color: '#FFF' }]}>{cfg.btnLabel}</Text>
             </TouchableOpacity>
           </View>
@@ -140,7 +141,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 18,
+    marginBottom: 16,
   },
   titleIcon: {
     width: 44,
@@ -152,26 +153,29 @@ const styles = StyleSheet.create({
   },
   title: { fontFamily: Font.bold, fontSize: 17, marginBottom: 4 },
   desc:  { fontFamily: Font.regular, fontSize: 13, lineHeight: 18 },
-  input: {
-    borderWidth: 1,
-    borderRadius: Radius.md,
+
+  hintBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
     padding: 12,
-    fontFamily: Font.regular,
-    fontSize: 14,
-    minHeight: 90,
-    textAlignVertical: 'top',
-    marginBottom: 18,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    marginBottom: 20,
   },
+  hintText: { fontFamily: Font.regular, fontSize: 12, flex: 1, lineHeight: 17 },
+
   btnRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 4,
   },
   btn: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 14,
     borderRadius: Radius.md,
-    alignItems: 'center',
   },
   btnCancel:  {},
   btnConfirm: {},

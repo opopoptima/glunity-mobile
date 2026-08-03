@@ -21,6 +21,7 @@ import { AppScaffold } from '@/shared/components/AppScaffold';
 import { useTheme } from '@/shared/context/theme.context';
 import { useLanguage } from '@/shared/context/language.context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SubmissionConfirmationModal } from '../components/SubmissionConfirmationModal';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'AddRecipe'>;
 
@@ -453,6 +454,8 @@ export default function AddRecipeScreen({ navigation, route }: Props) {
 
   const [titleError, setTitleError] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [submissionModalVisible, setSubmissionModalVisible] = useState(false);
+  const [submittedRecipeTitle, setSubmittedRecipeTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Pre-fill when editing
@@ -613,10 +616,11 @@ export default function AddRecipeScreen({ navigation, route }: Props) {
         await recipesApi.create(dto);
       }
 
+      setSubmittedRecipeTitle(title.trim());
       setSuccessModalVisible(true);
+      setSubmissionModalVisible(true);
       setTimeout(() => {
         setSuccessModalVisible(false);
-        navigation.goBack();
       }, 1800);
     } catch (err: any) {
       console.error('Error saving recipe:', err);
@@ -929,6 +933,19 @@ export default function AddRecipeScreen({ navigation, route }: Props) {
 
         <View style={{ height: 110 }} />
       </ScrollView>
+
+      {/* Submission Confirmation Modal */}
+      <SubmissionConfirmationModal
+        visible={submissionModalVisible}
+        contentType="recipe"
+        contentName={submittedRecipeTitle}
+        isEdit={isEditing}
+        onClose={() => {
+          setSubmissionModalVisible(false);
+          navigation.goBack();
+        }}
+      />
+
     </AppScaffold>
   );
 }

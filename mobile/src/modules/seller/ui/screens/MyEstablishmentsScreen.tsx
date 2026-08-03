@@ -22,6 +22,7 @@ import {
   deleteEstablishmentApi,
   Establishment,
 } from '../../api/establishment.api';
+import { SubmissionStatusBanner, ContentModerationStatus } from '../components/SubmissionStatusBanner';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'MyEstablishments'>;
 
@@ -189,6 +190,17 @@ export default function MyEstablishmentsScreen({ navigation }: Props) {
               <Text style={styles.editBtnText}>{t('Éditer le magasin', 'Éditer le magasin')}</Text>
             </TouchableOpacity>
           </View>
+          {/* ── Moderation Status Banner ── */}
+          {(item as any).moderationStatus && (item as any).moderationStatus !== 'approved' && (
+            <SubmissionStatusBanner
+              status={(item as any).moderationStatus as ContentModerationStatus}
+              reason={(item as any).moderationReason}
+              notes={(item as any).moderationNotes}
+              submittedAt={(item as any).createdAt}
+              moderatedAt={(item as any).updatedAt}
+              onEdit={() => navigation.navigate('EditStore', { establishmentId: item._id, isNew: false })}
+            />
+          )}
         </View>
       </View>
     );
