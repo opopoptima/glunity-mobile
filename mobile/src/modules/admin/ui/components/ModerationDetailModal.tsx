@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
-  ScrollView, Image,
+  ScrollView, Image, useWindowDimensions,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../../../shared/context/theme.context';
@@ -69,13 +69,14 @@ function SectionTitle({ title, icon, color }: { title: string; icon: string; col
 }
 
 const sectionStyles = StyleSheet.create({
-  row:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 4 },
+  row:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 2 },
   icon: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   text: { fontFamily: Font.bold, fontSize: 14 },
 });
 
 export function ModerationDetailModal({ visible, item, onClose, onApprove, onReject, onRevision }: Props) {
   const { theme: T, isDark } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const primaryGreen = Colors.green || '#8BC34A';
   const cardBg  = isDark ? '#1C1C1E' : '#FFFFFF';
   const sectionBg = isDark ? '#2C2C2E' : 'rgba(46,46,46,0.04)';
@@ -84,12 +85,166 @@ export function ModerationDetailModal({ visible, item, onClose, onApprove, onRej
 
   if (!item) return null;
 
+  const isTwoColumn = windowWidth > 640;
   const status = STATUS_META[item.moderationStatus] ?? STATUS_META.pending;
   const isProduct = item.type === 'product';
   const isRecipe  = item.type === 'recipe';
   const images    = item.images || (item as any).photos || [];
   const author    = item.sellerName || item.authorName || item.authorOrSeller;
   const isPending = item.moderationStatus === 'pending' || item.moderationStatus === 'resubmitted';
+
+  /* Left Column Content (Media + Identity + Product/Recipe Details) */
+  const renderLeftColumn = () => (
+    <View style={styles.columnBlock}>
+      {/* ── Images Header ── */}
+      {images.length > 0 && (
+        <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+          <SectionTitle title="Aperçu Visuel" icon="image-outline" color="#3B82F6" />
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.imageScroll}
+            contentContainerStyle={styles.imageRow}
+          >
+            {images.map((uri: string, i: number) => (
+              <Image
+                key={i}
+                source={{ uri }}
+                style={styles.image}
+                resizeMode="cover"
+              />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── Identity Section ── */}
+      <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+        <SectionTitle title="Identité & Origine" icon="account-circle-outline" color="#3B82F6" />
+        <InfoRow icon="user"         label="Auteur / Vendeur" value={author} />
+        <InfoRow icon="mail"         label="Email"            value={item.sellerEmail || (item as any).authorEmail} />
+        <InfoRow icon="shopping-bag" label="Boutique"         value={item.shopName} />
+        <InfoRow icon="calendar"     label="Soumis le"        value={formatDateUserFriendly(item.date)} />
+        {item.moderatedAt ? (
+          <InfoRow icon="check-square" label="Modéré le" value={formatDateUserFriendly(item.moderatedAt)} />
+        ) : null}
+        {item.moderatedByName ? (
+          <InfoRow icon="shield" label="Modéré par" value={item.moderatedByName} />
+        ) : null}
+      </View>
+
+      {/* ── Product Specifics ── */}
+      {isProduct && (
+        <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+          <SectionTitle title="Caractéristiques Produit" icon="food-apple" color={primaryGreen} />
+          <InfoRow icon="tag"         label="Catégorie"   value={item.category} />
+          <InfoRow icon="dollar-sign" label="Prix"        value={item.price} />
+          <InfoRow icon="check-circle"
+            label="Sans gluten"
+            value={
+              (item as any).isGlutenFree === true ? '✅ Oui'
+              : (item as any).isGlutenFree === false ? '❌ Non'
+              : undefined
+            }
+          />
+          <InfoRow icon="award"
+            label="Certifié SG"
+            value={
+              (item as any).certifiedGF === true ? '✅ Certifié'
+              : (item as any).certifiedGF === false ? '⚠️ Non certifié'
+              : undefined
+            }
+          />
+
+          {/* Ingredients */}
+          {(item as any).ingredients?.length > 0 && (
+            <View style={styles.tagsBlock}>
+              <Text style={[styles.tagsLabel, { color: T.textMuted }]}>Ingrédients</Text>
+              <View style={styles.tagsRow}>
+                {(item as any).ingredients.map((ing: any, i: number) => {
+                  const ingLabel = typeof ing === 'string' ? ing : (ing?.name || ing?.ingredient || ing?.title || JSON.stringify(ing));
+                  return (
+                    <View key={i} style={[styles.tag, { backgroundColor: primaryGreen + '18', borderColor: primaryGreen + '33' }]}>
+                      <Text style={[styles.tagText, { color: primaryGreen }]}>{ingLabel}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* ── Recipe Specifics ── */}
+      {isRecipe && (
+        <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+          <SectionTitle title="Détails de la Recette" icon="chef-hat" color="#F59E0B" />
+          <InfoRow icon="tag"       label="Catégorie"   value={item.category} />
+          <InfoRow icon="file-text" label="Description" value={(item as any).description} />
+
+          {/* Ingredients */}
+          {(item as any).ingredients?.length > 0 && (
+            <View style={styles.tagsBlock}>
+              <Text style={[styles.tagsLabel, { color: T.textMuted }]}>Ingrédients</Text>
+              <View style={styles.tagsRow}>
+                {(item as any).ingredients.map((ing: any, i: number) => {
+                  const ingLabel = typeof ing === 'string' ? ing : (ing?.name || ing?.ingredient || ing?.title || JSON.stringify(ing));
+                  return (
+                    <View key={i} style={[styles.tag, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B33' }]}>
+                      <Text style={[styles.tagText, { color: '#D97706' }]}>{ingLabel}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* Steps */}
+          {(item as any).steps?.length > 0 && (
+            <View style={styles.stepsBlock}>
+              <Text style={[styles.tagsLabel, { color: T.textMuted }]}>Étapes de préparation ({(item as any).steps.length})</Text>
+              {(item as any).steps.slice(0, 6).map((step: any, i: number) => {
+                const stepText = typeof step === 'string' ? step : (step?.description || step?.text || step?.instruction || JSON.stringify(step));
+                return (
+                  <View key={i} style={styles.stepRow}>
+                    <View style={[styles.stepNum, { backgroundColor: primaryGreen + '18' }]}>
+                      <Text style={[styles.stepNumText, { color: primaryGreen }]}>{i + 1}</Text>
+                    </View>
+                    <Text style={[styles.stepText, { color: T.text }]} numberOfLines={4}>
+                      {stepText}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
+    </View>
+  );
+
+  /* Right Column Content (Moderation Timeline + Verification Checklist) */
+  const renderRightColumn = () => (
+    <View style={styles.columnBlock}>
+      {/* ── Moderation Timeline ── */}
+      <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+        <SectionTitle title="Historique de Modération" icon="timeline-clock-outline" color="#F59E0B" />
+        <ModerationTimeline
+          currentStatus={item.moderationStatus as TimelineStatus}
+          submittedAt={formatDateUserFriendly(item.date)}
+          moderatedAt={item.moderatedAt ? formatDateUserFriendly(item.moderatedAt) : undefined}
+        />
+      </View>
+
+      {/* ── Verification Checklist ── */}
+      <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+        <SectionTitle title="Checklist d'Approbation" icon="clipboard-check-outline" color={primaryGreen} />
+        <VerificationChecklist
+          contentType={isProduct ? 'product' : isRecipe ? 'recipe' : 'product'}
+        />
+      </View>
+    </View>
+  );
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -108,47 +263,30 @@ export function ModerationDetailModal({ visible, item, onClose, onApprove, onRej
             </View>
           </View>
 
-          {/* ── Detail / Checklist tabs ── */}
-          <View style={[styles.detailTabs, { backgroundColor: isDark ? '#2C2C2E' : 'rgba(0,0,0,0.04)', borderBottomColor: borderC }]}>
-            {(['info', 'checklist'] as const).map(tab => (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.detailTab, activeDetailTab === tab && { backgroundColor: cardBg }]}
-                onPress={() => setActiveDetailTab(tab)}
-                activeOpacity={0.7}
-              >
-                <Feather
-                  name={tab === 'info' ? 'file-text' : 'check-square'}
-                  size={13}
-                  color={activeDetailTab === tab ? primaryGreen : T.textMuted}
-                />
-                <Text style={[styles.detailTabText, { color: activeDetailTab === tab ? T.text : T.textMuted, fontFamily: activeDetailTab === tab ? Font.semibold : Font.regular }]}>
-                  {tab === 'info' ? 'Informations' : 'Checklist'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* ── Detail / Checklist tabs on mobile screens ── */}
+          {!isTwoColumn && (
+            <View style={[styles.detailTabs, { backgroundColor: isDark ? '#2C2C2E' : 'rgba(0,0,0,0.04)', borderBottomColor: borderC }]}>
+              {(['info', 'checklist'] as const).map(tab => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[styles.detailTab, activeDetailTab === tab && { backgroundColor: cardBg }]}
+                  onPress={() => setActiveDetailTab(tab)}
+                  activeOpacity={0.7}
+                >
+                  <Feather
+                    name={tab === 'info' ? 'file-text' : 'check-square'}
+                    size={13}
+                    color={activeDetailTab === tab ? primaryGreen : T.textMuted}
+                  />
+                  <Text style={[styles.detailTabText, { color: activeDetailTab === tab ? T.text : T.textMuted, fontFamily: activeDetailTab === tab ? Font.semibold : Font.regular }]}>
+                    {tab === 'info' ? 'Informations' : 'Checklist'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-            {/* ── Images ── */}
-            {images.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.imageScroll}
-                contentContainerStyle={styles.imageRow}
-              >
-                {images.map((uri: string, i: number) => (
-                  <Image
-                    key={i}
-                    source={{ uri }}
-                    style={styles.image}
-                    resizeMode="cover"
-                  />
-                ))}
-              </ScrollView>
-            )}
-
             {/* ── Rejection/Revision notice ── */}
             {item.moderationReason ? (
               <View style={[styles.noticeBox, { backgroundColor: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.2)' }]}>
@@ -167,133 +305,37 @@ export function ModerationDetailModal({ visible, item, onClose, onApprove, onRej
               </View>
             ) : null}
 
-            {activeDetailTab === 'checklist' ? (
-              <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
-                <SectionTitle title="Checklist de vérification" icon="clipboard-check-outline" color={primaryGreen} />
-                <VerificationChecklist
-                  contentType={isProduct ? 'product' : isRecipe ? 'recipe' : 'product'}
-                />
+            {/* ── Responsive Body Grid (2-Column on wider screens / 1-Column on mobile) ── */}
+            {isTwoColumn ? (
+              <View style={styles.twoColumnGrid}>
+                <View style={styles.leftFlexColumn}>
+                  {renderLeftColumn()}
+                </View>
+                <View style={styles.rightFlexColumn}>
+                  {renderRightColumn()}
+                </View>
               </View>
             ) : (
-              <>
-                {/* ── Identity Section ── */}
+              activeDetailTab === 'checklist' ? (
                 <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
-                  <SectionTitle title="Identité" icon="account-circle-outline" color="#3B82F6" />
-                  <InfoRow icon="user"     label="Auteur / Vendeur" value={author} />
-                  <InfoRow icon="mail"     label="Email"            value={item.sellerEmail || (item as any).authorEmail} />
-                  <InfoRow icon="shopping-bag" label="Boutique"     value={item.shopName} />
-                  <InfoRow icon="calendar" label="Soumis le"        value={formatDateUserFriendly(item.date)} />
-                  {item.moderatedAt ? (
-                    <InfoRow icon="check-square" label="Modéré le" value={formatDateUserFriendly(item.moderatedAt)} />
-                  ) : null}
-                  {item.moderatedByName ? (
-                    <InfoRow icon="shield" label="Modéré par" value={item.moderatedByName} />
-                  ) : null}
-                </View>
-
-                {/* ── Moderation Timeline ── */}
-                <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
-                  <SectionTitle title="Historique de modération" icon="timeline-clock-outline" color="#F59E0B" />
-                  <ModerationTimeline
-                    currentStatus={item.moderationStatus as TimelineStatus}
-                    submittedAt={formatDateUserFriendly(item.date)}
-                    moderatedAt={item.moderatedAt ? formatDateUserFriendly(item.moderatedAt) : undefined}
+                  <SectionTitle title="Checklist de vérification" icon="clipboard-check-outline" color={primaryGreen} />
+                  <VerificationChecklist
+                    contentType={isProduct ? 'product' : isRecipe ? 'recipe' : 'product'}
                   />
                 </View>
-              </>
-            )}
-
-            {/* ── Product-specific (only on info tab) ── */}
-            {activeDetailTab === 'info' && isProduct && (
-              <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
-                <SectionTitle title="Détails Produit" icon="food-apple" color={primaryGreen} />
-                <InfoRow icon="tag"        label="Catégorie"     value={item.category} />
-                <InfoRow icon="dollar-sign" label="Prix"         value={item.price} />
-                <InfoRow icon="check-circle"
-                  label="Sans gluten"
-                  value={
-                    (item as any).isGlutenFree === true ? '✅ Oui'
-                    : (item as any).isGlutenFree === false ? '❌ Non'
-                    : undefined
-                  }
-                />
-                <InfoRow icon="award"
-                  label="Certifié SG"
-                  value={
-                    (item as any).certifiedGF === true ? '✅ Certifié'
-                    : (item as any).certifiedGF === false ? '⚠️ Non certifié'
-                    : undefined
-                  }
-                />
-
-                {/* Ingredients */}
-                {(item as any).ingredients?.length > 0 && (
-                  <View style={styles.tagsBlock}>
-                    <Text style={[styles.tagsLabel, { color: T.textMuted }]}>Ingrédients</Text>
-                    <View style={styles.tagsRow}>
-                      {(item as any).ingredients.map((ing: any, i: number) => {
-                        const ingLabel = typeof ing === 'string' ? ing : (ing?.name || ing?.ingredient || ing?.title || JSON.stringify(ing));
-                        return (
-                          <View key={i} style={[styles.tag, { backgroundColor: primaryGreen + '18', borderColor: primaryGreen + '33' }]}>
-                            <Text style={[styles.tagText, { color: primaryGreen }]}>{ingLabel}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
+              ) : (
+                <>
+                  {renderLeftColumn()}
+                  <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
+                    <SectionTitle title="Historique de Modération" icon="timeline-clock-outline" color="#F59E0B" />
+                    <ModerationTimeline
+                      currentStatus={item.moderationStatus as TimelineStatus}
+                      submittedAt={formatDateUserFriendly(item.date)}
+                      moderatedAt={item.moderatedAt ? formatDateUserFriendly(item.moderatedAt) : undefined}
+                    />
                   </View>
-                )}
-              </View>
-            )}
-
-            {/* ── Recipe-specific (only on info tab) ── */}
-            {activeDetailTab === 'info' && isRecipe && (
-              <View style={[styles.section, { backgroundColor: sectionBg, borderColor: borderC }]}>
-                <SectionTitle title="Détails Recette" icon="chef-hat" color="#F59E0B" />
-                <InfoRow icon="tag"       label="Catégorie"    value={item.category} />
-                <InfoRow icon="file-text" label="Description"  value={(item as any).description} />
-
-                {/* Ingredients */}
-                {(item as any).ingredients?.length > 0 && (
-                  <View style={styles.tagsBlock}>
-                    <Text style={[styles.tagsLabel, { color: T.textMuted }]}>Ingrédients</Text>
-                    <View style={styles.tagsRow}>
-                      {(item as any).ingredients.map((ing: any, i: number) => {
-                        const ingLabel = typeof ing === 'string' ? ing : (ing?.name || ing?.ingredient || ing?.title || JSON.stringify(ing));
-                        return (
-                          <View key={i} style={[styles.tag, { backgroundColor: '#F59E0B18', borderColor: '#F59E0B33' }]}>
-                            <Text style={[styles.tagText, { color: '#D97706' }]}>{ingLabel}</Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-                )}
-
-                {/* Steps */}
-                {(item as any).steps?.length > 0 && (
-                  <View style={styles.stepsBlock}>
-                    <Text style={[styles.tagsLabel, { color: T.textMuted }]}>Étapes ({(item as any).steps.length})</Text>
-                    {(item as any).steps.slice(0, 5).map((step: any, i: number) => {
-                      const stepText = typeof step === 'string' ? step : (step?.description || step?.text || step?.instruction || JSON.stringify(step));
-                      return (
-                        <View key={i} style={styles.stepRow}>
-                          <View style={[styles.stepNum, { backgroundColor: primaryGreen + '18' }]}>
-                            <Text style={[styles.stepNumText, { color: primaryGreen }]}>{i + 1}</Text>
-                          </View>
-                          <Text style={[styles.stepText, { color: T.text }]} numberOfLines={3}>
-                            {stepText}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                    {(item as any).steps.length > 5 && (
-                      <Text style={[styles.moreText, { color: T.textMuted }]}>
-                        + {(item as any).steps.length - 5} étapes supplémentaires…
-                      </Text>
-                    )}
-                  </View>
-                )}
-              </View>
+                </>
+              )
             )}
           </ScrollView>
 
@@ -323,10 +365,13 @@ export function ModerationDetailModal({ visible, item, onClose, onApprove, onRej
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   sheet: {
+    width: '100%',
+    maxWidth: 960,
     height: '92%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
@@ -337,33 +382,43 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 18,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    gap: 10,
+    gap: 12,
   },
   closeBtn:    { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontFamily: Font.bold, fontSize: 15, flex: 1 },
-  statusPill:  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full, flexShrink: 0 },
-  statusText:  { fontFamily: Font.semibold, fontSize: 11 },
+  headerTitle: { fontFamily: Font.bold, fontSize: 16, flex: 1 },
+  statusPill:  { paddingHorizontal: 12, paddingVertical: 5, borderRadius: Radius.full, flexShrink: 0 },
+  statusText:  { fontFamily: Font.semibold, fontSize: 12 },
 
   /* Body */
-  body: { padding: 14, paddingBottom: 20 },
+  body: { padding: 16, paddingBottom: 24 },
+
+  /* Two column grid */
+  twoColumnGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'flex-start',
+  },
+  leftFlexColumn:  { flex: 1.2 },
+  rightFlexColumn: { flex: 1 },
+  columnBlock:     { gap: 0 },
 
   /* Images */
-  imageScroll: { marginBottom: 14 },
-  imageRow:    { gap: 8 },
-  image:       { width: 140, height: 140, borderRadius: Radius.lg },
+  imageScroll: { marginBottom: 4 },
+  imageRow:    { gap: 10 },
+  image:       { width: 150, height: 150, borderRadius: Radius.lg },
 
   /* Notice boxes */
   noticeBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    padding: 10,
+    gap: 10,
+    padding: 12,
     borderRadius: Radius.md,
     borderWidth: 1,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   noticeText: { fontFamily: Font.medium, fontSize: 13, flex: 1, lineHeight: 18 },
 
@@ -371,34 +426,33 @@ const styles = StyleSheet.create({
   section: {
     borderRadius: Radius.lg,
     borderWidth: 1,
-    padding: 14,
-    marginBottom: 12,
+    padding: 16,
+    marginBottom: 14,
   },
 
   /* Tags */
-  tagsBlock: { marginTop: 4 },
+  tagsBlock: { marginTop: 6 },
   tagsLabel: { fontFamily: Font.regular, fontSize: 11, marginBottom: 6 },
   tagsRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  tag:       { paddingHorizontal: 9, paddingVertical: 4, borderRadius: Radius.full, borderWidth: 1 },
+  tag:       { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full, borderWidth: 1 },
   tagText:   { fontFamily: Font.medium, fontSize: 12 },
 
   /* Steps */
   stepsBlock: { marginTop: 10 },
-  stepRow:    { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8, gap: 8 },
+  stepRow:    { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 10 },
   stepNum:    { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   stepNumText:{ fontFamily: Font.bold, fontSize: 12 },
-  stepText:   { fontFamily: Font.regular, fontSize: 13, flex: 1, lineHeight: 18 },
-  moreText:   { fontFamily: Font.regular, fontSize: 12 },
+  stepText:   { fontFamily: Font.regular, fontSize: 13, flex: 1, lineHeight: 19 },
 
   /* Detail tabs */
   detailTabs: {
     flexDirection: 'row',
-    marginHorizontal: 14,
+    marginHorizontal: 16,
+    marginTop: 8,
     marginBottom: 4,
     borderRadius: Radius.md,
     padding: 3,
     gap: 2,
-    borderBottomWidth: 0,
   },
   detailTab: {
     flex: 1,
@@ -415,16 +469,19 @@ const styles = StyleSheet.create({
   actionBar: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    gap: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
   },
   actionBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 5,
+    paddingVertical: 14,
+    borderRadius: Radius.md,
+    gap: 6,
   },
-  approveBtn:     { backgroundColor: Colors.green || '#8BC34A' },
-  actionBtnText:  { fontFamily: Font.semibold, fontSize: 13 },
+  approveBtn:    { backgroundColor: Colors.green || '#8BC34A' },
+  actionBtnText: { fontFamily: Font.semibold, fontSize: 14 },
 });
