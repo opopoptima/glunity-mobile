@@ -28,9 +28,12 @@ const STATUS_META: Record<string, { color: string; bg: string; label: string }> 
   resubmitted:        { color: '#3B82F6', bg: 'rgba(59,130,246,0.12)',  label: '🔄 Renvoyé' },
 };
 
-function InfoRow({ icon, label, value }: { icon: string; label: string; value?: string | null }) {
+function InfoRow({ icon, label, value }: { icon: string; label: string; value?: unknown }) {
   const { theme: T } = useTheme();
-  if (!value) return null;
+  if (value === undefined || value === null || value === '') return null;
+  const safeVal = typeof value === 'object'
+    ? ((value as any).name || (value as any).fullName || (value as any).address || JSON.stringify(value))
+    : String(value);
   return (
     <View style={rowStyles.row}>
       <View style={rowStyles.iconWrap}>
@@ -38,7 +41,7 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value?: 
       </View>
       <View style={rowStyles.content}>
         <Text style={[rowStyles.label, { color: T.textMuted }]}>{label}</Text>
-        <Text style={[rowStyles.value, { color: T.text }]}>{value}</Text>
+        <Text style={[rowStyles.value, { color: T.text }]}>{safeVal}</Text>
       </View>
     </View>
   );

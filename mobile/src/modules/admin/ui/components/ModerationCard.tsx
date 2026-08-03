@@ -47,7 +47,16 @@ export function ModerationCard({ item, onApprove, onReject, onRevision, onViewDe
 
   const status    = STATUS_META[item.moderationStatus] ?? { color: '#6B7280', bg: 'rgba(107,114,128,0.1)', label: item.moderationStatus };
   const typeM     = TYPE_META[item.type] ?? { icon: 'file-document-outline', color: '#6B7280' };
-  const author    = item.sellerName || item.authorName || item.authorOrSeller;
+  const rawAuthor = item.sellerName || item.authorName || item.authorOrSeller;
+  const author = typeof rawAuthor === 'object' && rawAuthor !== null
+    ? ((rawAuthor as any).name || (rawAuthor as any).fullName || JSON.stringify(rawAuthor))
+    : String(rawAuthor || '');
+
+  const rawShop = item.shopName;
+  const shopName = typeof rawShop === 'object' && rawShop !== null
+    ? ((rawShop as any).storeName || (rawShop as any).name || '')
+    : String(rawShop || '');
+
   const urgent    = isUrgent(item.date, item.moderationStatus);
   const isResubmitted = item.moderationStatus === 'resubmitted';
 

@@ -1708,17 +1708,44 @@ class AdminService {
     if (type === 'all' || type === 'events') {
       const eventFilter = status === 'all' ? {}
         : status === 'pending' ? { $or: [{ status: 'pending' }, { status: { $exists: false } }] }
-        : status === 'approved' ? { status: 'active' }
+        : status === 'approved' ? { status: { $in: ['active', 'approved'] } }
         : { status };
       if (search) eventFilter.title = { $regex: search, $options: 'i' };
-      const docs = await Event.find(eventFilter).sort({ createdAt: -1 }).limit(type === 'events' ? lim : 10).lean();
-      const mapped = docs.map(d => ({
-        id: d._id.toString(), type: 'event',
-        title: d.title || 'Événement',
-        authorOrSeller: d.organizer || 'Inconnu',
-        moderationStatus: d.status === 'active' ? 'approved' : (d.status || 'pending'),
-        date: d.createdAt, eventDate: d.date, location: d.location,
-      }));
+      const docs = await Event.find(eventFilter)
+        .populate('createdBy', 'fullName email avatar')
+        .sort({ createdAt: -1 })
+        .skip(type === 'events' ? skip : 0)
+        .limit(type === 'events' ? lim : 10)
+        .lean();
+      const mapped = docs.map(d => {
+        const orgName = (typeof d.organizer === 'object' && d.organizer !== null)
+          ? (d.organizer.name || '')
+          : (typeof d.organizer === 'string' ? d.organizer : '');
+        const authorName = orgName || d.createdBy?.fullName || 'Inconnu';
+        const locationStr = (typeof d.location === 'object' && d.location !== null)
+          ? (d.location.name || d.location.address || d.location.city || '')
+          : (typeof d.location === 'string' ? d.location : '');
+        const imagesList = Array.isArray(d.images)
+          ? d.images.map(img => (typeof img === 'string' ? img : img?.url)).filter(Boolean)
+          : [];
+
+        return {
+          id: d._id.toString(),
+          type: 'event',
+          title: d.title || 'Événement',
+          authorOrSeller: authorName,
+          sellerName: authorName,
+          sellerEmail: (d.organizer && typeof d.organizer === 'object' ? d.organizer.contact : '') || d.createdBy?.email || '',
+          moderationStatus: (d.status === 'active' || d.status === 'approved') ? 'approved' : (d.status || 'pending'),
+          moderationReason: d.rejectionReason || '',
+          date: d.createdAt,
+          eventDate: d.startsAt ? new Date(d.startsAt).toLocaleDateString('fr-FR') : undefined,
+          location: locationStr,
+          images: imagesList,
+          category: d.type || 'other',
+          price: d.price != null ? `${d.price} ${d.currency || 'TND'}` : undefined,
+        };
+      });
       results = results.concat(mapped);
     }
 
@@ -1760,6 +1787,34 @@ class AdminService {
         .lean();
       if (!doc) return null;
       return { ...doc, type: 'recipe' };
+    }
+    if (type === 'event') {
+      const doc = await Event.findById(id)
+        .populate('createdBy', 'fullName email avatar')
+        .lean();
+      if (!doc) return null;
+      const orgName = (typeof doc.organizer === 'object' && doc.organizer !== null)
+        ? (doc.organizer.name || '')
+        : (typeof doc.organizer === 'string' ? doc.organizer : '');
+      const authorName = orgName || doc.createdBy?.fullName || 'Inconnu';
+      const locationStr = (typeof doc.location === 'object' && doc.location !== null)
+        ? (doc.location.name || doc.location.address || doc.location.city || '')
+        : (typeof doc.location === 'string' ? doc.location : '');
+      return {
+        ...doc,
+        id: doc._id.toString(),
+        type: 'event',
+        title: doc.title || 'Événement',
+        authorOrSeller: authorName,
+        sellerName: authorName,
+        sellerEmail: doc.createdBy?.email || '',
+        moderationStatus: (doc.status === 'active' || doc.status === 'approved') ? 'approved' : (doc.status || 'pending'),
+        moderationReason: doc.rejectionReason || '',
+        date: doc.createdAt,
+        eventDate: doc.startsAt ? new Date(doc.startsAt).toLocaleDateString('fr-FR') : undefined,
+        location: locationStr,
+        images: Array.isArray(doc.images) ? doc.images.map(i => typeof i === 'string' ? i : i?.url).filter(Boolean) : [],
+      };
     }
     return null;
   }
